@@ -1,0 +1,23 @@
+{
+  "name": "game-collection",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc && vite build",
+    "preview": "vite preview",
+    "test": "node tests/test-sokoban.cjs && node tests/test-linkgame.cjs && node tests/test-tetris.cjs && node tests/test-tetris-keymap.cjs && node tests/test-breakout-collision.cjs && node tests/test-catchfruit-gameover.cjs && node tests/test-preventdefault.cjs"
+  },
+  "dependencies": {
+    "pinia": "^2.1.7",
+    "vue": "^3.4.21",
+    "vue-router": "^4.3.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.4",
+    "typescript": "^5.4.2",
+    "vite": "^5.1.6",
+    "vue-tsc": "^2.0.6"
+  }
+}

@@ -1,0 +1,25 @@
+sequenceDiagram
+    participant User
+    participant Router
+    participant SokobanView
+    participant GameLayout
+    participant useGameKeyboard
+    participant useGameStore
+
+    User->>Router: 点击"推箱子"
+    Router->>SokobanView: 路由跳转 /sokoban
+    SokobanView->>useGameStore: useGameStore()
+    SokobanView->>GameLayout: <GameLayout title="推箱子" accentColor="#00FFFF" ...>
+    SokobanView->>useGameKeyboard: useGameKeyboard({ bindings, active })
+    useGameKeyboard->>window: addEventListener('keydown')
+    SokobanView->>SokobanView: initLevel()
+    Note over SokobanView,GameLayout: 游戏运行中...
+    User->>useGameKeyboard: 按下 ArrowUp
+    useGameKeyboard->>SokobanView: handler() → move(0, -1)
+    SokobanView->>SokobanView: checkWin() → winDialog = true
+    SokobanView->>GameLayout: <GameDialog v-model:visible="winDialog">
+    User->>GameLayout: 点击"下一关"
+    GameLayout->>SokobanView: @action → nextLevel()
+    User->>GameLayout: 点击"返回"
+    GameLayout->>SokobanView: @back → router.push('/')
+    SokobanView->>useGameKeyboard: onUnmounted → removeEventListener

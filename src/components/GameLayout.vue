@@ -1,0 +1,121 @@
+<template>
+  <div class="game-view" :style="{ '--game-accent': accentColor }">
+    <div class="game-header">
+      <button class="back-btn" @click="$emit('back')">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+        返回
+      </button>
+      <h2>{{ title }}</h2>
+      <div class="game-info">
+        <span v-for="item in infoItems" :key="item.label">{{ item.label }} {{ item.value }}</span>
+      </div>
+    </div>
+    <div class="keyboard-hint" v-if="hints?.length">
+      <span v-for="hint in hints" :key="hint">{{ hint }}</span>
+    </div>
+    <div class="game-container">
+      <slot></slot>
+    </div>
+    <div class="controls-area" v-if="$slots.controls">
+      <slot name="controls"></slot>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+export interface InfoItem {
+  label: string
+  value: string | number
+}
+
+defineProps<{
+  title: string
+  accentColor: string
+  gradientEnd?: string
+  hints?: string[]
+  infoItems?: InfoItem[]
+}>()
+
+defineEmits<{
+  back: []
+}>()
+</script>
+
+<style scoped>
+.game-view {
+  min-height: 100vh;
+  background: linear-gradient(180deg, var(--game-bg-dark) 0%, var(--game-bg-mid) 50%, var(--game-bg-dark) 100%);
+  padding: 20px;
+  position: relative;
+}
+
+.game-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 600px;
+  margin: 0 auto 30px;
+  color: var(--game-text);
+}
+
+.game-header h2 {
+  margin: 0;
+  font-weight: 600;
+  background: linear-gradient(135deg, var(--game-accent), var(--gradient-end, var(--game-accent)));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.back-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--game-btn-bg);
+  border: 1px solid var(--game-btn-border);
+  color: var(--game-text);
+  padding: 8px 16px;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.back-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--game-accent);
+}
+
+.game-info {
+  display: flex;
+  gap: 20px;
+  font-size: 0.95em;
+  color: var(--game-text-info);
+}
+
+.keyboard-hint {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 20px;
+  font-size: 0.85em;
+  color: var(--game-text-muted);
+}
+
+.keyboard-hint span {
+  padding: 4px 12px;
+  background: var(--game-btn-bg);
+  border-radius: 4px;
+}
+
+.game-container {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.controls-area {
+  max-width: 600px;
+  margin: 25px auto 0;
+  text-align: center;
+}
+</style>

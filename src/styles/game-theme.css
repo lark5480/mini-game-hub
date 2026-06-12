@@ -1,0 +1,13 @@
+:root {
+  --game-bg-dark: #0D0D1A;
+  --game-bg-mid: #1A1A2E;
+  --game-text: #E0E0FF;
+  --game-text-muted: #6B7280;
+  --game-text-info: #818CF8;
+  --game-accent: #00FFFF;
+  --game-panel-bg: rgba(0, 0, 0, 0.4);
+  --game-btn-bg: rgba(255, 255, 255, 0.05);
+  --game-btn-border: rgba(255, 255, 255, 0.1);
+  --game-btn-radius: 12px;
+  --game-cell-border: rgba(255, 255, 255, 0.05);
+}

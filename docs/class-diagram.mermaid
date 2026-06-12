@@ -1,0 +1,91 @@
+classDiagram
+    class GameLayout {
+        +String title
+        +String accentColor
+        +String gradientEnd
+        +String[] hints
+        +InfoItem[] infoItems
+        +Slot default
+        +Slot controls
+        +Event back
+    }
+
+    class InfoItem {
+        +String label
+        +String|number value
+    }
+
+    class GameDialog {
+        +Boolean visible
+        +String accentColor
+        +String icon
+        +String title
+        +String message
+        +String actionText
+        +Slot icon
+        +Slot default
+        +Slot action
+        +Event update:visible
+        +Event action
+    }
+
+    class DirectionPad {
+        +String layout
+        +Boolean showUp
+        +Boolean showDown
+        +String accentColor
+        +Slot extra
+        +Event up
+        +Event down
+        +Event left
+        +Event right
+    }
+
+    class KeyBinding {
+        +String|String[] key
+        +Function handler
+        +Boolean preventDefault
+    }
+
+    class UseGameKeyboardOptions {
+        +KeyBinding[] bindings
+        +Ref~Boolean~|Boolean active
+    }
+
+    class UseGameKeyboardReturn {
+        +Function refresh
+    }
+
+    class UseGameLoopOptions {
+        +Function onUpdate
+        +String mode
+        +Number intervalMs
+        +Number fixedStep
+    }
+
+    class UseGameLoopReturn {
+        +Ref~Boolean~ isRunning
+        +Function start
+        +Function stop
+    }
+
+    class GameScore {
+        +String name
+        +Number score
+        +String date
+    }
+
+    class useGameStore {
+        +Ref~String~ currentGame
+        +Ref~Record~String, GameScore[]~~ scores
+        +setCurrentGame(game: String) void
+        +addScore(game: String, score: Number) void
+        +getTopScore(game: Number) Number
+    }
+
+    GameLayout --> InfoItem : infoItems
+    UseGameKeyboardOptions --> KeyBinding : bindings
+    UseGameKeyboardOptions --> UseGameKeyboardReturn : returns
+    UseGameLoopOptions --> UseGameLoopReturn : returns
+    useGameStore --> GameScore : scores
+    useGameStore --> localStorage : watch + sync
