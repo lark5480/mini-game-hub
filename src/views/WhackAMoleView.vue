@@ -90,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import GameLayout from '@/components/GameLayout.vue'
@@ -251,13 +251,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopAllTimers()
-})
-
-watch(difficulty, () => {
-  if (!gameStarted.value) {
-    updateDifficultySettings()
-    initHoles()
-  }
 })
 </script>
 

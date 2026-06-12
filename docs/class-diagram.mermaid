@@ -33,7 +33,6 @@ classDiagram
         +String layout
         +Boolean showUp
         +Boolean showDown
-        +String accentColor
         +Slot extra
         +Event up
         +Event down
@@ -45,15 +44,12 @@ classDiagram
         +String|String[] key
         +Function handler
         +Boolean preventDefault
+        +Boolean onKeyUp
     }
 
     class UseGameKeyboardOptions {
         +KeyBinding[] bindings
         +Ref~Boolean~|Boolean active
-    }
-
-    class UseGameKeyboardReturn {
-        +Function refresh
     }
 
     class UseGameLoopOptions {
@@ -63,12 +59,6 @@ classDiagram
         +Number fixedStep
     }
 
-    class UseGameLoopReturn {
-        +Ref~Boolean~ isRunning
-        +Function start
-        +Function stop
-    }
-
     class GameScore {
         +String name
         +Number score
@@ -76,16 +66,12 @@ classDiagram
     }
 
     class useGameStore {
-        +Ref~String~ currentGame
         +Ref~Record~String, GameScore[]~~ scores
-        +setCurrentGame(game: String) void
         +addScore(game: String, score: Number) void
-        +getTopScore(game: Number) Number
+        +getTopScore(game: String) Number
     }
 
     GameLayout --> InfoItem : infoItems
     UseGameKeyboardOptions --> KeyBinding : bindings
-    UseGameKeyboardOptions --> UseGameKeyboardReturn : returns
-    UseGameLoopOptions --> UseGameLoopReturn : returns
     useGameStore --> GameScore : scores
     useGameStore --> localStorage : watch + sync

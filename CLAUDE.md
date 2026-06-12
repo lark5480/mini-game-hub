@@ -27,7 +27,7 @@ import { useGameStore } from '@/stores/game'
 **关键约束：**
 - 游戏框架统一用 GameLayout + GameDialog + DirectionPad，不要各写一套
 - 动画循环用 `useGameLoop({ onUpdate, mode, fixedStep? })`，组件卸载自动清理
-- 键盘用 `useGameKeyboard({ bindings, active })`，`active=false` 时自动忽略输入
+- 键盘用 `useGameKeyboard({ bindings, active })`，`active=false` 时自动忽略输入；同一键需 keyup/keydown 分离时加 `{ onKeyUp: true }`
 - 分数用 `useGameStore().addScore(gameName, score)`
 - **新增游戏**必须同步：路由（`src/router/index.ts`）→ Store（`src/stores/game.ts` 的 `defaultScores()`）→ 首页卡片（`HomeView.vue`）
 

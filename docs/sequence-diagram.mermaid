@@ -1,25 +1,35 @@
 sequenceDiagram
     participant User
     participant Router
-    participant SokobanView
+    participant GameView
     participant GameLayout
     participant useGameKeyboard
+    participant useGameLoop
     participant useGameStore
 
-    User->>Router: 点击"推箱子"
-    Router->>SokobanView: 路由跳转 /sokoban
-    SokobanView->>useGameStore: useGameStore()
-    SokobanView->>GameLayout: <GameLayout title="推箱子" accentColor="#00FFFF" ...>
-    SokobanView->>useGameKeyboard: useGameKeyboard({ bindings, active })
-    useGameKeyboard->>window: addEventListener('keydown')
-    SokobanView->>SokobanView: initLevel()
-    Note over SokobanView,GameLayout: 游戏运行中...
-    User->>useGameKeyboard: 按下 ArrowUp
-    useGameKeyboard->>SokobanView: handler() → move(0, -1)
-    SokobanView->>SokobanView: checkWin() → winDialog = true
-    SokobanView->>GameLayout: <GameDialog v-model:visible="winDialog">
-    User->>GameLayout: 点击"下一关"
-    GameLayout->>SokobanView: @action → nextLevel()
-    User->>GameLayout: 点击"返回"
-    GameLayout->>SokobanView: @back → router.push('/')
-    SokobanView->>useGameKeyboard: onUnmounted → removeEventListener
+    User->>Router: 点击游戏卡片
+    Router->>GameView: 路由跳转
+    GameView->>useGameStore: useGameStore()
+    GameView->>GameLayout: 渲染布局（title, accentColor, hints, infoItems）
+    GameView->>useGameKeyboard: useGameKeyboard({ bindings, active })
+    useGameKeyboard->>window: addEventListener(keydown + keyup)
+    GameView->>GameView: initGame()
+    GameView->>useGameLoop: start()（interval 或 raf）
+
+    loop 游戏循环
+        useGameLoop->>GameView: onUpdate(dt)
+    end
+
+    User->>useGameKeyboard: 按键
+    useGameKeyboard->>GameView: handler() / onKeyUp handler()
+
+    GameView->>GameView: checkWin() / checkGameOver()
+
+    GameView->>GameLayout: GameDialog v-model:visible="true"
+    GameView->>useGameLoop: stop()
+    GameView->>useGameStore: addScore(game, score)
+    useGameStore->>localStorage: setItem()
+
+    User->>GameLayout: 点击返回
+    GameLayout->>GameView: @back → router.push('/')
+    GameView->>useGameKeyboard: onUnmounted → removeEventListener

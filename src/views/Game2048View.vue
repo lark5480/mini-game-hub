@@ -13,7 +13,7 @@
           v-for="(cell, x) in row"
           :key="x"
           class="board-cell"
-          :class="{ 'has-tile': cell > 0, [`tile-${Math.min(cell, 131072)}`]: true }"
+          :class="{ [`tile-${Math.min(cell, 131072)}`]: true }"
         >
           <span v-if="cell > 0" class="tile-value" :class="{ 'tile-pop': isAnimating(x, y) }">
             {{ cell }}

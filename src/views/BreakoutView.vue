@@ -37,7 +37,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
@@ -56,6 +56,9 @@ const gameOver = ref(false)
 const victory = ref(false)
 const paused = ref(false)
 
+const CANVAS_W = 600
+const CANVAS_H = 450
+const PADDLE_Y = 440
 const PADDLE_WIDTH = 100
 const PADDLE_HEIGHT = 14
 const BALL_RADIUS = 8
@@ -95,8 +98,18 @@ useGameKeyboard({
       handler: () => { leftPressed = true }
     },
     {
+      key: ['ArrowLeft', 'a', 'A'],
+      handler: () => { leftPressed = false },
+      onKeyUp: true
+    },
+    {
       key: ['ArrowRight', 'd', 'D'],
       handler: () => { rightPressed = true }
+    },
+    {
+      key: ['ArrowRight', 'd', 'D'],
+      handler: () => { rightPressed = false },
+      onKeyUp: true
     },
     {
       key: 'Enter',
@@ -109,16 +122,10 @@ useGameKeyboard({
   ]
 })
 
-// keyup 需要手动处理（useGameKeyboard 不处理 keyup）
-function handleKeyup(e: KeyboardEvent) {
-  if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') leftPressed = false
-  if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') rightPressed = false
-}
-
 function initGame() {
-  paddleX = (600 - PADDLE_WIDTH) / 2
-  ballX = 300
-  ballY = 400
+  paddleX = (CANVAS_W - PADDLE_WIDTH) / 2
+  ballX = CANVAS_W / 2
+  ballY = CANVAS_H - 50
   ballDX = 4
   ballDY = -4
   launched = false
@@ -149,7 +156,7 @@ function moveLeft() {
 }
 
 function moveRight() {
-  if (paddleX < 600 - PADDLE_WIDTH) paddleX += PADDLE_SPEED
+  if (paddleX < CANVAS_W - PADDLE_WIDTH) paddleX += PADDLE_SPEED
 }
 
 function drawPaddle() {
@@ -157,7 +164,7 @@ function drawPaddle() {
   ctx.fillStyle = '#818CF8'
   ctx.shadowColor = '#00FFFF'
   ctx.shadowBlur = 15
-  ctx.fillRect(paddleX, 440, PADDLE_WIDTH, PADDLE_HEIGHT)
+  ctx.fillRect(paddleX, PADDLE_Y, PADDLE_WIDTH, PADDLE_HEIGHT)
   ctx.shadowBlur = 0
 }
 
@@ -192,9 +199,9 @@ function drawBricks() {
 }
 
 function gameUpdate(dt: number) {
-  if (!ctx || !canvasRef.value) return
+  if (!ctx) return
 
-  ctx.clearRect(0, 0, canvasRef.value.width, canvasRef.value.height)
+  ctx.clearRect(0, 0, CANVAS_W, CANVAS_H)
   drawBricks()
   drawPaddle()
   drawBall()
@@ -208,27 +215,27 @@ function gameUpdate(dt: number) {
   ballX += ballDX * scale
   ballY += ballDY * scale
 
-  if (ballX + BALL_RADIUS > 600 || ballX - BALL_RADIUS < 0) {
+  if (ballX + BALL_RADIUS > CANVAS_W || ballX - BALL_RADIUS < 0) {
     ballDX = -ballDX
-    ballX = Math.max(BALL_RADIUS, Math.min(600 - BALL_RADIUS, ballX))
+    ballX = Math.max(BALL_RADIUS, Math.min(CANVAS_W - BALL_RADIUS, ballX))
   }
   if (ballY - BALL_RADIUS < 0) {
     ballDY = -ballDY
     ballY = BALL_RADIUS
   }
 
-  if (ballY + BALL_RADIUS >= 440 && ballY - BALL_RADIUS <= 454) {
+  if (ballY + BALL_RADIUS >= PADDLE_Y && ballY - BALL_RADIUS <= PADDLE_Y + PADDLE_HEIGHT) {
     if (ballX > paddleX && ballX < paddleX + PADDLE_WIDTH) {
       const hitPos = (ballX - paddleX) / PADDLE_WIDTH
       const angle = (hitPos - 0.5) * Math.PI * 0.7
       const speed = Math.sqrt(ballDX * ballDX + ballDY * ballDY)
       ballDX = speed * Math.sin(angle)
       ballDY = -Math.abs(speed * Math.cos(angle))
-      ballY = 440 - BALL_RADIUS
+      ballY = PADDLE_Y - BALL_RADIUS
     }
   }
 
-  if (ballY > 460) {
+  if (ballY > CANVAS_H + 10) {
     lives.value--
     if (lives.value <= 0) {
       gameOver.value = true
@@ -236,7 +243,7 @@ function gameUpdate(dt: number) {
       gameStore.addScore('breakout', score.value)
     } else {
       ballX = paddleX + PADDLE_WIDTH / 2
-      ballY = 400
+      ballY = CANVAS_H - 50
       ballDX = 4 * (Math.random() > 0.5 ? 1 : -1)
       ballDY = -4
       launched = false
@@ -300,7 +307,7 @@ function gameUpdate(dt: number) {
   }
 
   if (leftPressed) paddleX = Math.max(0, paddleX - PADDLE_SPEED * scale)
-  if (rightPressed) paddleX = Math.min(600 - PADDLE_WIDTH, paddleX + PADDLE_SPEED * scale)
+  if (rightPressed) paddleX = Math.min(CANVAS_W - PADDLE_WIDTH, paddleX + PADDLE_SPEED * scale)
 }
 
 function restart() {
@@ -316,13 +323,8 @@ onMounted(() => {
   if (canvasRef.value) {
     ctx = canvasRef.value.getContext('2d')
     initGame()
-    window.addEventListener('keyup', handleKeyup)
     gameLoop.start()
   }
-})
-
-onUnmounted(() => {
-  window.removeEventListener('keyup', handleKeyup)
 })
 </script>
 
