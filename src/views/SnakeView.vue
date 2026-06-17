@@ -48,12 +48,14 @@ import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useGameLoop } from '@/composables/useGameLoop'
+import { useSound } from '@/composables/useSound'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
 
 const router = useRouter()
 const gameStore = useGameStore()
+const sound = useSound()
 
 const GRID_WIDTH = 20, GRID_HEIGHT = 15
 const grid = ref<number[][]>([])
@@ -147,12 +149,13 @@ function step() {
 
   if (head.x < 0 || head.x >= GRID_WIDTH || head.y < 0 || head.y >= GRID_HEIGHT ||
       snake.value.some(s => s.x === head.x && s.y === head.y)) {
+    sound.crash()
     endGame(); return
   }
 
   snake.value.unshift(head)
   if (head.x === food.value.x && head.y === food.value.y) {
-    score.value += 10; spawnFood()
+    score.value += 10; spawnFood(); sound.eat()
   } else {
     snake.value.pop()
   }
@@ -175,6 +178,7 @@ function startGame() {
 function endGame() {
   isPlaying.value = false; gameOver.value = true
   gameLoop.stop()
+  sound.gameOver()
   gameStore.addScore('snake', score.value)
 }
 

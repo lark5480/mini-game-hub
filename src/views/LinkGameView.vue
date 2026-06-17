@@ -42,11 +42,13 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
+import { useSound } from '@/composables/useSound'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 
 const router = useRouter()
 const gameStore = useGameStore()
+const sound = useSound()
 
 interface Cell { type: number; matched: boolean }
 
@@ -210,7 +212,7 @@ function selectCell(x: number, y: number) {
   const cell = board.value[y][x]
   if (cell.matched) return
 
-  if (!selected.value) { selected.value = { x, y }; return }
+  if (!selected.value) { selected.value = { x, y }; sound.select(); return }
 
   const sel = selected.value
   if (sel.x === x && sel.y === y) { selected.value = null; return }
@@ -219,8 +221,10 @@ function selectCell(x: number, y: number) {
   if (selCell.type === cell.type && canConnect(sel.x, sel.y, x, y)) {
     cell.matched = true; selCell.matched = true
     score.value += 10; selected.value = null
+    sound.match()
     if (remaining.value === 0) {
       winDialog.value = true
+      sound.win()
       gameStore.addScore('link', score.value)
     } else if (!hasValidPair()) {
       // 死局自动洗牌
@@ -228,6 +232,7 @@ function selectCell(x: number, y: number) {
     }
   } else {
     selected.value = { x, y }
+    sound.select()
   }
 }
 
@@ -238,6 +243,7 @@ function shuffle() {
     [cells[i].type, cells[j].type] = [cells[j].type, cells[i].type]
   }
   selected.value = null
+  sound.click()
 }
 
 initGame()

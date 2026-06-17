@@ -63,12 +63,14 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
+import { useSound } from '@/composables/useSound'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
 
 const router = useRouter()
 const gameStore = useGameStore()
+const sound = useSound()
 
 // 编码：0=空地, 1=玩家, 2=箱子, 3=目标点, 4=箱子在目标上, 5=墙壁
 const levels = [
@@ -165,6 +167,7 @@ function move(dx: number, dy: number) {
     board.value[ny][nx] = 1
     board.value[playerPos.y][playerPos.x] = isTarget(playerPos.x, playerPos.y) ? 3 : 0
     steps.value++
+    sound.move()
   } else if (target === 2 || target === 4) {
     const nnx = nx + dx
     const nny = ny + dy
@@ -179,6 +182,8 @@ function move(dx: number, dy: number) {
       board.value[ny][nx] = 1
       board.value[playerPos.y][playerPos.x] = isTarget(playerPos.x, playerPos.y) ? 3 : 0
       steps.value++
+      sound.push()
+      if (behind === 3) sound.place()
     }
   }
 
@@ -212,6 +217,7 @@ function checkWin() {
     }
   }
   winDialog.value = true
+  sound.win()
   gameStore.addScore('sokoban', Math.max(0, 100 - steps.value))
 }
 

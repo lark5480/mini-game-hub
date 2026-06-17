@@ -42,6 +42,7 @@ import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useGameLoop } from '@/composables/useGameLoop'
+import { useSound } from '@/composables/useSound'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
@@ -49,6 +50,7 @@ import DirectionPad from '@/components/DirectionPad.vue'
 const router = useRouter()
 const gameStore = useGameStore()
 const canvasRef = ref<HTMLCanvasElement | null>(null)
+const sound = useSound()
 
 const score = ref(0)
 const lives = ref(3)
@@ -218,10 +220,12 @@ function gameUpdate(dt: number) {
   if (ballX + BALL_RADIUS > CANVAS_W || ballX - BALL_RADIUS < 0) {
     ballDX = -ballDX
     ballX = Math.max(BALL_RADIUS, Math.min(CANVAS_W - BALL_RADIUS, ballX))
+    sound.bounce()
   }
   if (ballY - BALL_RADIUS < 0) {
     ballDY = -ballDY
     ballY = BALL_RADIUS
+    sound.bounce()
   }
 
   if (ballY + BALL_RADIUS >= PADDLE_Y && ballY - BALL_RADIUS <= PADDLE_Y + PADDLE_HEIGHT) {
@@ -232,6 +236,7 @@ function gameUpdate(dt: number) {
       ballDX = speed * Math.sin(angle)
       ballDY = -Math.abs(speed * Math.cos(angle))
       ballY = PADDLE_Y - BALL_RADIUS
+      sound.bounce()
     }
   }
 
@@ -240,6 +245,7 @@ function gameUpdate(dt: number) {
     if (lives.value <= 0) {
       gameOver.value = true
       launched = false
+      sound.gameOver()
       gameStore.addScore('breakout', score.value)
     } else {
       ballX = paddleX + PADDLE_WIDTH / 2
@@ -247,6 +253,7 @@ function gameUpdate(dt: number) {
       ballDX = 4 * (Math.random() > 0.5 ? 1 : -1)
       ballDY = -4
       launched = false
+      sound.loseLife()
     }
   }
 
@@ -289,6 +296,7 @@ function gameUpdate(dt: number) {
 
         bricks[r][c] = false
         score.value += 10
+        sound.brick()
       }
     }
   }
@@ -303,6 +311,7 @@ function gameUpdate(dt: number) {
   if (allBroken) {
     victory.value = true
     launched = false
+    sound.win()
     gameStore.addScore('breakout', score.value)
   }
 

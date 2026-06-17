@@ -51,12 +51,14 @@ import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useGameLoop } from '@/composables/useGameLoop'
+import { useSound } from '@/composables/useSound'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
 
 const router = useRouter()
 const gameStore = useGameStore()
+const sound = useSound()
 
 const boardWidth = 400, boardHeight = 500, basketWidth = 80, basketSpeed = 30
 const basketX = ref(boardWidth / 2 - basketWidth / 2)
@@ -105,19 +107,22 @@ function spawnFruit() {
 
 function update() {
   const toRemove: number[] = []
-  fruits.value.forEach((fruit) => {
+  for (const fruit of fruits.value) {
+    if (gameOver.value) break
     fruit.y += 4
     if (fruit.y > boardHeight - 60) {
       if (Math.abs(fruit.x + 20 - (basketX.value + basketWidth / 2)) < basketWidth / 2) {
         score.value += 5
         toRemove.push(fruit.id)
+        sound.collect()
       } else if (fruit.y > boardHeight) {
         lives.value--
         toRemove.push(fruit.id)
+        sound.loseLife()
         if (lives.value <= 0) endGame()
       }
     }
-  })
+  }
   fruits.value = fruits.value.filter(f => !toRemove.includes(f.id))
 }
 
@@ -130,6 +135,7 @@ function startGame() {
 function endGame() {
   isPlaying.value = false; gameOver.value = true
   gameLoop.stop()
+  sound.gameOver()
   gameStore.addScore('catch-fruit', score.value)
 }
 

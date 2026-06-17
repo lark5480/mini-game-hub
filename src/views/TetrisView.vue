@@ -68,12 +68,14 @@ import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useGameLoop } from '@/composables/useGameLoop'
+import { useSound } from '@/composables/useSound'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
 
 const router = useRouter()
 const gameStore = useGameStore()
+const sound = useSound()
 
 const GRID_W = 10, GRID_H = 20
 type Cell = { color: string | null }
@@ -226,6 +228,7 @@ function clearLines() {
     }
   }
   if (cleared > 0) {
+    sound.clear(cleared)
     lines.value += cleared
     const pts = [0, 100, 300, 500, 800]
     score.value += pts[cleared] || 800
@@ -236,6 +239,7 @@ function step() {
   if (!current.value || !isPlaying.value) return
   if (collides(current.value.shape, current.value.x, current.value.y + 1)) {
     placePiece()
+    sound.drop()
     clearLines()
     spawnPiece()
   } else {
@@ -246,6 +250,7 @@ function step() {
 function move(dir: number) {
   if (current.value && isPlaying.value && !collides(current.value.shape, current.value.x + dir, current.value.y)) {
     current.value.x += dir
+    sound.move()
   }
 }
 
@@ -255,6 +260,7 @@ function switchShape() {
   const rotated = s[0].map((_, i) => s.map(r => r[i]).reverse())
   if (!collides(rotated, current.value.x, current.value.y)) {
     current.value.shape = rotated
+    sound.rotate()
   }
 }
 
@@ -270,6 +276,7 @@ function drop() {
   while (!collides(current.value.shape, current.value.x, current.value.y + 1)) {
     current.value.y++
   }
+  sound.drop()
 }
 
 function startGame() {
@@ -286,6 +293,7 @@ function startGame() {
 function endGame() {
   isPlaying.value = false; gameOver.value = true
   gameLoop.stop()
+  sound.gameOver()
   gameStore.addScore('tetris', score.value)
 }
 

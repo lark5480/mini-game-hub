@@ -93,6 +93,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
+import { useSound } from '@/composables/useSound'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 
@@ -103,6 +104,7 @@ interface Hole {
 
 const router = useRouter()
 const gameStore = useGameStore()
+const sound = useSound()
 
 const difficulties = [
   { name: 'easy', label: '简单', gridCols: 3, gridRows: 3, interval: 1200, duration: 1000 },
@@ -206,17 +208,18 @@ function spawnMole() {
 
 function whack(index: number) {
   if (!gameStarted.value) return
-  
+
   const hole = holes.value[index]
-  
+
   if (hole.active && !hole.hit) {
     hole.hit = true
     combo.value++
-    
+
     const baseScore = 10
     const comboBonus = (combo.value - 1) * 5
     score.value += baseScore + comboBonus
-    
+    sound.hit()
+
     const timeoutId = window.setTimeout(() => {
       pendingTimeouts.delete(timeoutId)
       hole.active = false
@@ -225,6 +228,7 @@ function whack(index: number) {
     pendingTimeouts.add(timeoutId)
   } else if (!hole.active) {
     combo.value = 0
+    sound.miss()
   }
 }
 
@@ -232,6 +236,7 @@ function gameOver() {
   stopAllTimers()
   gameStarted.value = false
   gameOverDialog.value = true
+  sound.gameOver()
   gameStore.addScore('whackamole', score.value)
 }
 

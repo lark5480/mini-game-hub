@@ -11,6 +11,18 @@
       <div class="game-info">
         <span v-for="item in infoItems" :key="item.label">{{ item.label }} {{ item.value }}</span>
       </div>
+      <button class="sound-btn" @click="toggleMute" :title="muted ? '开启音效' : '关闭音效'">
+        <svg v-if="!muted" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+        </svg>
+        <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <line x1="23" y1="9" x2="17" y2="15"/>
+          <line x1="17" y1="9" x2="23" y2="15"/>
+        </svg>
+      </button>
     </div>
     <div class="keyboard-hint" v-if="hints?.length">
       <span v-for="hint in hints" :key="hint">{{ hint }}</span>
@@ -25,6 +37,8 @@
 </template>
 
 <script setup lang="ts">
+import { useSound } from '@/composables/useSound'
+
 export interface InfoItem {
   label: string
   value: string | number
@@ -41,6 +55,8 @@ defineProps<{
 defineEmits<{
   back: []
 }>()
+
+const { muted, toggleMute } = useSound()
 </script>
 
 <style scoped>
@@ -91,6 +107,26 @@ defineEmits<{
   gap: 20px;
   font-size: 0.95em;
   color: var(--game-text-info);
+}
+
+.sound-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: var(--game-btn-bg);
+  border: 1px solid var(--game-btn-border);
+  color: var(--game-text);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.sound-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--game-accent);
 }
 
 .keyboard-hint {

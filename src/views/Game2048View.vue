@@ -60,6 +60,7 @@ import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
+import { useSound } from '@/composables/useSound'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
@@ -71,6 +72,7 @@ type History = { grid: Grid; score: number }
 const SIZE = 4
 const router = useRouter()
 const gameStore = useGameStore()
+const sound = useSound()
 
 const grid = ref<Grid>(createEmptyGrid())
 const score = ref(0)
@@ -216,6 +218,7 @@ function handleMove(dir: Direction) {
   if (history.value.length > 20) history.value.shift()
 
   score.value += totalMerged
+  if (totalMerged > 0) sound.merge(totalMerged)
   spawnTile()
 
   // 检查是否达到 2048
@@ -225,6 +228,7 @@ function handleMove(dir: Direction) {
         if (grid.value[y][x] === 2048) {
           won.value = true
           winDialog.value = true
+          sound.win()
           gameStore.addScore('2048', score.value)
           return
         }
@@ -235,6 +239,7 @@ function handleMove(dir: Direction) {
   // 检查游戏结束
   if (!canMove(grid.value)) {
     gameStore.addScore('2048', score.value)
+    sound.gameOver()
     gameOverDialog.value = true
   }
 }
