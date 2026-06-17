@@ -34,6 +34,7 @@ App.vue（全局样式 + scanlines 特效）
 |------------|------|
 | `useGameKeyboard` | 键盘绑定，自动 `addEventListener`/`removeEventListener`（keydown + keyup），`active` 控制是否响应，`onKeyUp` 标记 keyup 绑定 |
 | `useGameLoop` | 游戏循环：`interval` 模式（`setInterval`，用于 Snake/Tetris/CatchFruit）或 `raf` 模式（`requestAnimationFrame` + 可选 `fixedStep`，用于 Breakout） |
+| `useSound` | 音效系统：Web Audio API 合成音效（tone/sweep），20+ 预设（bounce/eat/merge/clear 等），全局 `muted` ref + `localStorage` 持久化，`readonly` 暴露防止绕过持久化 |
 
 ## Store（分数系统）
 
@@ -46,6 +47,7 @@ App.vue（全局样式 + scanlines 特效）
   → useGameKeyboard / DirectionPad
   → 游戏视图更新状态
   → useGameLoop 驱动渲染（interval 或 rAF）
+  → 游戏事件触发音效（useSound.tone/sweep）
   → 游戏结束 → useGameStore.addScore() → localStorage 持久化
 ```
 
