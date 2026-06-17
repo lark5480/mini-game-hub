@@ -87,7 +87,8 @@ game-collection/
 │   │   └── DirectionPad.vue  # 方向控制键盘
 │   ├── composables/         # 组合式函数
 │   │   ├── useGameKeyboard.ts # 键盘输入处理
-│   │   └── useGameLoop.ts     # 游戏循环管理
+│   │   ├── useGameLoop.ts     # 游戏循环管理
+│   │   └── useSound.ts        # 音效系统（Web Audio API）
 │   ├── router/              # 路由配置
 │   │   └── index.ts
 │   ├── stores/              # 状态管理
@@ -135,6 +136,11 @@ game-collection/
 ### ⌨️ 键盘支持
 - 部分游戏支持键盘控制（方向键、WASD）
 - 流畅的键盘响应
+
+### 🔊 音效系统
+- 基于 Web Audio API 的合成音效，无需加载音频文件
+- 全局静音切换按钮（GameLayout 顶部栏），状态持久化到 localStorage
+- 适配各游戏场景：碰撞、消除、收集、移动、胜负等事件
 
 ---
 

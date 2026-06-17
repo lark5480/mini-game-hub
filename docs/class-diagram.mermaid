@@ -59,6 +59,33 @@ classDiagram
         +Number fixedStep
     }
 
+    class useSound {
+        +Ref~Boolean~ muted (readonly)
+        +toggleMute() void
+        +tone(freq, dur, type, vol, delay) void
+        +sweep(f1, f2, dur, type, vol) void
+        +click() void
+        +move() void
+        +push() void
+        +place() void
+        +select() void
+        +match() void
+        +eat() void
+        +crash() void
+        +drop() void
+        +rotate() void
+        +clear(lines) void
+        +bounce() void
+        +brick() void
+        +loseLife() void
+        +merge(level) void
+        +hit() void
+        +miss() void
+        +collect() void
+        +win() void
+        +gameOver() void
+    }
+
     class GameScore {
         +String name
         +Number score

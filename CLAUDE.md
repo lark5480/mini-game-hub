@@ -20,6 +20,7 @@
 <script setup lang="ts">
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useGameLoop } from '@/composables/useGameLoop'
+import { useSound } from '@/composables/useSound'
 import { useGameStore } from '@/stores/game'
 </script>
 ```
@@ -29,6 +30,7 @@ import { useGameStore } from '@/stores/game'
 - 动画循环用 `useGameLoop({ onUpdate, mode, fixedStep? })`，组件卸载自动清理
 - 键盘用 `useGameKeyboard({ bindings, active })`，`active=false` 时自动忽略输入；同一键需 keyup/keydown 分离时加 `{ onKeyUp: true }`
 - 分数用 `useGameStore().addScore(gameName, score)`
+- 音效用 `useSound()`，导入后通过 `sound.xxx()` 调用（全局静音由 GameLayout 统一控制，无需各游戏自行处理）
 - **新增游戏**必须同步：路由（`src/router/index.ts`）→ Store（`src/stores/game.ts` 的 `defaultScores()`）→ 首页卡片（`HomeView.vue`）
 
 ## 注意事项

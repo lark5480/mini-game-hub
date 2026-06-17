@@ -5,11 +5,13 @@ sequenceDiagram
     participant GameLayout
     participant useGameKeyboard
     participant useGameLoop
+    participant useSound
     participant useGameStore
 
     User->>Router: 点击游戏卡片
     Router->>GameView: 路由跳转
     GameView->>useGameStore: useGameStore()
+    GameView->>useSound: useSound()
     GameView->>GameLayout: 渲染布局（title, accentColor, hints, infoItems）
     GameView->>useGameKeyboard: useGameKeyboard({ bindings, active })
     useGameKeyboard->>window: addEventListener(keydown + keyup)
@@ -29,6 +31,9 @@ sequenceDiagram
     GameView->>useGameLoop: stop()
     GameView->>useGameStore: addScore(game, score)
     useGameStore->>localStorage: setItem()
+
+    User->>GameLayout: 点击静音按钮
+    GameLayout->>useSound: toggleMute() → localStorage.setItem()
 
     User->>GameLayout: 点击返回
     GameLayout->>GameView: @back → router.push('/')
