@@ -82,17 +82,22 @@ npm run preview
 game-collection/
 ├── src/
 │   ├── components/          # 公共组件
-│   │   ├── GameLayout.vue    # 游戏布局组件
-│   │   ├── GameDialog.vue    # 游戏对话框
-│   │   └── DirectionPad.vue  # 方向控制键盘
+│   │   ├── GameLayout.vue         # 游戏布局组件
+│   │   ├── GameDialog.vue         # 游戏对话框
+│   │   ├── DirectionPad.vue       # 方向控制键盘
+│   │   ├── LeaderboardOverlay.vue  # 排行榜提交弹窗
+│   │   └── LeaderboardStrip.vue   # 内嵌排行榜条
 │   ├── composables/         # 组合式函数
-│   │   ├── useGameKeyboard.ts # 键盘输入处理
-│   │   ├── useGameLoop.ts     # 游戏循环管理
-│   │   └── useSound.ts        # 音效系统（Web Audio API）
+│   │   ├── useGameKeyboard.ts  # 键盘输入处理
+│   │   ├── useGameLoop.ts      # 游戏循环管理
+│   │   ├── useSound.ts         # 音效系统（Web Audio API）
+│   │   └── useLeaderboard.ts   # 排行榜数据（Supabase）
 │   ├── router/              # 路由配置
 │   │   └── index.ts
-│   ├── stores/              # 状态管理
-│   │   └── game.ts           # 游戏分数管理
+│   ├── lib/
+│   │   └── supabase.ts       # Supabase 客户端
+│   ├── stores/               # 状态管理
+│   │   └── game.ts            # 游戏本地分数管理
 │   ├── styles/              # 全局样式
 │   │   └── game-theme.css    # 游戏主题样式
 │   ├── views/               # 游戏页面
@@ -128,6 +133,14 @@ game-collection/
 - 分数自动保存到浏览器的 LocalStorage
 - 首页显示各游戏的最高分记录
 
+### 🏆 全局排行榜（Supabase）
+- 基于 Supabase PostgreSQL 的跨玩家积分排行榜
+- 匿名昵称制，无需注册登录
+- 同昵称自动保留最高分
+- 每款游戏内嵌实时排行榜条（Top 5）
+- 游戏结束可一键提交分数、查看排行、再来一局
+- 2048 和连连看支持中途提交分数
+
 ### 🎨 统一的游戏布局
 - 所有游戏共享统一的布局组件（GameLayout）
 - 包含标题栏、游戏区、控制区
@@ -150,8 +163,55 @@ game-collection/
 2. 在 `src/router/index.ts` 添加路由配置
 3. 在 `src/stores/game.ts` 的 `defaultScores` 注册游戏名称
 4. 在 `src/views/HomeView.vue` 添加游戏卡片（包含图标、标题、描述、颜色）
+5. 在游戏视图中嵌入 `<LeaderboardStrip :game="'xxx'" />`
+6. 在 GameDialog 结束回调中调用 `openLeaderboard` 弹出排行榜提交
 
 参考现有游戏的实现方式。
+
+---
+
+## 🚀 部署到 Netlify
+
+### 前置条件
+- Supabase 项目已创建，SQL 已执行（见下方）
+- `.env` 已配置（本地开发用，不提交到 git）
+
+### 1. Supabase 初始化
+
+在 Supabase Dashboard → SQL Editor 执行：
+
+```sql
+create table leaderboard (
+  id bigint generated always as identity primary key,
+  game text not null,
+  nickname text not null,
+  score integer not null,
+  created_at timestamptz default now()
+);
+create index idx_leaderboard_game_score on leaderboard (game, score desc);
+alter table leaderboard enable row level security;
+create policy "anon select" on leaderboard for select to anon using (true);
+create policy "anon insert" on leaderboard for insert to anon with check (true);
+create policy "anon update" on leaderboard for update to anon using (true) with check (true);
+```
+
+### 2. Netlify 配置
+
+1. 推送代码到 GitHub
+2. Netlify 导入 GitHub 仓库
+3. **Site settings → Environment variables** 添加：
+   - `VITE_SUPABASE_URL` = 你的 Supabase 项目 URL
+   - `VITE_SUPABASE_ANON_KEY` = Publishable key（不是 Secret key）
+4. Deploy settings 保持默认：
+   - Build command: `npm run build`
+   - Publish directory: `dist`
+5. 触发部署
+
+### 3. 验证
+
+- 访问部署 URL，打开任一游戏
+- 游戏结束 → 提交分数 → 应看到排行榜
+- 排行榜条自动显示最新数据
 
 ---
 

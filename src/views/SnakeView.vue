@@ -17,6 +17,7 @@
         ></div>
       </div>
     </div>
+    <LeaderboardStrip game="snake" />
     <template #controls>
       <DirectionPad
         @up="changeDir('up')"
@@ -36,8 +37,16 @@
       icon="fail"
       title="游戏结束"
       :message="'得分: ' + score"
-      actionText="再来一局"
-      @action="startGame"
+      actionText="提交分数"
+      @action="openLeaderboard"
+    />
+    <LeaderboardOverlay
+      :visible="showLeaderboard"
+      game="snake"
+      gameName="贪吃蛇"
+      :score="lastScore"
+      @update:visible="showLeaderboard = $event"
+      @replay="startGame"
     />
   </GameLayout>
 </template>
@@ -52,10 +61,14 @@ import { useSound } from '@/composables/useSound'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
+import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
+import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 
 const router = useRouter()
 const gameStore = useGameStore()
 const sound = useSound()
+
+const showLeaderboard = ref(false)
 
 const GRID_WIDTH = 20, GRID_HEIGHT = 15
 const grid = ref<number[][]>([])
@@ -66,6 +79,7 @@ const nextDir = ref<'up'|'down'|'left'|'right'>('right')
 const score = ref(0)
 const isPlaying = ref(false)
 const gameOver = ref(false)
+const lastScore = ref(0)
 
 const gameLoop = useGameLoop({
   mode: 'interval',
@@ -169,6 +183,7 @@ function changeDir(dir: 'up'|'down'|'left'|'right') {
 
 function startGame() {
   gameLoop.stop()
+  showLeaderboard.value = false
   initGrid(); initSnake(); spawnFood(); render()
   score.value = 0; gameOver.value = false; isPlaying.value = true
   direction.value = 'right'; nextDir.value = 'right'
@@ -179,7 +194,13 @@ function endGame() {
   isPlaying.value = false; gameOver.value = true
   gameLoop.stop()
   sound.gameOver()
+  lastScore.value = score.value
   gameStore.addScore('snake', score.value)
+}
+
+function openLeaderboard() {
+  gameOver.value = false
+  showLeaderboard.value = true
 }
 
 function handleBack() {

@@ -45,7 +45,7 @@
         <div class="time-fill" :style="{ width: (timeLeft / 30 * 100) + '%' }"></div>
       </div>
     </div>
-
+    <LeaderboardStrip game="whackamole" />
     <template #controls>
       <div class="game-controls">
         <div class="difficulty-buttons">
@@ -83,8 +83,16 @@
       icon="success"
       title="游戏结束！"
       :message="'最终得分: ' + score"
-      actionText="再玩一次"
-      @action="restartGame"
+      actionText="提交分数"
+      @action="openLeaderboard"
+    />
+    <LeaderboardOverlay
+      :visible="showLeaderboard"
+      game="whackamole"
+      gameName="打地鼠"
+      :score="lastScore"
+      @update:visible="showLeaderboard = $event"
+      @replay="restartGame"
     />
   </GameLayout>
 </template>
@@ -96,6 +104,8 @@ import { useGameStore } from '@/stores/game'
 import { useSound } from '@/composables/useSound'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
+import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
+import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 
 interface Hole {
   active: boolean
@@ -118,6 +128,8 @@ const timeLeft = ref(30)
 const combo = ref(0)
 const gameStarted = ref(false)
 const gameOverDialog = ref(false)
+const showLeaderboard = ref(false)
+const lastScore = ref(0)
 
 const gridCols = ref(3)
 const gridRows = ref(3)
@@ -139,12 +151,13 @@ function initHoles() {
 }
 
 function startGame() {
+  showLeaderboard.value = false
   gameStarted.value = true
   score.value = 0
   timeLeft.value = 30
   combo.value = 0
   gameOverDialog.value = false
-  
+
   updateDifficultySettings()
   initHoles()
   countdown()
@@ -237,7 +250,13 @@ function gameOver() {
   gameStarted.value = false
   gameOverDialog.value = true
   sound.gameOver()
+  lastScore.value = score.value
   gameStore.addScore('whackamole', score.value)
+}
+
+function openLeaderboard() {
+  gameOverDialog.value = false
+  showLeaderboard.value = true
 }
 
 function stopAllTimers() {

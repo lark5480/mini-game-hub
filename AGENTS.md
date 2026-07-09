@@ -1,8 +1,8 @@
-# CLAUDE.md
+# AGENTS.md
 
 小游戏合集 — Vue 3 + TypeScript + Vite + Pinia + Vue Router。原生 CSS（复古霓虹主题），无 UI 库。
 
-详见 [README.md](./README.md)（游戏列表、启动命令、目录结构）。
+详见 [README.md](./README.md)（游戏列表、启动命令、目录结构、部署指南）。
 
 ## 游戏开发约定
 

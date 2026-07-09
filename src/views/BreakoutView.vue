@@ -8,6 +8,7 @@
     @back="handleBack"
   >
     <canvas ref="canvasRef" width="600" height="450"></canvas>
+    <LeaderboardStrip game="breakout" />
     <template #controls>
       <DirectionPad layout="horizontal" :showUp="false" :showDown="false" @left="moveLeft" @right="moveRight">
         <template #extra>
@@ -21,8 +22,8 @@
       icon="fail"
       title="游戏结束"
       :message="'得分 ' + score"
-      actionText="再来一局"
-      @action="restart"
+      actionText="提交分数"
+      @action="openLeaderboard"
     />
     <GameDialog
       v-model:visible="victory"
@@ -30,8 +31,16 @@
       icon="success"
       title="恭喜通关！"
       :message="'得分 ' + score"
-      actionText="再玩一局"
-      @action="restart"
+      actionText="提交分数"
+      @action="openLeaderboard"
+    />
+    <LeaderboardOverlay
+      :visible="showLeaderboard"
+      game="breakout"
+      gameName="弹球打砖块"
+      :score="lastScore"
+      @update:visible="showLeaderboard = $event"
+      @replay="restart"
     />
   </GameLayout>
 </template>
@@ -45,6 +54,8 @@ import { useGameLoop } from '@/composables/useGameLoop'
 import { useSound } from '@/composables/useSound'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
+import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
+import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
 
 const router = useRouter()
@@ -55,6 +66,8 @@ const sound = useSound()
 const score = ref(0)
 const lives = ref(3)
 const gameOver = ref(false)
+const showLeaderboard = ref(false)
+const lastScore = ref(0)
 const victory = ref(false)
 const paused = ref(false)
 
@@ -246,6 +259,7 @@ function gameUpdate(dt: number) {
       gameOver.value = true
       launched = false
       sound.gameOver()
+      lastScore.value = score.value
       gameStore.addScore('breakout', score.value)
     } else {
       ballX = paddleX + PADDLE_WIDTH / 2
@@ -312,6 +326,7 @@ function gameUpdate(dt: number) {
     victory.value = true
     launched = false
     sound.win()
+    lastScore.value = score.value
     gameStore.addScore('breakout', score.value)
   }
 
@@ -320,7 +335,14 @@ function gameUpdate(dt: number) {
 }
 
 function restart() {
+  showLeaderboard.value = false
   initGame()
+}
+
+function openLeaderboard() {
+  gameOver.value = false
+  victory.value = false
+  showLeaderboard.value = true
 }
 
 function handleBack() {

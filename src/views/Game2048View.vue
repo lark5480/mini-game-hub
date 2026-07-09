@@ -21,6 +21,7 @@
         </div>
       </div>
     </div>
+    <LeaderboardStrip game="2048" />
     <template #controls>
       <DirectionPad
         @up="move('up')"
@@ -30,6 +31,7 @@
       >
         <template #extra>
           <button @click="undo" class="extra-btn" :disabled="history.length === 0">撤销</button>
+          <button @click="submitScore" class="extra-btn">提交分数</button>
           <button @click="restart" class="extra-btn">重来</button>
         </template>
       </DirectionPad>
@@ -49,8 +51,16 @@
       icon="fail"
       title="游戏结束"
       :message="'最终得分: ' + score"
-      actionText="再来一局"
-      @action="restart"
+      actionText="提交分数"
+      @action="openLeaderboard"
+    />
+    <LeaderboardOverlay
+      :visible="showLeaderboard"
+      game="2048"
+      gameName="2048"
+      :score="lastScore"
+      @update:visible="showLeaderboard = $event"
+      @replay="restart"
     />
   </GameLayout>
 </template>
@@ -64,6 +74,8 @@ import { useSound } from '@/composables/useSound'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
+import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
+import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 
 type Direction = 'up' | 'down' | 'left' | 'right'
 type Grid = number[][]
@@ -79,6 +91,8 @@ const score = ref(0)
 const bestScore = computed(() => gameStore.getTopScore('2048'))
 const winDialog = ref(false)
 const gameOverDialog = ref(false)
+const showLeaderboard = ref(false)
+const lastScore = ref(0)
 const won = ref(false)
 const history = ref<History[]>([])
 const newTiles = ref<{ x: number; y: number }[]>([])
@@ -121,7 +135,9 @@ function spawnTile(): boolean {
   const empty = getEmptyCells(grid.value)
   if (empty.length === 0) return false
   const cell = empty[Math.floor(Math.random() * empty.length)]
-  grid.value[cell.y][cell.x] = Math.random() < 0.9 ? 2 : 4
+  const maxTile = Math.max(...grid.value.flat())
+  const fourChance = maxTile > 2048 ? 0.5 : 0.1
+  grid.value[cell.y][cell.x] = Math.random() < (1 - fourChance) ? 2 : 4
   newTiles.value = [{ x: cell.x, y: cell.y }]
   return true
 }
@@ -238,6 +254,7 @@ function handleMove(dir: Direction) {
 
   // 检查游戏结束
   if (!canMove(grid.value)) {
+    lastScore.value = score.value
     gameStore.addScore('2048', score.value)
     sound.gameOver()
     gameOverDialog.value = true
@@ -257,6 +274,7 @@ function undo() {
 }
 
 function restart() {
+  showLeaderboard.value = false
   grid.value = createEmptyGrid()
   score.value = 0
   won.value = false
@@ -266,6 +284,18 @@ function restart() {
   newTiles.value = []
   spawnTile()
   spawnTile()
+}
+
+function openLeaderboard() {
+  gameOverDialog.value = false
+  showLeaderboard.value = true
+}
+
+function submitScore() {
+  lastScore.value = score.value
+  gameOverDialog.value = false
+  winDialog.value = false
+  showLeaderboard.value = true
 }
 
 function isAnimating(x: number, y: number): boolean {
