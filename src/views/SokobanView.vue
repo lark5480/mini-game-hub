@@ -3,8 +3,8 @@
     title="推箱子"
     accentColor="#00FFFF"
     gradientEnd="#FF006E"
-    :hints="['方向键/WASD 移动', 'R 重置', 'Enter 下一关']"
-    :infoItems="[{ label: '关卡', value: levelIndex + 1 }, { label: '步数', value: steps }]"
+    :hints="['方向键/WASD 移动', 'R 重置当前关', '重玩从第1关开始']"
+    :infoItems="[{ label: '关卡', value: levelIndex + 1 }, { label: '步数', value: steps }, { label: '总分', value: totalScore }]"
     @back="router.push('/')"
   >
     <div class="game-board">
@@ -33,6 +33,7 @@
         </div>
       </div>
     </div>
+    <LeaderboardStrip game="sokoban" />
     <template #controls>
       <DirectionPad
         @up="move(0, -1)"
@@ -41,6 +42,7 @@
         @right="move(1, 0)"
       >
         <template #extra>
+          <button @click="submitScore" class="extra-btn">提交分数</button>
           <button @click="resetLevel" class="extra-btn">重置</button>
           <button @click="nextLevel" class="extra-btn">下一关</button>
         </template>
@@ -50,10 +52,18 @@
       v-model:visible="winDialog"
       accentColor="#00FFFF"
       icon="success"
-      title="恭喜过关！"
-      :message="'用了 ' + steps + ' 步'"
-      actionText="下一关"
-      @action="nextLevel"
+      :title="gameComplete ? '全部通关！' : '恭喜过关！'"
+      :message="gameComplete ? '总分: ' + totalScore : '用了 ' + steps + ' 步'"
+      :actionText="gameComplete ? '提交分数' : '下一关'"
+      @action="handleDialogAction"
+    />
+    <LeaderboardOverlay
+      :visible="showLeaderboard"
+      game="sokoban"
+      gameName="推箱子"
+      :score="lastScore"
+      @update:visible="showLeaderboard = $event"
+      @replay="restartGame"
     />
   </GameLayout>
 </template>
@@ -66,14 +76,20 @@ import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useSound } from '@/composables/useSound'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
+import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
+import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
 
 const router = useRouter()
 const gameStore = useGameStore()
 const sound = useSound()
 
+const showLeaderboard = ref(false)
+const lastScore = ref(0)
+
 // 编码：0=空地, 1=玩家, 2=箱子, 3=目标点, 4=箱子在目标上, 5=墙壁
 const levels = [
+  // 关卡 1 — 入门：1 箱 1 目标
   [
     [5,5,5,5,5,5],
     [5,0,0,0,0,5],
@@ -82,6 +98,7 @@ const levels = [
     [5,0,0,3,0,5],
     [5,5,5,5,5,5]
   ],
+  // 关卡 2 — 基础：2 箱 2 目标
   [
     [5,5,5,5,5,5,5],
     [5,0,0,0,0,0,5],
@@ -91,6 +108,7 @@ const levels = [
     [5,0,0,3,3,0,5],
     [5,5,5,5,5,5,5]
   ],
+  // 关卡 3 — 初级：3 箱 3 目标
   [
     [5,5,5,5,5,5,5],
     [5,0,1,0,0,0,5],
@@ -99,6 +117,88 @@ const levels = [
     [5,0,2,0,0,0,5],
     [5,3,3,3,0,0,5],
     [5,5,5,5,5,5,5]
+  ],
+  // 关卡 4 — 中级：3 箱 目标分散
+  [
+    [5,5,5,5,5,5,5,5],
+    [5,0,0,0,0,0,0,5],
+    [5,0,2,0,2,0,3,5],
+    [5,0,0,1,0,0,0,5],
+    [5,0,2,0,0,0,3,5],
+    [5,0,0,0,0,0,3,5],
+    [5,5,5,5,5,5,5,5]
+  ],
+  // 关卡 5 — 进阶：4 箱 4 目标
+  [
+    [5,5,5,5,5,5,5,5],
+    [5,3,0,0,0,0,3,5],
+    [5,0,0,0,0,0,0,5],
+    [5,0,0,2,2,0,0,5],
+    [5,0,0,1,0,0,0,5],
+    [5,0,0,2,2,0,0,5],
+    [5,3,0,0,0,0,3,5],
+    [5,5,5,5,5,5,5,5]
+  ],
+  // 关卡 6 — 挑战：3 箱 3 目标 有隔墙
+  [
+    [5,5,5,5,5,5,5,5],
+    [5,3,0,0,5,0,3,5],
+    [5,0,2,0,5,0,0,5],
+    [5,0,0,0,0,0,0,5],
+    [5,0,0,0,5,0,0,5],
+    [5,0,2,0,5,0,2,5],
+    [5,3,0,1,0,0,0,5],
+    [5,5,5,5,5,5,5,5]
+  ],
+  // 关卡 7 — 4 箱 4 目标
+  [
+    [5,5,5,5,5,5,5,5],
+    [5,0,0,0,0,0,0,5],
+    [5,0,3,0,0,3,0,5],
+    [5,0,0,0,0,0,0,5],
+    [5,0,0,0,1,0,0,5],
+    [5,0,0,0,0,0,0,5],
+    [5,0,2,0,0,2,0,5],
+    [5,0,0,2,2,0,0,5],
+    [5,0,3,0,0,3,0,5],
+    [5,5,5,5,5,5,5,5]
+  ],
+  // 关卡 8 — 6 箱 6 目标 隔间
+  [
+    [5,5,5,5,5,5,5,5],
+    [5,1,0,0,5,0,3,5],
+    [5,0,2,0,5,0,0,5],
+    [5,0,0,2,0,0,3,5],
+    [5,3,0,0,5,0,0,5],
+    [5,0,2,0,3,0,2,5],
+    [5,0,0,5,0,2,0,5],
+    [5,0,0,5,3,0,0,5],
+    [5,3,0,0,5,0,2,5],
+    [5,5,5,5,5,5,5,5]
+  ],
+  // 关卡 9 — 5 箱 5 目标
+  [
+    [5,5,5,5,5,5,5,5,5],
+    [5,3,0,0,0,0,0,3,5],
+    [5,0,0,2,0,2,0,0,5],
+    [5,0,0,0,0,0,0,0,5],
+    [5,0,2,0,1,0,2,0,5],
+    [5,0,0,0,0,0,0,0,5],
+    [5,0,0,2,0,0,0,0,5],
+    [5,3,0,0,3,0,0,3,5],
+    [5,5,5,5,5,5,5,5,5]
+  ],
+  // 关卡 10 — 5 箱 5 目标
+  [
+    [5,5,5,5,5,5,5,5,5],
+    [5,1,0,0,5,0,0,3,5],
+    [5,0,2,0,0,0,2,0,5],
+    [5,0,2,0,5,0,0,0,5],
+    [5,3,0,0,0,0,0,3,5],
+    [5,0,0,5,0,0,2,0,5],
+    [5,0,2,0,0,5,0,0,5],
+    [5,3,0,0,0,0,0,3,5],
+    [5,5,5,5,5,5,5,5,5]
   ]
 ]
 
@@ -106,6 +206,8 @@ const levelIndex = ref(0)
 const steps = ref(0)
 const board = ref<number[][]>([])
 const winDialog = ref(false)
+const totalScore = ref(0)
+const gameComplete = ref(false)
 
 useGameKeyboard({
   bindings: [
@@ -128,10 +230,6 @@ useGameKeyboard({
     {
       key: ['r', 'R'],
       handler: () => { if (!winDialog.value) resetLevel() }
-    },
-    {
-      key: ['Enter', ' '],
-      handler: () => { if (winDialog.value) nextLevel() }
     }
   ]
 })
@@ -218,17 +316,45 @@ function checkWin() {
   }
   winDialog.value = true
   sound.win()
-  gameStore.addScore('sokoban', Math.max(0, 100 - steps.value))
+  const levelScore = Math.max(0, 100 - steps.value)
+  lastScore.value = levelScore
+  totalScore.value += levelScore
+  gameStore.addScore('sokoban', totalScore.value)
 }
 
 function resetLevel() { initLevel() }
 
 function nextLevel() {
+  showLeaderboard.value = false
+  winDialog.value = false
   if (levelIndex.value < levels.length - 1) {
     levelIndex.value++
+    initLevel()
   } else {
-    levelIndex.value = 0
+    gameComplete.value = true
   }
+}
+
+function submitScore() {
+  lastScore.value = totalScore.value
+  winDialog.value = false
+  gameComplete.value = false
+  showLeaderboard.value = true
+}
+
+function handleDialogAction() {
+  if (gameComplete.value) {
+    submitScore()
+  } else {
+    nextLevel()
+  }
+}
+
+function restartGame() {
+  levelIndex.value = 0
+  totalScore.value = 0
+  gameComplete.value = false
+  showLeaderboard.value = false
   initLevel()
 }
 

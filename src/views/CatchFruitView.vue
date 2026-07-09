@@ -26,6 +26,7 @@
         </svg>
       </div>
     </div>
+    <LeaderboardStrip game="catch-fruit" />
     <template #controls>
       <DirectionPad layout="horizontal" :showUp="false" :showDown="false" @left="moveLeft" @right="moveRight">
         <template #extra>
@@ -39,8 +40,16 @@
       icon="fail"
       title="游戏结束"
       :message="'得分: ' + score"
-      actionText="再来一局"
-      @action="startGame"
+      actionText="提交分数"
+      @action="openLeaderboard"
+    />
+    <LeaderboardOverlay
+      :visible="showLeaderboard"
+      game="catch-fruit"
+      gameName="接水果"
+      :score="lastScore"
+      @update:visible="showLeaderboard = $event"
+      @replay="startGame"
     />
   </GameLayout>
 </template>
@@ -54,6 +63,8 @@ import { useGameLoop } from '@/composables/useGameLoop'
 import { useSound } from '@/composables/useSound'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
+import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
+import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
 
 const router = useRouter()
@@ -64,6 +75,8 @@ const boardWidth = 400, boardHeight = 500, basketWidth = 80, basketSpeed = 30
 const basketX = ref(boardWidth / 2 - basketWidth / 2)
 const fruits = ref<{ id: number; x: number; y: number; emoji: string }[]>([])
 const score = ref(0), lives = ref(3), isPlaying = ref(false), gameOver = ref(false), fruitId = ref(0)
+const showLeaderboard = ref(false)
+const lastScore = ref(0)
 
 const fruitEmojis = ['🍎','🍊','🍋','🍇','🍓','🍉','🍑','🍒']
 
@@ -127,6 +140,7 @@ function update() {
 }
 
 function startGame() {
+  showLeaderboard.value = false
   isPlaying.value = true; gameOver.value = false
   score.value = 0; lives.value = 3; fruits.value = []
   gameLoop.start()
@@ -136,7 +150,13 @@ function endGame() {
   isPlaying.value = false; gameOver.value = true
   gameLoop.stop()
   sound.gameOver()
+  lastScore.value = score.value
   gameStore.addScore('catch-fruit', score.value)
+}
+
+function openLeaderboard() {
+  gameOver.value = false
+  showLeaderboard.value = true
 }
 
 function moveLeft() { if (basketX.value > 0) basketX.value -= basketSpeed }

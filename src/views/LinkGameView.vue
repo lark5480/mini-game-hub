@@ -22,7 +22,9 @@
         </div>
       </div>
     </div>
+    <LeaderboardStrip game="link" />
     <template #controls>
+      <button @click="submitScore" class="reset-btn">提交分数</button>
       <button @click="shuffle" class="reset-btn">重置</button>
     </template>
     <GameDialog
@@ -31,8 +33,16 @@
       icon="success"
       title="全部消除！"
       :message="'得分: ' + score"
-      actionText="再来一局"
-      @action="initGame"
+      actionText="提交分数"
+      @action="openLeaderboard"
+    />
+    <LeaderboardOverlay
+      :visible="showLeaderboard"
+      game="link"
+      gameName="连连看"
+      :score="lastScore"
+      @update:visible="showLeaderboard = $event"
+      @replay="initGame"
     />
   </GameLayout>
 </template>
@@ -45,6 +55,8 @@ import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useSound } from '@/composables/useSound'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
+import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
+import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 
 const router = useRouter()
 const gameStore = useGameStore()
@@ -58,6 +70,8 @@ const selected = ref<{ x: number; y: number } | null>(null)
 const cursor = ref<{ x: number; y: number }>({ x: 0, y: 0 })
 const score = ref(0)
 const winDialog = ref(false)
+const showLeaderboard = ref(false)
+const lastScore = ref(0)
 
 const remaining = computed(() => board.value.flat().filter(c => !c.matched).length)
 
@@ -109,7 +123,19 @@ useGameKeyboard({
 
 function getIcon(type: number): string { return icons[type] || '❓' }
 
+function openLeaderboard() {
+  winDialog.value = false
+  showLeaderboard.value = true
+}
+
+function submitScore() {
+  lastScore.value = score.value
+  winDialog.value = false
+  showLeaderboard.value = true
+}
+
 function initGame() {
+  showLeaderboard.value = false
   const pairs: number[] = []
   for (let i = 0; i < ROWS * COLS / 2; i++) {
     pairs.push(i % TYPES, i % TYPES)
@@ -225,6 +251,7 @@ function selectCell(x: number, y: number) {
     if (remaining.value === 0) {
       winDialog.value = true
       sound.win()
+      lastScore.value = score.value
       gameStore.addScore('link', score.value)
     } else if (!hasValidPair()) {
       // 死局自动洗牌

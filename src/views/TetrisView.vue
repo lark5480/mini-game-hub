@@ -36,6 +36,7 @@
         </div>
       </div>
     </div>
+    <LeaderboardStrip game="tetris" />
     <template #controls>
       <DirectionPad
         @up="switchShape"
@@ -56,8 +57,16 @@
       icon="fail"
       title="游戏结束"
       :message="'得分: ' + score"
-      actionText="再来一局"
-      @action="startGame"
+      actionText="提交分数"
+      @action="openLeaderboard"
+    />
+    <LeaderboardOverlay
+      :visible="showLeaderboard"
+      game="tetris"
+      gameName="俄罗斯方块"
+      :score="lastScore"
+      @update:visible="showLeaderboard = $event"
+      @replay="startGame"
     />
   </GameLayout>
 </template>
@@ -72,6 +81,8 @@ import { useSound } from '@/composables/useSound'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
+import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
+import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 
 const router = useRouter()
 const gameStore = useGameStore()
@@ -96,6 +107,8 @@ const current = ref<{ x: number, y: number, shape: number[][], color: string } |
 const nextPiece = ref<Tetromino | null>(null)
 const score = ref(0), lines = ref(0), isPlaying = ref(false), gameOver = ref(false)
 const nextGrid = ref<string[][]>([])
+const showLeaderboard = ref(false)
+const lastScore = ref(0)
 
 const displayGrid = computed(() => {
   const d = grid.value.map(row => row.map(c => ({ color: c.color })))
@@ -281,6 +294,7 @@ function drop() {
 
 function startGame() {
   gameLoop.stop()
+  showLeaderboard.value = false
   initGrid()
   score.value = 0; lines.value = 0; gameOver.value = false; isPlaying.value = false
   nextPiece.value = randomPiece()
@@ -294,7 +308,13 @@ function endGame() {
   isPlaying.value = false; gameOver.value = true
   gameLoop.stop()
   sound.gameOver()
+  lastScore.value = score.value
   gameStore.addScore('tetris', score.value)
+}
+
+function openLeaderboard() {
+  gameOver.value = false
+  showLeaderboard.value = true
 }
 
 function handleBack() {

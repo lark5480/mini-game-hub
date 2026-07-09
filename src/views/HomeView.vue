@@ -23,9 +23,19 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
           {{ getTopScore(game.name) }}
         </div>
+        <button class="card-leaderboard-btn" @click.stop="leaderboardGame = { name: game.name, title: game.title }" title="查看排行榜">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20 17 22M18 2H6v7a6 6 0 0 0 12 0V2z"/></svg>
+        </button>
         <div class="card-glow"></div>
       </div>
     </div>
+    <LeaderboardOverlay
+      :visible="leaderboardGame !== null"
+      :game="leaderboardGame?.name ?? ''"
+      :gameName="leaderboardGame?.title ?? ''"
+      :score="0"
+      @update:visible="leaderboardGame = null"
+    />
     <footer class="footer">
       <p>Press any game to start</p>
     </footer>
@@ -33,12 +43,15 @@
 </template>
 
 <script setup lang="ts">
-import { h } from 'vue'
+import { h, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
+import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
 
 const router = useRouter()
 const gameStore = useGameStore()
+
+const leaderboardGame = ref<{ name: string; title: string } | null>(null)
 
 const BoxIcon = () => h('rect', { x: '3', y: '3', width: '7', height: '7', rx: '1' })
 const LinkIcon = () => h('path', { d: 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71' })
@@ -215,6 +228,29 @@ function getTopScore(name: string): number {
 
 .best-score svg {
   color: #FFD700;
+}
+
+.card-leaderboard-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #818CF8;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.card-leaderboard-btn:hover {
+  background: rgba(129, 140, 248, 0.15);
+  border-color: #818CF8;
+  color: #fff;
 }
 
 .footer {
