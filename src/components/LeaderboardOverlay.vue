@@ -64,7 +64,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { supabase } from '@/lib/supabase'
-import { useLeaderboard } from '@/composables/useLeaderboard'
+import { useLeaderboard, useLeaderboardAutoRefresh } from '@/composables/useLeaderboard'
 
 type Mode = 'submit' | 'view' | 'viewing-after-submit'
 
@@ -83,6 +83,7 @@ const emit = defineEmits<{
 }>()
 
 const { entries, loading, error, fetch, submit } = useLeaderboard(props.game)
+useLeaderboardAutoRefresh(fetch)
 
 const nickname = ref('')
 const submitting = ref(false)
@@ -105,6 +106,7 @@ async function handleSubmit() {
   const ok = await submit(nickname.value, props.score)
   submitting.value = false
   if (ok) {
+    await fetch()
     lastInsertedId.value = entries.value[0]?.id ?? null
     mode.value = 'viewing-after-submit'
   }
