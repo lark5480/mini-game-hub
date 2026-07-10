@@ -72,12 +72,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useGameLoop } from '@/composables/useGameLoop'
 import { useSound } from '@/composables/useSound'
+import { useAchievements } from '@/stores/achievements'
+import { useToast } from '@/composables/useToast'
+import { useGameSave } from '@/composables/useGameSave'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
@@ -87,6 +90,8 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 const router = useRouter()
 const gameStore = useGameStore()
 const sound = useSound()
+const achievements = useAchievements()
+const toast = useToast()
 
 const GRID_W = 10, GRID_H = 20
 type Cell = { color: string | null }
@@ -109,6 +114,47 @@ const score = ref(0), lines = ref(0), isPlaying = ref(false), gameOver = ref(fal
 const nextGrid = ref<string[][]>([])
 const showLeaderboard = ref(false)
 const lastScore = ref(0)
+
+// 存档
+const save = useGameSave('tetris')
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleSave() {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    if (!isPlaying.value || gameOver.value) return
+    save.saveGame({
+      grid: grid.value,
+      current: current.value,
+      nextPiece: nextPiece.value,
+      score: score.value,
+      lines: lines.value,
+      isPlaying: isPlaying.value
+    })
+  }, 300)
+}
+
+function clearSave() {
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
+  save.clearGame()
+}
+
+watch([grid, current, nextPiece, score, lines, isPlaying], scheduleSave, { deep: true })
+onMounted(() => {
+  const data = save.loadGame()
+  if (data && Array.isArray(data.grid) && typeof data.score === 'number' && !!data.isPlaying) {
+    grid.value = data.grid as Cell[][]
+    current.value = (data.current as typeof current.value) ?? null
+    nextPiece.value = (data.nextPiece as Tetromino | null) ?? null
+    score.value = data.score
+    lines.value = typeof data.lines === 'number' ? data.lines : 0
+    isPlaying.value = true
+    gameOver.value = false
+    if (nextPiece.value) renderNext()
+    gameLoop.start()
+  }
+})
+onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer) })
 
 const displayGrid = computed(() => {
   const d = grid.value.map(row => row.map(c => ({ color: c.color })))
@@ -245,6 +291,11 @@ function clearLines() {
     lines.value += cleared
     const pts = [0, 100, 300, 500, 800]
     score.value += pts[cleared] || 800
+    if (lines.value >= 50) {
+      if (achievements.unlock('tetris_master')) {
+        toast.show('成就解锁：建筑大师', '🎯')
+      }
+    }
   }
 }
 
@@ -295,6 +346,7 @@ function drop() {
 function startGame() {
   gameLoop.stop()
   showLeaderboard.value = false
+  clearSave()
   initGrid()
   score.value = 0; lines.value = 0; gameOver.value = false; isPlaying.value = false
   nextPiece.value = randomPiece()
@@ -315,6 +367,7 @@ function endGame() {
 function openLeaderboard() {
   gameOver.value = false
   showLeaderboard.value = true
+  clearSave()
 }
 
 function handleBack() {

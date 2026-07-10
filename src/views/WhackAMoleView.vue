@@ -102,6 +102,8 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useSound } from '@/composables/useSound'
+import { useAchievements } from '@/stores/achievements'
+import { useToast } from '@/composables/useToast'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
@@ -115,6 +117,8 @@ interface Hole {
 const router = useRouter()
 const gameStore = useGameStore()
 const sound = useSound()
+const achievements = useAchievements()
+const toast = useToast()
 
 const difficulties = [
   { name: 'easy', label: '简单', gridCols: 3, gridRows: 3, interval: 1200, duration: 1000 },
@@ -252,6 +256,11 @@ function gameOver() {
   sound.gameOver()
   lastScore.value = score.value
   gameStore.addScore('whackamole', score.value)
+  if (score.value >= 300) {
+    if (achievements.unlock('whack_master')) {
+      toast.show('成就解锁：神速', '🔨')
+    }
+  }
 }
 
 function openLeaderboard() {

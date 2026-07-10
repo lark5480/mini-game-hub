@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vue-tsc && vite build",
     "preview": "vite preview",
-    "test": "node tests/test-sokoban.cjs && node tests/test-linkgame.cjs && node tests/test-tetris.cjs && node tests/test-tetris-keymap.cjs && node tests/test-breakout-collision.cjs && node tests/test-catchfruit-gameover.cjs && node tests/test-preventdefault.cjs"
+    "test": "node tests/test-sokoban.cjs && node tests/test-linkgame.cjs && node tests/test-tetris.cjs && node tests/test-tetris-keymap.cjs && node tests/test-breakout-collision.cjs && node tests/test-catchfruit-gameover.cjs && node tests/test-preventdefault.cjs && node tests/test-sokoban-levels.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.1",

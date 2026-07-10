@@ -1,5 +1,21 @@
 import { ref, watch } from 'vue'
 import { supabase } from '@/lib/supabase'
+import { useAchievements } from '@/stores/achievements'
+import { useToast } from '@/composables/useToast'
+
+const SUBMITTED_GAMES_KEY = 'game-submitted-games'
+
+function loadSubmittedGames(): Set<string> {
+  try {
+    const data = localStorage.getItem(SUBMITTED_GAMES_KEY)
+    if (data) return new Set(JSON.parse(data))
+  } catch { /* ignore */ }
+  return new Set()
+}
+
+function saveSubmittedGames(games: Set<string>) {
+  localStorage.setItem(SUBMITTED_GAMES_KEY, JSON.stringify([...games]))
+}
 
 export interface LeaderboardEntry {
   id: number
@@ -62,6 +78,25 @@ export function useLeaderboard(game: string, limit = 10) {
     }
     leaderboardVersion.value++
     await fetch()
+
+    // 排行榜成就检查（异步，不阻塞提交流程）
+    setTimeout(() => {
+      const store = useAchievements()
+      const toast = useToast()
+
+      if (store.unlock('first_submit')) {
+        toast.show('成就解锁：排行榜新人', '🏆')
+      }
+
+      const submittedGames = loadSubmittedGames()
+      submittedGames.add(game)
+      saveSubmittedGames(submittedGames)
+
+      if (submittedGames.size >= 8 && store.unlock('all_games')) {
+        toast.show('成就解锁：全能玩家', '🎮')
+      }
+    }, 0)
+
     return true
   }
 

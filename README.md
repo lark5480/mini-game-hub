@@ -86,22 +86,26 @@ game-collection/
 │   │   ├── GameDialog.vue         # 游戏对话框
 │   │   ├── DirectionPad.vue       # 方向控制键盘
 │   │   ├── LeaderboardOverlay.vue  # 排行榜提交弹窗
-│   │   └── LeaderboardStrip.vue   # 内嵌排行榜条
+│   │   ├── LeaderboardStrip.vue   # 内嵌排行榜条
+│   │   └── GameToast.vue          # 成就解锁 Toast
 │   ├── composables/         # 组合式函数
 │   │   ├── useGameKeyboard.ts  # 键盘输入处理
 │   │   ├── useGameLoop.ts      # 游戏循环管理
 │   │   ├── useSound.ts         # 音效系统（Web Audio API）
-│   │   └── useLeaderboard.ts   # 排行榜数据（Supabase）
+│   │   ├── useLeaderboard.ts   # 排行榜数据（Supabase）
+│   │   └── useToast.ts         # Toast 通知管理
 │   ├── router/              # 路由配置
 │   │   └── index.ts
 │   ├── lib/
 │   │   └── supabase.ts       # Supabase 客户端
 │   ├── stores/               # 状态管理
-│   │   └── game.ts            # 游戏本地分数管理
+│   │   ├── game.ts            # 游戏本地分数管理
+│   │   └── achievements.ts    # 成就系统管理
 │   ├── styles/              # 全局样式
 │   │   └── game-theme.css    # 游戏主题样式
 │   ├── views/               # 游戏页面
 │   │   ├── HomeView.vue      # 首页 - 游戏选择
+│   │   ├── AchievementsView.vue # 成就展示页
 │   │   ├── SokobanView.vue   # 推箱子
 │   │   ├── LinkGameView.vue  # 连连看
 │   │   ├── CatchFruitView.vue # 接水果
@@ -154,6 +158,13 @@ game-collection/
 - 基于 Web Audio API 的合成音效，无需加载音频文件
 - 全局静音切换按钮（GameLayout 顶部栏），状态持久化到 localStorage
 - 适配各游戏场景：碰撞、消除、收集、移动、胜负等事件
+
+### 🏅 成就系统
+- 10 个可解锁成就，覆盖所有 8 款游戏与里程碑事件
+- 进度自动保存到 localStorage（key: `game-achievements`）
+- 解锁时顶部弹入 Toast 通知（2 秒自动消失）
+- 首页右上角成就入口按钮显示已解锁数量
+- 成就页面（`/achievements`）网格展示所有成就的解锁状态
 
 ---
 

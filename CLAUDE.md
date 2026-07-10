@@ -36,6 +36,14 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 - 内嵌排行榜条：`<LeaderboardStrip :game="'xxx'" />` 放在默认 slot 底部，自动加载 Top 5
 - **新增游戏**必须同步：路由（`src/router/index.ts`）→ Store（`src/stores/game.ts` 的 `defaultScores()`）→ 首页卡片（`HomeView.vue`）
 
+## 成就系统
+
+- `src/stores/achievements.ts` — Pinia store，元数据 `ACHIEVEMENTS`（10 个）+ `Set<string>` 已解锁 + localStorage 持久化（key: `game-achievements`）
+- `src/composables/useToast.ts` + `src/components/GameToast.vue` — 顶部 Toast 通知（首次解锁时弹出，2 秒自动消失）
+- `src/views/AchievementsView.vue` — `/achievements` 路由，网格展示所有成就
+- **新增成就**：在 `ACHIEVEMENTS` 数组加条目 → 在对应游戏触发点调用 `achievements.unlock('id')` + `toast.show(...)` → 路由 `/achievements` 自动显示
+- **自动完美主义**：解锁后若其余 9 个成就已全解锁，自动解锁 `perfectionist`
+
 ## 全局积分排行榜（Supabase）
 
 架构：前端（Supabase JS SDK）→ Supabase PostgreSQL → RLS 安全策略

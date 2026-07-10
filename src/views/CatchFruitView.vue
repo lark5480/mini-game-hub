@@ -57,7 +57,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useGameLoop } from '@/composables/useGameLoop'
 import { useSound } from '@/composables/useSound'
@@ -68,7 +67,6 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
 
 const router = useRouter()
-const gameStore = useGameStore()
 const sound = useSound()
 
 const boardWidth = 400, boardHeight = 500, basketWidth = 80, basketSpeed = 30
@@ -151,11 +149,11 @@ function endGame() {
   gameLoop.stop()
   sound.gameOver()
   lastScore.value = score.value
-  gameStore.addScore('catch-fruit', score.value)
 }
 
 function openLeaderboard() {
   gameOver.value = false
+  lastScore.value = score.value
   showLeaderboard.value = true
 }
 

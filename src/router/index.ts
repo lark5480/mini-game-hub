@@ -47,6 +47,16 @@ const router = createRouter({
       path: '/whackamole',
       name: 'whackamole',
       component: () => import('@/views/WhackAMoleView.vue')
+    },
+    {
+      path: '/tic-tac-toe',
+      name: 'tic-tac-toe',
+      component: () => import('@/views/TicTacToeView.vue')
+    },
+    {
+      path: '/achievements',
+      name: 'achievements',
+      component: () => import('@/views/AchievementsView.vue')
     }
   ]
 })

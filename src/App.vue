@@ -2,10 +2,12 @@
   <div id="app">
     <div class="scanlines"></div>
     <router-view />
+    <GameToast />
   </div>
 </template>
 
 <script setup lang="ts">
+import GameToast from '@/components/GameToast.vue'
 </script>
 
 <style>

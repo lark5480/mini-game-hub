@@ -52,12 +52,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useGameLoop } from '@/composables/useGameLoop'
 import { useSound } from '@/composables/useSound'
+import { useAchievements } from '@/stores/achievements'
+import { useToast } from '@/composables/useToast'
+import { useGameSave } from '@/composables/useGameSave'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
@@ -67,6 +70,8 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 const router = useRouter()
 const gameStore = useGameStore()
 const sound = useSound()
+const achievements = useAchievements()
+const toast = useToast()
 
 const showLeaderboard = ref(false)
 
@@ -80,6 +85,48 @@ const score = ref(0)
 const isPlaying = ref(false)
 const gameOver = ref(false)
 const lastScore = ref(0)
+
+// 存档
+const save = useGameSave('snake')
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleSave() {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    if (!isPlaying.value || gameOver.value) return
+    save.saveGame({
+      snake: snake.value,
+      food: food.value,
+      direction: direction.value,
+      nextDir: nextDir.value,
+      score: score.value,
+      grid: grid.value,
+      isPlaying: isPlaying.value
+    })
+  }, 300)
+}
+
+function clearSave() {
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
+  save.clearGame()
+}
+
+watch([snake, food, direction, nextDir, score, isPlaying, grid], scheduleSave, { deep: true })
+onMounted(() => {
+  const data = save.loadGame()
+  if (data && Array.isArray(data.snake) && data.food && typeof data.score === 'number' && !!data.isPlaying) {
+    snake.value = data.snake as { x: number; y: number }[]
+    food.value = data.food as { x: number; y: number }
+    direction.value = data.direction as 'up' | 'down' | 'left' | 'right'
+    nextDir.value = data.nextDir as 'up' | 'down' | 'left' | 'right'
+    score.value = data.score
+    if (Array.isArray(data.grid)) grid.value = data.grid as number[][]
+    gameOver.value = false
+    isPlaying.value = true
+    gameLoop.start()
+  }
+})
+onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer) })
 
 const gameLoop = useGameLoop({
   mode: 'interval',
@@ -187,6 +234,7 @@ function startGame() {
   initGrid(); initSnake(); spawnFood(); render()
   score.value = 0; gameOver.value = false; isPlaying.value = true
   direction.value = 'right'; nextDir.value = 'right'
+  clearSave()
   gameLoop.start()
 }
 
@@ -196,11 +244,17 @@ function endGame() {
   sound.gameOver()
   lastScore.value = score.value
   gameStore.addScore('snake', score.value)
+  if (score.value >= 200) {
+    if (achievements.unlock('snake_king')) {
+      toast.show('成就解锁：蛇王', '🐍')
+    }
+  }
 }
 
 function openLeaderboard() {
   gameOver.value = false
   showLeaderboard.value = true
+  clearSave()
 }
 
 function handleBack() {

@@ -25,7 +25,7 @@
     <LeaderboardStrip game="link" />
     <template #controls>
       <button @click="submitScore" class="reset-btn">提交分数</button>
-      <button @click="shuffle" class="reset-btn">重置</button>
+      <button @click="shuffle(true)" class="reset-btn">重置</button>
     </template>
     <GameDialog
       v-model:visible="winDialog"
@@ -48,19 +48,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useSound } from '@/composables/useSound'
+import { useAchievements } from '@/stores/achievements'
+import { useToast } from '@/composables/useToast'
+import { useGameSave } from '@/composables/useGameSave'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
 import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 
 const router = useRouter()
-const gameStore = useGameStore()
 const sound = useSound()
+const achievements = useAchievements()
+const toast = useToast()
 
 interface Cell { type: number; matched: boolean }
 
@@ -76,6 +79,39 @@ const lastScore = ref(0)
 const remaining = computed(() => board.value.flat().filter(c => !c.matched).length)
 
 const icons = ['🍎','🍊','🍋','🍇','🍓','🍑','🥝','🍒','🥭','🍍','🥥','🫐']
+
+// 存档
+const save = useGameSave('link')
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleSave() {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    if (winDialog.value) return
+    save.saveGame({ board: board.value, score: score.value })
+  }, 300)
+}
+
+function clearSave() {
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
+  save.clearGame()
+}
+
+watch([board, score], scheduleSave, { deep: true })
+onMounted(() => {
+  const data = save.loadGame()
+  if (data && Array.isArray(data.board) && typeof data.score === 'number') {
+    const b = data.board as unknown[][]
+    if (b.length === ROWS && b.every(r => r.length === COLS)) {
+      board.value = data.board as typeof board.value
+      score.value = data.score
+      selected.value = null
+      cursor.value = { x: 0, y: 0 }
+      winDialog.value = false
+    }
+  }
+})
+onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer) })
 
 useGameKeyboard({
   bindings: [
@@ -110,13 +146,13 @@ useGameKeyboard({
     {
       key: ['Enter', ' '],
       handler: () => {
-        if (winDialog.value) { initGame(); return }
+        if (winDialog.value) { initGame(); clearSave(); return }
         selectCell(cursor.value.x, cursor.value.y)
       }
     },
     {
       key: ['r', 'R'],
-      handler: () => { if (!winDialog.value) shuffle() }
+      handler: () => { if (!winDialog.value) shuffle(true) }
     }
   ]
 })
@@ -125,13 +161,16 @@ function getIcon(type: number): string { return icons[type] || '❓' }
 
 function openLeaderboard() {
   winDialog.value = false
+  lastScore.value = score.value
   showLeaderboard.value = true
+  clearSave()
 }
 
 function submitScore() {
   lastScore.value = score.value
   winDialog.value = false
   showLeaderboard.value = true
+  clearSave()
 }
 
 function initGame() {
@@ -252,9 +291,13 @@ function selectCell(x: number, y: number) {
       winDialog.value = true
       sound.win()
       lastScore.value = score.value
-      gameStore.addScore('link', score.value)
+      if (score.value >= 200) {
+        if (achievements.unlock('link_master')) {
+          toast.show('成就解锁：连连看达人', '🔗')
+        }
+      }
     } else if (!hasValidPair()) {
-      // 死局自动洗牌
+      // 死局自动洗牌（非用户重启，保留存档）
       shuffle()
     }
   } else {
@@ -263,7 +306,7 @@ function selectCell(x: number, y: number) {
   }
 }
 
-function shuffle() {
+function shuffle(explicit = false) {
   const cells = board.value.flat().filter(c => !c.matched)
   for (let i = cells.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -271,6 +314,7 @@ function shuffle() {
   }
   selected.value = null
   sound.click()
+  if (explicit) clearSave()
 }
 
 initGame()
