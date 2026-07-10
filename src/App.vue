@@ -1,13 +1,18 @@
 <template>
   <div id="app">
-    <div class="scanlines"></div>
-    <router-view />
+    <div class="scanlines" aria-hidden="true"></div>
+    <router-view v-slot="{ Component }">
+      <Transition name="page-fade" mode="out-in">
+        <component :is="Component" />
+      </Transition>
+    </router-view>
     <GameToast />
   </div>
 </template>
 
 <script setup lang="ts">
 import GameToast from '@/components/GameToast.vue'
+import '@/styles/animations.css'
 </script>
 
 <style>
@@ -76,5 +81,13 @@ button {
   );
   pointer-events: none;
   z-index: 100;
+}
+
+.page-fade-enter-active {
+  animation: page-fade-in 0.25s ease-out;
+}
+
+.page-fade-leave-active {
+  animation: page-fade-out 0.15s ease-in;
 }
 </style>

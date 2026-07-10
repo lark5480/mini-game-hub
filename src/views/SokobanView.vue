@@ -5,7 +5,10 @@
     gradientEnd="#FF006E"
     :hints="['方向键/WASD 移动', 'R 重置当前关', '重玩从第1关开始']"
     :infoItems="[{ label: '关卡', value: levelIndex + 1 }, { label: '步数', value: steps }, { label: '总分', value: totalScore }]"
+    :confirmRestart="levelIndex > 0 || totalScore > 0"
+    tutorial="把所有箱子推到目标点上。注意：箱子只能推不能拉，别把箱子推进死角！"
     @back="router.push('/')"
+    @restart="restartGame"
   >
     <div class="game-board">
       <div v-for="(row, y) in board" :key="y" class="game-row">
@@ -45,6 +48,7 @@
           <button @click="submitScore" class="extra-btn">提交分数</button>
           <button @click="resetLevel" class="extra-btn">重置</button>
           <button @click="nextLevel" class="extra-btn">下一关</button>
+          <button @click="restartGame" class="extra-btn">从头开始</button>
         </template>
       </DirectionPad>
     </template>
@@ -65,11 +69,12 @@
       @update:visible="showLeaderboard = $event"
       @replay="restartGame"
     />
+    <ResumePrompt :visible="showResume" @continue="continueGame" @new-game="newGame" />
   </GameLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
@@ -77,20 +82,26 @@ import { useSound } from '@/composables/useSound'
 import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
 import { useGameSave } from '@/composables/useGameSave'
+import { useHaptics } from '@/composables/useHaptics'
+import { useAutoPause } from '@/composables/useAutoPause'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
 import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
+import ResumePrompt from '@/components/ResumePrompt.vue'
 
 const router = useRouter()
 const gameStore = useGameStore()
 const sound = useSound()
 const achievements = useAchievements()
 const toast = useToast()
+const haptics = useHaptics()
+const showResume = ref(false)
 
 const showLeaderboard = ref(false)
 const lastScore = ref(0)
+const gameActive = computed(() => !winDialog.value && !gameComplete.value && !showResume.value)
 
 // 编码：0=空地, 1=玩家, 2=箱子, 3=目标点, 4=箱子在目标上, 5=墙壁
 const levels = [
@@ -168,17 +179,16 @@ const levels = [
     [5,0,3,0,0,3,0,5],
     [5,5,5,5,5,5,5,5]
   ],
-  // 关卡 8 — 6 箱 6 目标 隔间
+  // 关卡 8 — 3 箱 3 目标 走廊
   [
     [5,5,5,5,5,5,5,5],
-    [5,1,0,0,5,0,3,5],
-    [5,0,2,0,5,0,0,5],
-    [5,0,0,2,0,0,3,5],
-    [5,3,0,0,5,0,0,5],
-    [5,0,2,0,3,0,2,5],
-    [5,0,0,5,0,2,0,5],
-    [5,0,0,5,3,0,0,5],
-    [5,3,0,0,5,0,2,5],
+    [5,0,0,0,0,0,0,5],
+    [5,0,0,2,0,0,2,5],
+    [5,0,0,0,0,0,0,5],
+    [5,0,0,0,0,0,0,5],
+    [5,0,0,0,0,0,0,5],
+    [5,0,3,0,3,3,0,5],
+    [5,0,2,0,0,0,0,5],
     [5,5,5,5,5,5,5,5]
   ],
   // 关卡 9 — 5 箱 5 目标
@@ -235,12 +245,15 @@ watch([levelIndex, steps, totalScore, board], scheduleSave, { deep: true })
 onMounted(() => {
   const data = save.loadGame()
   if (data && Array.isArray(data.board) && typeof data.levelIndex === 'number') {
+    showResume.value = true
     levelIndex.value = data.levelIndex
     steps.value = typeof data.steps === 'number' ? data.steps : 0
     totalScore.value = typeof data.totalScore === 'number' ? data.totalScore : 0
     board.value = data.board as number[][]
     winDialog.value = false
     gameComplete.value = false
+  } else {
+    initLevel()
   }
 })
 onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer) })
@@ -249,26 +262,47 @@ useGameKeyboard({
   bindings: [
     {
       key: ['ArrowUp', 'w', 'W'],
-      handler: () => { if (!winDialog.value) move(0, -1) }
+      handler: () => { if (!winDialog.value && !showResume.value) move(0, -1) }
     },
     {
       key: ['ArrowDown', 's', 'S'],
-      handler: () => { if (!winDialog.value) move(0, 1) }
+      handler: () => { if (!winDialog.value && !showResume.value) move(0, 1) }
     },
     {
       key: ['ArrowLeft', 'a', 'A'],
-      handler: () => { if (!winDialog.value) move(-1, 0) }
+      handler: () => { if (!winDialog.value && !showResume.value) move(-1, 0) }
     },
     {
       key: ['ArrowRight', 'd', 'D'],
-      handler: () => { if (!winDialog.value) move(1, 0) }
+      handler: () => { if (!winDialog.value && !showResume.value) move(1, 0) }
     },
     {
       key: ['r', 'R'],
-      handler: () => { if (!winDialog.value) resetLevel() }
+      handler: () => { if (!winDialog.value && !showResume.value) resetLevel() }
+    },
+    {
+      key: ['p', 'P', 'Escape'],
+      handler: () => {
+        if (winDialog.value || gameComplete.value) return
+        if (gameActive.value) showResume.value = true
+      }
     }
   ]
 })
+
+// 失焦自动暂停
+useAutoPause(() => {
+  if (gameActive && !showResume.value) showResume.value = true
+})
+
+function continueGame() {
+  showResume.value = false
+}
+
+function newGame() {
+  showResume.value = false
+  restartGame()
+}
 
 function initLevel() {
   board.value = JSON.parse(JSON.stringify(levels[levelIndex.value]))
@@ -302,6 +336,7 @@ function move(dx: number, dy: number) {
     board.value[playerPos.y][playerPos.x] = isTarget(playerPos.x, playerPos.y) ? 3 : 0
     steps.value++
     sound.move()
+    haptics.tap()
   } else if (target === 2 || target === 4) {
     const nnx = nx + dx
     const nny = ny + dy
@@ -317,7 +352,8 @@ function move(dx: number, dy: number) {
       board.value[playerPos.y][playerPos.x] = isTarget(playerPos.x, playerPos.y) ? 3 : 0
       steps.value++
       sound.push()
-      if (behind === 3) sound.place()
+      haptics.pulse()
+      if (behind === 3) { sound.place(); haptics.success() }
     }
   }
 
@@ -368,8 +404,8 @@ function resetLevel() { initLevel() }
 
 function nextLevel() {
   showLeaderboard.value = false
-  winDialog.value = false
   if (levelIndex.value < levels.length - 1) {
+    winDialog.value = false
     levelIndex.value++
     initLevel()
   } else {
@@ -402,7 +438,6 @@ function restartGame() {
   clearSave()
 }
 
-initLevel()
 </script>
 
 <style scoped>

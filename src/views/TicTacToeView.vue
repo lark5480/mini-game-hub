@@ -5,7 +5,9 @@
     gradientEnd="#00CFFF"
     :hints="['点击空位落子', 'X 先手，AI 为 O']"
     :infoItems="[{ label: '状态', value: statusLabel }]"
+    tutorial="在3×3棋盘上先连成三子即获胜。你执X先手，AI执O。"
     @back="goHome"
+    @restart="() => resetGame(false)"
   >
     <div class="game-container">
       <div class="turn-indicator" :class="{ 'bot-turn': !isPlayerTurn }">
@@ -85,6 +87,7 @@
       @update:visible="showLeaderboard = $event"
       @replay="resetGame(false)"
     />
+    <ResumePrompt :visible="showResume" @continue="continueGame" @new-game="newGame" />
   </GameLayout>
 </template>
 
@@ -94,10 +97,12 @@ import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useSound } from '@/composables/useSound'
 import { useGameSave } from '@/composables/useGameSave'
+import { useHaptics } from '@/composables/useHaptics'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
 import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
+import ResumePrompt from '@/components/ResumePrompt.vue'
 
 type Cell = 'X' | 'O' | null
 type Board = Cell[]
@@ -114,6 +119,8 @@ const WIN_LINES = [
 const router = useRouter()
 const gameStore = useGameStore()
 const sound = useSound()
+const haptics = useHaptics()
+const showResume = ref(false)
 
 const board = ref<Board>(Array(9).fill(null))
 const isPlayerTurn = ref(true)
@@ -180,6 +187,7 @@ function handleCellClick(index: number) {
   if (gameOver.value || !isPlayerTurn.value || board.value[index] !== null) return
   board.value[index] = PLAYER
   sound.select()
+  haptics.tap()
 
   const line = findWinningLine(board.value)
   if (line) {
@@ -202,6 +210,7 @@ function makeBotMove() {
   if (move !== -1) {
     board.value[move] = BOT
     sound.select()
+    haptics.tap()
   }
 
   const line = findWinningLine(board.value)
@@ -228,17 +237,32 @@ function endGame(res: Exclude<Result, null>, line: number[]) {
     stats.value.wins++
     score = 100
     sound.win()
+    haptics.win()
   } else if (res === 'draw') {
     stats.value.draws++
     score = 50
+    haptics.tap()
   } else {
     stats.value.losses++
     sound.gameOver()
+    haptics.error()
   }
   lastScore.value = score
   gameStore.addScore('tic-tac-toe', score)
   clearSave()
   gameOverDialog.value = true
+}
+
+function continueGame() {
+  showResume.value = false
+  if (!isPlayerTurn.value && !gameOver.value) {
+    botTimer = setTimeout(makeBotMove, 380)
+  }
+}
+
+function newGame() {
+  showResume.value = false
+  resetGame(false)
 }
 
 function resetGame(restoring: boolean) {
@@ -353,7 +377,6 @@ function bestMove(b: Board): number {
 }
 
 onMounted(() => {
-  let restored = false
   const data = save.loadGame()
   if (data && Array.isArray(data.board) && data.board.length === 9 && data.gameOver === false) {
     const savedResult = data.result as Result | undefined
@@ -370,12 +393,11 @@ onMounted(() => {
           losses: s.losses || 0
         }
       }
-      restored = true
+      showResume.value = true
+      return
     }
   }
-  if (!restored) {
-    resetGame(true)
-  }
+  resetGame(true)
 })
 
 onUnmounted(() => {

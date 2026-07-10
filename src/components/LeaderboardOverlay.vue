@@ -1,6 +1,7 @@
 <template>
-  <div v-if="visible" class="overlay" @click.self="$emit('update:visible', false)">
-    <div class="panel">
+  <Transition name="leaderboard">
+    <div v-if="visible" class="overlay" @click.self="$emit('update:visible', false)">
+      <div class="panel">
       <button class="close-btn" @click="$emit('update:visible', false)" title="关闭">✕</button>
 
       <!-- 标题 -->
@@ -31,7 +32,10 @@
       <!-- 排行榜展示 -->
       <div v-else class="leaderboard-area">
         <p v-if="loading" class="status">加载中…</p>
-        <p v-else-if="error" class="status error">{{ error }}</p>
+        <template v-else-if="error">
+          <p class="status error">{{ error }}</p>
+          <button class="retry-btn" @click="fetch">重试</button>
+        </template>
         <p v-else-if="entries.length === 0" class="status">还没有人上榜，快来抢第一！</p>
         <ul v-else class="rank-list">
           <li
@@ -54,6 +58,7 @@
       </div>
     </div>
   </div>
+  </Transition>
 </template>
 
 <script setup lang="ts">
@@ -124,7 +129,20 @@ function rankLabel(idx: number): string {
   align-items: center;
   justify-content: center;
   z-index: 300;
-  padding: 20px;
+  padding: max(20px, env(safe-area-inset-top) + 16px) 20px max(20px, env(safe-area-inset-bottom) + 16px);
+}
+
+.leaderboard-enter-active {
+  animation: overlay-in 0.2s ease-out;
+}
+.leaderboard-enter-active .panel {
+  animation: dialog-in 0.25s ease-out;
+}
+.leaderboard-leave-active {
+  animation: overlay-out 0.18s ease-in;
+}
+.leaderboard-leave-active .panel {
+  animation: dialog-out 0.18s ease-in;
 }
 
 .panel {
@@ -234,6 +252,24 @@ h3 {
 }
 
 .status.error { color: #FF6B6B; }
+
+.retry-btn {
+  display: block;
+  margin: 12px auto 0;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--game-text);
+  padding: 8px 24px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: all 0.2s;
+}
+
+.retry-btn:hover {
+  background: rgba(129, 140, 248, 0.15);
+  border-color: #818CF8;
+}
 
 .rank-list {
   list-style: none;

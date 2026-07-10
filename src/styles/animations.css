@@ -1,0 +1,87 @@
+/* =====================================================
+   全局共享动画 & 过渡
+   —— 所有弹窗、Toast、页面过渡的 keyframes 统一管理
+   ===================================================== */
+
+/* ---------- 弹窗：淡入 + 轻微上移 ---------- */
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes dialog-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+}
+
+/* ---------- 弹窗遮罩：淡入 / 淡出 ---------- */
+@keyframes overlay-in  { from { opacity: 0 } to { opacity: 1 } }
+@keyframes overlay-out { from { opacity: 1 } to { opacity: 0 } }
+
+/* ---------- Toast ---------- */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-30px) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px) scale(0.9);
+  }
+}
+
+/* ---------- 页面路由过渡 ---------- */
+@keyframes page-fade-in {
+  from { opacity: 0; transform: translateY(8px) }
+  to   { opacity: 1; transform: translateY(0) }
+}
+
+@keyframes page-fade-out {
+  from { opacity: 1 }
+  to   { opacity: 0 }
+}
+
+/* ---------- 可访问性：prefers-reduced-motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ---------- 全局 focus-visible 键盘聚焦环 ---------- */
+:focus-visible {
+  outline: 2px solid var(--game-accent, #00FFFF);
+  outline-offset: 2px;
+}
+
+/* 鼠标 / 触摸用户不显示聚焦环，仅键盘 Tab 触发 */
+:focus:not(:focus-visible) {
+  outline: none;
+}

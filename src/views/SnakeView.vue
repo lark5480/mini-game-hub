@@ -3,9 +3,12 @@
     title="贪吃蛇"
     accentColor="#B967FF"
     gradientEnd="#FF006E"
-    :hints="['空格/Enter 开始', '方向键/WASD 移动']"
+    :hints="['空格/Enter 开始', '方向键/WASD 移动', 'P/Esc 暂停']"
     :infoItems="[{ label: '分数', value: score }]"
+    :confirmRestart="score > 0"
+    tutorial="控制蛇吃食物变长，别撞墙或咬到自己！"
     @back="handleBack"
+    @restart="startGame"
   >
     <div class="game-board" ref="boardEl">
       <div v-for="(row, y) in grid" :key="y" class="game-row">
@@ -13,9 +16,10 @@
           v-for="(cell, x) in row"
           :key="x"
           class="game-cell"
-          :class="{ snake: cell === 1, food: cell === 2 }"
-        ></div>
+          :class="{ snake: cell === 1, head: cell === 3, shake: cell === 3 && blocked, food: cell === 2 }"
+        ><span v-if="cell === 3" class="head-eyes" :class="'dir-' + direction"></span></div>
       </div>
+      <ScoreFloat :popups="popups" />
     </div>
     <LeaderboardStrip game="snake" />
     <template #controls>
@@ -27,7 +31,11 @@
       >
         <template #extra>
           <button v-if="!isPlaying" @click="startGame" class="start-btn">开始</button>
-          <button v-else @click="startGame" class="extra-btn">重新开始</button>
+          <template v-else>
+            <button v-if="!paused && !showResume" @click="togglePause" class="extra-btn">暂停</button>
+            <button v-else-if="paused && !showResume" @click="togglePause" class="extra-btn">继续</button>
+            <button @click="startGame" class="extra-btn">重新开始</button>
+          </template>
         </template>
       </DirectionPad>
     </template>
@@ -48,6 +56,8 @@
       @update:visible="showLeaderboard = $event"
       @replay="startGame"
     />
+    <PauseOverlay :visible="paused" @resume="togglePause" />
+    <ResumePrompt :visible="showResume" @continue="continueGame" @new-game="newGame" />
   </GameLayout>
 </template>
 
@@ -62,17 +72,25 @@ import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
 import { useGameSave } from '@/composables/useGameSave'
 import { useSwipe } from '@/composables/useSwipe'
+import { useAutoPause } from '@/composables/useAutoPause'
+import { useHaptics } from '@/composables/useHaptics'
+import { useScoreFloats } from '@/composables/useScoreFloats'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
 import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
+import PauseOverlay from '@/components/PauseOverlay.vue'
+import ResumePrompt from '@/components/ResumePrompt.vue'
+import ScoreFloat from '@/components/ScoreFloat.vue'
 
 const router = useRouter()
 const gameStore = useGameStore()
 const sound = useSound()
 const achievements = useAchievements()
 const toast = useToast()
+const haptics = useHaptics()
+const { popups, pop } = useScoreFloats()
 
 const showLeaderboard = ref(false)
 
@@ -86,6 +104,8 @@ const score = ref(0)
 const isPlaying = ref(false)
 const gameOver = ref(false)
 const lastScore = ref(0)
+const blocked = ref(false)
+const showResume = ref(false)
 
 // 存档
 const save = useGameSave('snake')
@@ -124,7 +144,7 @@ onMounted(() => {
     if (Array.isArray(data.grid)) grid.value = data.grid as number[][]
     gameOver.value = false
     isPlaying.value = true
-    gameLoop.start()
+    showResume.value = true
   }
 })
 onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer) })
@@ -134,10 +154,31 @@ const gameLoop = useGameLoop({
   intervalMs: 150,
   onUpdate: () => step()
 })
+const paused = gameLoop.paused
 
-// 棋盘 DOM ref（用于绑定滑动手势）
+function togglePause() {
+  if (showResume.value || gameOver.value || !isPlaying.value) return
+  if (paused.value) { gameLoop.resume(); sound.resume() }
+  else { gameLoop.pause(); sound.pause() }
+}
+
+function continueGame() {
+  showResume.value = false
+  if (isPlaying.value && !gameOver.value) gameLoop.start()
+}
+
+function newGame() {
+  showResume.value = false
+  startGame()
+}
+
+useAutoPause(() => {
+  if (isPlaying.value && !gameOver.value && !showResume.value) gameLoop.pause()
+})
+
+// 棋盘 DOM ref（用于绑定滑动手势 + 浮动分数定位）
 const boardEl = ref<HTMLElement | null>(null)
-const isPlayingActive = computed(() => isPlaying.value && !gameOver.value)
+const isPlayingActive = computed(() => isPlaying.value && !gameOver.value && !paused.value)
 
 useSwipe({
   el: () => boardEl.value,
@@ -156,19 +197,23 @@ useGameKeyboard({
     },
     {
       key: ['ArrowUp', 'w', 'W'],
-      handler: () => { if (isPlaying.value && !gameOver.value) changeDir('up') }
+      handler: () => { if (isPlaying.value && !gameOver.value && !showResume.value) changeDir('up') }
     },
     {
       key: ['ArrowDown', 's', 'S'],
-      handler: () => { if (isPlaying.value && !gameOver.value) changeDir('down') }
+      handler: () => { if (isPlaying.value && !gameOver.value && !showResume.value) changeDir('down') }
     },
     {
       key: ['ArrowLeft', 'a', 'A'],
-      handler: () => { if (isPlaying.value && !gameOver.value) changeDir('left') }
+      handler: () => { if (isPlaying.value && !gameOver.value && !showResume.value) changeDir('left') }
     },
     {
       key: ['ArrowRight', 'd', 'D'],
-      handler: () => { if (isPlaying.value && !gameOver.value) changeDir('right') }
+      handler: () => { if (isPlaying.value && !gameOver.value && !showResume.value) changeDir('right') }
+    },
+    {
+      key: ['p', 'P', 'Escape'],
+      handler: () => togglePause()
     }
   ]
 })
@@ -200,15 +245,16 @@ function spawnFood() {
 
 function render() {
   initGrid()
-  snake.value.forEach(s => {
+  snake.value.forEach((s, i) => {
     if (s.y >= 0 && s.y < GRID_HEIGHT && s.x >= 0 && s.x < GRID_WIDTH) {
-      grid.value[s.y][s.x] = 1
+      grid.value[s.y][s.x] = i === 0 ? 3 : 1
     }
   })
   grid.value[food.value.y][food.value.x] = 2
 }
 
 function step() {
+  if (paused.value) return
   direction.value = nextDir.value
   const head = { ...snake.value[0] }
 
@@ -227,16 +273,37 @@ function step() {
 
   snake.value.unshift(head)
   if (head.x === food.value.x && head.y === food.value.y) {
-    score.value += 10; spawnFood(); sound.eat()
+    score.value += 10
+    haptics.pulse()
+    popScoreAt(head)
+    spawnFood()
+    sound.eat()
   } else {
     snake.value.pop()
   }
   render()
 }
 
+function popScoreAt(head: { x: number; y: number }) {
+  const el = boardEl.value
+  if (!el) return
+  const cells = el.querySelectorAll('.game-cell')
+  const cellEl = cells[head.y * GRID_WIDTH + head.x] as HTMLElement | undefined
+  if (!cellEl) return
+  const boardRect = el.getBoundingClientRect()
+  const r = cellEl.getBoundingClientRect()
+  pop('+10', r.left + r.width / 2 - boardRect.left, r.top + r.height / 2 - boardRect.top)
+}
+
 function changeDir(dir: 'up'|'down'|'left'|'right') {
   const opposites: Record<string, string> = { up: 'down', down: 'up', left: 'right', right: 'left' }
-  if (opposites[dir] !== direction.value) nextDir.value = dir
+  if (opposites[dir] !== direction.value) {
+    nextDir.value = dir
+  } else if (isPlaying.value && !gameOver.value) {
+    // 反向（掉头）无效：给蛇头一个轻微抖动反馈，避免“点了没反应”
+    blocked.value = true
+    setTimeout(() => { blocked.value = false }, 220)
+  }
 }
 
 function startGame() {
@@ -278,6 +345,7 @@ initGrid(); render()
 
 <style scoped>
 .game-board {
+  position: relative;
   background: rgba(0,0,0,0.5);
   border: 2px solid rgba(185,103,255,0.5);
   border-radius: 8px;
@@ -299,12 +367,57 @@ initGrid(); render()
   aspect-ratio: 1;
   border: 1px solid rgba(255,255,255,0.03);
   box-sizing: border-box;
+  position: relative;
 }
 
 .game-cell.snake {
   background: linear-gradient(135deg, #B967FF, #818CF8);
   border-radius: 4px;
   box-shadow: 0 0 8px rgba(185,103,255,0.6);
+}
+
+.game-cell.head {
+  background: linear-gradient(135deg, #3DF5FF, #00BFFF);
+  border-radius: 6px;
+  box-shadow: 0 0 12px rgba(61,245,255,0.9);
+  z-index: 2;
+}
+
+/* 蛇头眼睛：随行进方向旋转，明确指示朝向 */
+.head-eyes {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10%;
+  padding-right: 16%;
+  transform-origin: center;
+}
+
+.head-eyes.dir-up { transform: rotate(-90deg); }
+.head-eyes.dir-down { transform: rotate(90deg); }
+.head-eyes.dir-left { transform: rotate(180deg); }
+.head-eyes.dir-right { transform: rotate(0deg); }
+
+.head-eyes::before,
+.head-eyes::after {
+  content: '';
+  width: 26%;
+  height: 26%;
+  background: #0D0D1A;
+  border-radius: 50%;
+}
+
+/* 反向（掉头）无效时的蛇头抖动反馈 */
+.game-cell.shake {
+  animation: headShake 0.22s ease;
+}
+
+@keyframes headShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
 }
 
 .game-cell.food {

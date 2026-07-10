@@ -91,11 +91,11 @@ test('弹窗中有"游戏结束"文本', () => {
   )
 })
 
-test('弹窗中有"再来一局"按钮', () => {
-  // GameDialog 使用 actionText prop
+test('弹窗中有"提交分数"按钮', () => {
+  // GameDialog 使用 actionText prop，点击后打开排行榜
   assert.ok(
-    /actionText="再来一局"/.test(FILE) || /再来一局/.test(FILE),
-    '弹窗中缺少"再来一局"按钮'
+    /actionText="提交分数"/.test(FILE),
+    '弹窗中缺少"提交分数"按钮'
   )
 })
 
@@ -106,11 +106,16 @@ test('弹窗样式使用 #05FFA1 绿色主题（赛博朋克风格）', () => {
   )
 })
 
-test('弹窗按钮调用 startGame', () => {
-  // GameDialog 使用 @action 事件
+test('弹窗"提交分数"打开排行榜, 再来一局由排行榜触发 startGame', () => {
+  // GameDialog 的提交分数按钮打开排行榜
   assert.ok(
-    /@action="startGame"/.test(FILE) || /@click="startGame"/.test(FILE),
-    '弹窗"再来一局"按钮未绑定 startGame'
+    /@action="openLeaderboard"/.test(FILE),
+    'GameDialog 提交分数按钮未绑定 openLeaderboard'
+  )
+  // 真正的"再来一局"在 LeaderboardOverlay 的 replay 事件中
+  assert.ok(
+    /@replay="startGame"/.test(FILE),
+    'LeaderboardOverlay 再来一局按钮未绑定 startGame'
   )
 })
 

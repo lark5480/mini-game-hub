@@ -5,14 +5,23 @@
     gradientEnd="#00FFFF"
     :hints="['← → 或 A D 移动挡板', 'Enter 开始/发球', 'P 暂停']"
     :infoItems="[{ label: '分数', value: score }, { label: '生命', value: lives }]"
+    :confirmRestart="score > 0"
+    tutorial="移动挡板反弹球，打碎所有砖块即可过关。球不能落地！"
     @back="handleBack"
+    @restart="restart"
   >
-    <canvas ref="canvasRef" width="600" height="450"></canvas>
+    <div class="board-wrap">
+      <canvas ref="canvasRef" width="600" height="450"></canvas>
+      <ScoreFloat :popups="popups" />
+    </div>
     <LeaderboardStrip game="breakout" />
     <template #controls>
       <DirectionPad layout="horizontal" :showUp="false" :showDown="false" @left="moveLeft" @right="moveRight">
         <template #extra>
           <button @click="launchBall" class="launch-btn">发球</button>
+          <button v-if="!paused" @click="paused = true" class="extra-btn">暂停</button>
+          <button v-else @click="paused = false" class="extra-btn">继续</button>
+          <button @click="restart" class="extra-btn">重新开始</button>
         </template>
       </DirectionPad>
     </template>
@@ -42,6 +51,7 @@
       @update:visible="showLeaderboard = $event"
       @replay="restart"
     />
+    <PauseOverlay :visible="paused" @resume="paused = false" />
   </GameLayout>
 </template>
 
@@ -54,11 +64,16 @@ import { useGameLoop } from '@/composables/useGameLoop'
 import { useSound } from '@/composables/useSound'
 import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
+import { useAutoPause } from '@/composables/useAutoPause'
+import { useHaptics } from '@/composables/useHaptics'
+import { useScoreFloats } from '@/composables/useScoreFloats'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
 import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
+import PauseOverlay from '@/components/PauseOverlay.vue'
+import ScoreFloat from '@/components/ScoreFloat.vue'
 
 const router = useRouter()
 const gameStore = useGameStore()
@@ -66,6 +81,8 @@ const canvasRef = ref<HTMLCanvasElement | null>(null)
 const sound = useSound()
 const achievements = useAchievements()
 const toast = useToast()
+const haptics = useHaptics()
+const { popups, pop } = useScoreFloats()
 
 const score = ref(0)
 const lives = ref(3)
@@ -74,6 +91,10 @@ const showLeaderboard = ref(false)
 const lastScore = ref(0)
 const victory = ref(false)
 const paused = ref(false)
+
+useAutoPause(() => {
+  if (!gameOver.value && !victory.value) paused.value = true
+})
 
 const CANVAS_W = 600
 const CANVAS_H = 450
@@ -136,7 +157,10 @@ useGameKeyboard({
     },
     {
       key: ['p', 'P'],
-      handler: () => { paused.value = !paused.value }
+      handler: () => {
+        paused.value = !paused.value
+        if (paused.value) sound.pause(); else sound.resume()
+      }
     }
   ]
 })
@@ -263,6 +287,7 @@ function gameUpdate(dt: number) {
       gameOver.value = true
       launched = false
       sound.gameOver()
+      haptics.error()
       lastScore.value = score.value
       gameStore.addScore('breakout', score.value)
     } else {
@@ -272,6 +297,7 @@ function gameUpdate(dt: number) {
       ballDY = -4
       launched = false
       sound.loseLife()
+      haptics.error()
     }
   }
 
@@ -315,6 +341,8 @@ function gameUpdate(dt: number) {
         bricks[r][c] = false
         score.value += 10
         sound.brick()
+        haptics.pulse()
+        popScoreAt(ballX, ballY)
       }
     }
   }
@@ -330,6 +358,7 @@ function gameUpdate(dt: number) {
     victory.value = true
     launched = false
     sound.win()
+    haptics.win()
     lastScore.value = score.value
     gameStore.addScore('breakout', score.value)
     if (achievements.unlock('breakout_master')) {
@@ -339,6 +368,12 @@ function gameUpdate(dt: number) {
 
   if (leftPressed) paddleX = Math.max(0, paddleX - PADDLE_SPEED * scale)
   if (rightPressed) paddleX = Math.min(CANVAS_W - PADDLE_WIDTH, paddleX + PADDLE_SPEED * scale)
+}
+
+function popScoreAt(cx: number, cy: number) {
+  const cv = canvasRef.value
+  if (!cv) return
+  pop('+10', (cx / CANVAS_W) * cv.clientWidth, (cy / CANVAS_H) * cv.clientHeight)
 }
 
 function restart() {
@@ -357,9 +392,26 @@ function handleBack() {
   router.push('/')
 }
 
+// 触摸拖拽挡板（移动端核心交互）
+function onTouchMove(e: TouchEvent) {
+  if (e.touches.length === 0) return
+  const canvas = canvasRef.value
+  if (!canvas) return
+  e.preventDefault()
+  const rect = canvas.getBoundingClientRect()
+  const touchX = e.touches[0].clientX - rect.left
+  const canvasX = (touchX / rect.width) * CANVAS_W
+  paddleX = Math.max(0, Math.min(CANVAS_W - PADDLE_WIDTH, canvasX - PADDLE_WIDTH / 2))
+  // 触摸时自动发球
+  if (!launched && !gameOver.value && !victory.value && !paused.value) {
+    launchBall()
+  }
+}
+
 onMounted(() => {
   if (canvasRef.value) {
     ctx = canvasRef.value.getContext('2d')
+    canvasRef.value.addEventListener('touchmove', onTouchMove, { passive: false })
     initGame()
     gameLoop.start()
   }
@@ -367,6 +419,13 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.board-wrap {
+  position: relative;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
 canvas {
   display: block;
   width: 100%;
@@ -396,5 +455,22 @@ canvas {
 .launch-btn:hover {
   transform: scale(1.05);
   box-shadow: 0 0 20px rgba(0,255,255,0.3);
+}
+
+.extra-btn {
+  background: var(--game-btn-bg);
+  border: 1px solid var(--game-btn-border);
+  color: var(--game-text);
+  padding: 10px 24px;
+  font-size: 0.95em;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.extra-btn:hover {
+  background: rgba(255,107,107,0.1);
+  border-color: var(--game-accent);
+  box-shadow: 0 0 15px rgba(255,107,107,0.2);
 }
 </style>

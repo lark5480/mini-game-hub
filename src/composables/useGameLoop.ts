@@ -11,48 +11,78 @@ export interface UseGameLoopOptions {
 
 export function useGameLoop(options: UseGameLoopOptions) {
   const isRunning = ref(false)
+  const paused = ref(false)
   let intervalId: number | null = null
   let animationId: number | null = null
   let lastTime = 0
 
+  // ---- rAF 模式：抽成内部函数方便 resume 复用 ----
+  let rafAccumulator = 0
+  function rafLoop(timestamp: number) {
+    if (!isRunning.value || paused.value) {
+      animationId = null
+      return
+    }
+    // dt clamp：防止 tab 挂起回来后 dt 数秒导致瞬移
+    const rawDt = lastTime ? (timestamp - lastTime) : 16.67
+    const dt = Math.min(rawDt, 100)
+    lastTime = timestamp
+
+    const fixedStep = options.fixedStep || 0
+    if (fixedStep > 0) {
+      rafAccumulator += dt
+      while (rafAccumulator >= fixedStep) {
+        options.onUpdate(fixedStep)
+        rafAccumulator -= fixedStep
+      }
+    } else {
+      options.onUpdate(dt)
+    }
+
+    animationId = requestAnimationFrame(rafLoop)
+  }
+
+  function startRaf() {
+    lastTime = 0
+    rafAccumulator = 0
+    animationId = requestAnimationFrame(rafLoop)
+  }
+
   function start() {
     stop()
     isRunning.value = true
-    lastTime = 0
+    paused.value = false
 
     if (options.mode === 'raf') {
-      const fixedStep = options.fixedStep || 0
-      let accumulator = 0
-
-      function loop(timestamp: number) {
-        if (!isRunning.value) return
-        const dt = lastTime ? (timestamp - lastTime) : 16.67
-        lastTime = timestamp
-
-        if (fixedStep > 0) {
-          accumulator += dt
-          while (accumulator >= fixedStep) {
-            options.onUpdate(fixedStep)
-            accumulator -= fixedStep
-          }
-        } else {
-          options.onUpdate(dt)
-        }
-
-        animationId = requestAnimationFrame(loop)
-      }
-      animationId = requestAnimationFrame(loop)
+      startRaf()
     } else {
       // interval 模式
       const ms = options.intervalMs || 150
       intervalId = window.setInterval(() => {
+        if (paused.value) return
         options.onUpdate(ms)
       }, ms)
     }
   }
 
+  function pause() {
+    if (!isRunning.value) return
+    paused.value = true
+  }
+
+  function resume() {
+    if (!isRunning.value || !paused.value) return
+    paused.value = false
+    lastTime = 0
+    // 暂停时 rAF 链已自行停止，需要重新启动
+    if (options.mode === 'raf' && animationId === null) {
+      startRaf()
+    }
+  }
+
   function stop() {
     isRunning.value = false
+    paused.value = false
     if (intervalId !== null) {
       clearInterval(intervalId)
       intervalId = null
@@ -67,7 +97,10 @@ export function useGameLoop(options: UseGameLoopOptions) {
 
   return {
     isRunning,
+    paused,
     start,
-    stop
+    stop,
+    pause,
+    resume
   }
 }

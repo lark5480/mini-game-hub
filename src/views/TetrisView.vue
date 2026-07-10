@@ -5,29 +5,21 @@
     gradientEnd="#FF006E"
     :hints="['Enter 开始', '方向键移动 上旋转 下软降 空格硬降']"
     :infoItems="[{ label: '分数', value: score }, { label: '行数', value: lines }]"
+    :confirmRestart="score > 0"
+    tutorial="旋转并放置下落的方块，填满整行即可消除。同时消除多行得分更高！"
     @back="handleBack"
+    @restart="startGame"
   >
-    <div class="game-main">
-      <div class="game-board">
-        <div v-for="(row, y) in displayGrid" :key="y" class="game-row">
-          <div
-            v-for="(cell, x) in row"
-            :key="x"
-            class="game-cell"
-            :class="{ filled: cell.color }"
-            :style="cell.color ? { background: cell.color, boxShadow: `0 0 6px ${cell.color}80` } : {}"
-          ></div>
-        </div>
-      </div>
-      <div class="side-panel">
-        <div class="next-piece">
-          <div class="next-label">下一个</div>
-          <div class="next-grid">
-            <div v-for="(row, y) in nextGrid" :key="y" class="next-row">
+    <template #header-extra>
+      <div class="desktop-only">
+        <div class="mini-next">
+          <span class="mini-next-label">下一个</span>
+          <div class="mini-next-grid">
+            <div v-for="(row, y) in nextGrid" :key="y" class="mini-next-row">
               <div
                 v-for="(cell, x) in row"
                 :key="x"
-                class="next-cell"
+                class="mini-next-cell"
                 :class="{ filled: cell }"
                 :style="cell ? { background: cell } : {}"
               ></div>
@@ -35,30 +27,62 @@
           </div>
         </div>
       </div>
+    </template>
+    <div class="game-board" ref="boardEl">
+      <div v-for="(row, y) in displayGrid" :key="y" class="game-row">
+        <div
+          v-for="(cell, x) in row"
+          :key="x"
+          class="game-cell"
+          :class="{ filled: cell.color }"
+          :style="cell.color ? { background: cell.color, boxShadow: `0 0 6px ${cell.color}80` } : {}"
+        ></div>
+      </div>
+      <ScoreFloat :popups="popups" />
     </div>
     <LeaderboardStrip game="tetris" />
     <template #controls>
-      <DirectionPad
-        @up="switchShape"
-        @down="softDrop"
-        @left="move(-1)"
-        @right="move(1)"
-      >
-        <template #extra>
-          <button @click="drop" class="hard-drop-btn">硬降</button>
-          <button v-if="!isPlaying" @click="startGame" class="start-btn">开始</button>
-          <button v-else @click="startGame" class="extra-btn">重新开始</button>
-        </template>
-      </DirectionPad>
+      <div class="controls-flex">
+        <div class="controls-next">
+          <div class="controls-next-grid">
+            <div v-for="(row, y) in nextGrid" :key="y" class="controls-next-row">
+              <div
+                v-for="(cell, x) in row"
+                :key="x"
+                class="controls-next-cell"
+                :class="{ filled: cell }"
+                :style="cell ? { background: cell } : {}"
+              ></div>
+            </div>
+          </div>
+        </div>
+        <DirectionPad
+          @up="switchShape"
+          @down="softDrop"
+          @left="move(-1)"
+          @right="move(1)"
+        >
+          <template #extra>
+            <button @click="drop" class="hard-drop-btn">硬降</button>
+            <button v-if="!isPlaying" @click="startGame" class="start-btn">开始</button>
+            <template v-else>
+              <button v-if="!paused && !showResume" @click="togglePause" class="extra-btn">暂停</button>
+              <button v-else-if="paused && !showResume" @click="togglePause" class="extra-btn">继续</button>
+              <button @click="startGame" class="extra-btn">重新开始</button>
+            </template>
+          </template>
+        </DirectionPad>
+      </div>
     </template>
     <GameDialog
-      v-model:visible="gameOver"
+      :visible="gameOver"
       accentColor="#00FFFF"
       icon="fail"
       title="游戏结束"
       :message="'得分: ' + score"
       actionText="提交分数"
       @action="openLeaderboard"
+      @update:visible="onDialogClose"
     />
     <LeaderboardOverlay
       :visible="showLeaderboard"
@@ -68,6 +92,8 @@
       @update:visible="showLeaderboard = $event"
       @replay="startGame"
     />
+    <PauseOverlay :visible="paused" @resume="togglePause" />
+    <ResumePrompt :visible="showResume" @continue="continueGame" @new-game="newGame" />
   </GameLayout>
 </template>
 
@@ -81,17 +107,26 @@ import { useSound } from '@/composables/useSound'
 import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
 import { useGameSave } from '@/composables/useGameSave'
+import { useAutoPause } from '@/composables/useAutoPause'
+import { useHaptics } from '@/composables/useHaptics'
+import { useScoreFloats } from '@/composables/useScoreFloats'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
 import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
+import PauseOverlay from '@/components/PauseOverlay.vue'
+import ResumePrompt from '@/components/ResumePrompt.vue'
+import ScoreFloat from '@/components/ScoreFloat.vue'
 
 const router = useRouter()
 const gameStore = useGameStore()
 const sound = useSound()
 const achievements = useAchievements()
 const toast = useToast()
+const haptics = useHaptics()
+const { popups, pop } = useScoreFloats()
+const showResume = ref(false)
 
 const GRID_W = 10, GRID_H = 20
 type Cell = { color: string | null }
@@ -151,7 +186,7 @@ onMounted(() => {
     isPlaying.value = true
     gameOver.value = false
     if (nextPiece.value) renderNext()
-    gameLoop.start()
+    showResume.value = true
   }
 })
 onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer) })
@@ -179,6 +214,29 @@ const gameLoop = useGameLoop({
   intervalMs: 400,
   onUpdate: () => step()
 })
+const paused = gameLoop.paused
+
+function togglePause() {
+  if (showResume.value || gameOver.value || !isPlaying.value) return
+  if (paused.value) { gameLoop.resume(); sound.resume() }
+  else { gameLoop.pause(); sound.pause() }
+}
+
+function continueGame() {
+  showResume.value = false
+  if (isPlaying.value && !gameOver.value) gameLoop.start()
+}
+
+function newGame() {
+  showResume.value = false
+  startGame()
+}
+
+useAutoPause(() => {
+  if (isPlaying.value && !gameOver.value && !showResume.value) gameLoop.pause()
+})
+
+const boardEl = ref<HTMLElement | null>(null)
 
 useGameKeyboard({
   active: true,
@@ -192,24 +250,28 @@ useGameKeyboard({
     {
       key: [' '],
       handler: () => {
-        if (isPlaying.value && !gameOver.value) drop()
+        if (isPlaying.value && !gameOver.value && !paused.value) drop()
       }
     },
     {
       key: ['ArrowLeft', 'a', 'A'],
-      handler: () => { if (isPlaying.value && !gameOver.value) move(-1) }
+      handler: () => { if (isPlaying.value && !gameOver.value && !paused.value) move(-1) }
     },
     {
       key: ['ArrowRight', 'd', 'D'],
-      handler: () => { if (isPlaying.value && !gameOver.value) move(1) }
+      handler: () => { if (isPlaying.value && !gameOver.value && !paused.value) move(1) }
     },
     {
       key: ['ArrowDown', 's', 'S'],
-      handler: () => { if (isPlaying.value && !gameOver.value) softDrop() }
+      handler: () => { if (isPlaying.value && !gameOver.value && !paused.value) softDrop() }
     },
     {
       key: ['ArrowUp', 'w', 'W'],
-      handler: () => { if (isPlaying.value && !gameOver.value) switchShape() }
+      handler: () => { if (isPlaying.value && !gameOver.value && !paused.value) switchShape() }
+    },
+    {
+      key: ['p', 'P', 'Escape'],
+      handler: () => togglePause()
     }
   ]
 })
@@ -288,9 +350,12 @@ function clearLines() {
   }
   if (cleared > 0) {
     sound.clear(cleared)
+    haptics.pulse()
     lines.value += cleared
     const pts = [0, 100, 300, 500, 800]
-    score.value += pts[cleared] || 800
+    const gained = pts[cleared] || 800
+    score.value += gained
+    popScoreAt(gained)
     if (lines.value >= 50) {
       if (achievements.unlock('tetris_master')) {
         toast.show('成就解锁：建筑大师', '🎯')
@@ -299,7 +364,15 @@ function clearLines() {
   }
 }
 
+function popScoreAt(gained: number) {
+  const el = boardEl.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  pop('+' + gained, rect.width / 2, rect.height * 0.6)
+}
+
 function step() {
+  if (paused.value) return
   if (!current.value || !isPlaying.value) return
   if (collides(current.value.shape, current.value.x, current.value.y + 1)) {
     placePiece()
@@ -312,14 +385,14 @@ function step() {
 }
 
 function move(dir: number) {
-  if (current.value && isPlaying.value && !collides(current.value.shape, current.value.x + dir, current.value.y)) {
+  if (current.value && isPlaying.value && !paused.value && !collides(current.value.shape, current.value.x + dir, current.value.y)) {
     current.value.x += dir
     sound.move()
   }
 }
 
 function switchShape() {
-  if (!current.value || !isPlaying.value) return
+  if (!current.value || !isPlaying.value || paused.value) return
   const s = current.value.shape
   const rotated = s[0].map((_, i) => s.map(r => r[i]).reverse())
   if (!collides(rotated, current.value.x, current.value.y)) {
@@ -329,14 +402,14 @@ function switchShape() {
 }
 
 function softDrop() {
-  if (current.value && isPlaying.value && !collides(current.value.shape, current.value.x, current.value.y + 1)) {
+  if (current.value && isPlaying.value && !paused.value && !collides(current.value.shape, current.value.x, current.value.y + 1)) {
     current.value.y++
     score.value += 1
   }
 }
 
 function drop() {
-  if (!current.value || !isPlaying.value) return
+  if (!current.value || !isPlaying.value || paused.value) return
   while (!collides(current.value.shape, current.value.x, current.value.y + 1)) {
     current.value.y++
   }
@@ -370,6 +443,15 @@ function openLeaderboard() {
   clearSave()
 }
 
+function onDialogClose(visible: boolean) {
+  if (!visible && gameOver.value) {
+    gameOver.value = false
+    initGrid()
+    nextPiece.value = randomPiece()
+    renderNext()
+  }
+}
+
 function handleBack() {
   gameLoop.stop()
   router.push('/')
@@ -379,25 +461,111 @@ initGrid()
 </script>
 
 <style scoped>
-.game-main {
-  display: flex;
-  gap: 20px;
-  justify-content: center;
-  flex-wrap: wrap;
+/* header-extra 仅桌面端可见 */
+.desktop-only {
+  display: block;
+}
+@media (max-width: 640px) {
+  .desktop-only { display: none; }
 }
 
+/* 标题栏迷你下一个（桌面端） */
+.mini-next {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(0,255,255,0.15);
+  border-radius: 8px;
+  padding: 4px 8px 4px 10px;
+  white-space: nowrap;
+}
+
+.mini-next-label {
+  color: #818CF8;
+  font-size: 0.75em;
+  flex-shrink: 0;
+}
+
+.mini-next-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  width: 40px;
+  flex-shrink: 0;
+}
+
+.mini-next-row { display: contents; }
+
+.mini-next-cell {
+  width: 100%;
+  aspect-ratio: 1;
+  min-width: 0;
+  border-radius: 1px;
+  border: 1px solid rgba(255,255,255,0.04);
+  box-sizing: border-box;
+}
+
+.mini-next-cell.filled {
+  box-shadow: 0 0 4px rgba(0,255,255,0.4);
+}
+
+/* 控制区 flex 容器 */
+.controls-flex {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* 手机端"下一个"预览（按钮栏内） */
+.controls-next {
+  display: none;
+  width: 44px;
+  flex-shrink: 0;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(0,255,255,0.15);
+  border-radius: 8px;
+  padding: 4px;
+  box-sizing: content-box;
+}
+
+.controls-next-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  width: 44px;
+}
+
+.controls-next-row { display: contents; }
+
+.controls-next-cell {
+  width: 100%;
+  aspect-ratio: 1;
+  min-width: 0;
+  border-radius: 1px;
+  border: 1px solid rgba(255,255,255,0.04);
+  box-sizing: border-box;
+}
+
+.controls-next-cell.filled {
+  box-shadow: 0 0 4px rgba(0,255,255,0.4);
+}
+
+/* 棋盘 */
 .game-board {
+  position: relative;
   background: rgba(0,0,0,0.5);
-  border: 1px solid rgba(0,255,255,0.2);
+  border: 2px solid rgba(0,255,255,0.5);
   border-radius: 8px;
   padding: 5px;
   display: grid;
   grid-template-columns: repeat(10, 1fr);
   gap: 2px;
   width: 100%;
-  max-width: 320px;
+  max-width: 360px;
   margin: 0 auto;
-  box-shadow: 0 0 30px rgba(0,255,255,0.1);
+  box-shadow: 0 0 40px rgba(0,255,255,0.25);
 }
 
 .game-row { display: contents; }
@@ -414,37 +582,12 @@ initGrid()
   border-radius: 3px;
 }
 
-.side-panel { display: flex; flex-direction: column; justify-content: center; }
+@media (max-width: 640px) {
+  .game-board { max-width: 100%; }
 
-.next-piece {
-  background: rgba(0,0,0,0.4);
-  border: 1px solid rgba(0,255,255,0.15);
-  border-radius: 8px;
-  padding: 10px;
-  text-align: center;
+  /* 手机端显示控制区下一个预览 */
+  .controls-next { display: block; }
 }
-
-.next-label { color: #818CF8; font-size: 0.85em; margin-bottom: 8px; }
-
-.next-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 2px;
-  width: 88px;
-  max-width: 100%;
-}
-
-.next-row { display: contents; }
-
-.next-cell {
-  width: 100%;
-  aspect-ratio: 1;
-  min-width: 0;
-  border: 1px solid rgba(255,255,255,0.05);
-  box-sizing: border-box;
-}
-
-.next-cell.filled { border-radius: 2px; }
 
 .hard-drop-btn {
   background: rgba(255,0,110,0.15);

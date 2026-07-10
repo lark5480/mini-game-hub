@@ -188,14 +188,14 @@ onBeforeUnmount(() => {
 
 @media (max-width: 640px) {
   .pad-btn {
-    width: 64px;
-    height: 64px;
+    width: 52px;
+    height: 52px;
   }
   .direction-pad {
-    gap: 12px;
+    gap: 8px;
   }
   .pad-row {
-    gap: 12px;
+    gap: 8px;
   }
 }
 

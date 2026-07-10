@@ -5,9 +5,12 @@
     gradientEnd="#00FFFF"
     :hints="['空格/Enter 开始', '方向键/AD 左右移动']"
     :infoItems="[{ label: '分数', value: score }, { label: '生命', value: lives }]"
+    :confirmRestart="score > 0"
+    tutorial="移动篮子接住掉落的水果，漏接会失去生命。生命耗尽游戏结束！"
     @back="handleBack"
+    @restart="startGame"
   >
-    <div class="game-board">
+    <div class="game-board" ref="boardEl">
       <div
         v-for="fruit in fruits"
         :key="fruit.id"
@@ -25,12 +28,18 @@
           </defs>
         </svg>
       </div>
+      <ScoreFloat :popups="popups" />
     </div>
     <LeaderboardStrip game="catch-fruit" />
     <template #controls>
       <DirectionPad layout="horizontal" :showUp="false" :showDown="false" @left="moveLeft" @right="moveRight">
         <template #extra>
           <button v-if="!isPlaying" @click="startGame" class="start-btn">开始</button>
+          <template v-else>
+            <button v-if="!paused" @click="togglePause" class="extra-btn">暂停</button>
+            <button v-else @click="togglePause" class="extra-btn">继续</button>
+            <button @click="startGame" class="extra-btn">重新开始</button>
+          </template>
         </template>
       </DirectionPad>
     </template>
@@ -51,6 +60,7 @@
       @update:visible="showLeaderboard = $event"
       @replay="startGame"
     />
+    <PauseOverlay :visible="paused" @resume="togglePause" />
   </GameLayout>
 </template>
 
@@ -60,14 +70,21 @@ import { useRouter } from 'vue-router'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useGameLoop } from '@/composables/useGameLoop'
 import { useSound } from '@/composables/useSound'
+import { useAutoPause } from '@/composables/useAutoPause'
+import { useHaptics } from '@/composables/useHaptics'
+import { useScoreFloats } from '@/composables/useScoreFloats'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
 import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
+import PauseOverlay from '@/components/PauseOverlay.vue'
+import ScoreFloat from '@/components/ScoreFloat.vue'
 
 const router = useRouter()
 const sound = useSound()
+const haptics = useHaptics()
+const { popups, pop } = useScoreFloats()
 
 const boardWidth = 400, boardHeight = 500, basketWidth = 80, basketSpeed = 30
 const basketX = ref(boardWidth / 2 - basketWidth / 2)
@@ -82,10 +99,33 @@ const gameLoop = useGameLoop({
   mode: 'interval',
   intervalMs: 30,
   onUpdate: () => {
+    if (paused.value) return
     update()
     if (Math.random() < 0.03) spawnFruit()
   }
 })
+const paused = gameLoop.paused
+
+function togglePause() {
+  if (gameOver.value || !isPlaying.value) return
+  if (paused.value) { gameLoop.resume(); sound.resume() }
+  else { gameLoop.pause(); sound.pause() }
+}
+
+useAutoPause(() => {
+  if (isPlaying.value && !gameOver.value) gameLoop.pause()
+})
+
+const boardEl = ref<HTMLElement | null>(null)
+function popScoreAt() {
+  const el = boardEl.value
+  if (!el) return
+  const w = el.clientWidth
+  const h = el.clientHeight
+  const x = (basketX.value + 40) / boardWidth * w
+  const y = h * 0.85
+  pop('+5', x, y)
+}
 
 useGameKeyboard({
   active: true,
@@ -93,16 +133,20 @@ useGameKeyboard({
     {
       key: ['Enter', ' '],
       handler: () => {
-        if (!isPlaying.value || gameOver.value) startGame()
+        if (!isPlaying.value || gameOver.value || paused.value) startGame()
       }
     },
     {
       key: ['ArrowLeft', 'a', 'A'],
-      handler: () => { if (isPlaying.value) moveLeft() }
+      handler: () => { if (isPlaying.value && !paused.value) moveLeft() }
     },
     {
       key: ['ArrowRight', 'd', 'D'],
-      handler: () => { if (isPlaying.value) moveRight() }
+      handler: () => { if (isPlaying.value && !paused.value) moveRight() }
+    },
+    {
+      key: ['p', 'P', 'Escape'],
+      handler: () => togglePause()
     }
   ]
 })
@@ -126,10 +170,13 @@ function update() {
         score.value += 5
         toRemove.push(fruit.id)
         sound.collect()
+        haptics.pulse()
+        popScoreAt()
       } else if (fruit.y > boardHeight) {
         lives.value--
         toRemove.push(fruit.id)
         sound.loseLife()
+        haptics.error()
         if (lives.value <= 0) endGame()
       }
     }
@@ -217,5 +264,22 @@ function handleBack() {
 .start-btn:hover {
   transform: scale(1.05);
   box-shadow: 0 0 25px rgba(5,255,161,0.4);
+}
+
+.extra-btn {
+  background: var(--game-btn-bg);
+  border: 1px solid var(--game-btn-border);
+  color: var(--game-text);
+  padding: 10px 24px;
+  font-size: 0.95em;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.extra-btn:hover {
+  background: rgba(5,255,161,0.1);
+  border-color: var(--game-accent);
+  box-shadow: 0 0 15px rgba(5,255,161,0.2);
 }
 </style>

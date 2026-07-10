@@ -7,9 +7,19 @@
         </svg>
         返回
       </button>
+      <button v-if="$attrs.onRestart" class="icon-btn restart-btn" @click="handleRestart" title="重新开始">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+          <path d="M21 3v5h-5"/>
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+          <path d="M8 16H3v5"/>
+        </svg>
+      </button>
       <h2>{{ title }}</h2>
+      <slot name="header-extra"></slot>
       <div class="game-info">
         <span v-for="item in infoItems" :key="item.label">{{ item.label }} {{ item.value }}</span>
+        <span v-if="bestScore > 0" class="best-score">最佳 {{ bestScore }}</span>
       </div>
       <button class="sound-btn" @click="toggleMute" :title="muted ? '开启音效' : '关闭音效'">
         <svg v-if="!muted" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -27,29 +37,47 @@
     <div class="keyboard-hint" v-if="hints?.length">
       <span v-for="hint in hints" :key="hint">{{ hint }}</span>
     </div>
+    <div class="tutorial-bubble" v-if="showTutorial">
+      <div class="tutorial-content">{{ tutorial }}</div>
+      <button class="tutorial-close" @click="dismissTutorial">知道了</button>
+    </div>
     <div class="game-container">
       <slot></slot>
     </div>
     <div class="controls-area" v-if="$slots.controls">
       <slot name="controls"></slot>
     </div>
+    <div v-if="showRestartConfirm" class="confirm-overlay" @click.self="showRestartConfirm = false">
+      <div class="confirm-dialog">
+        <p>确定重新开始？当前进度会丢失</p>
+        <div class="confirm-buttons">
+          <button class="cancel-btn" @click="showRestartConfirm = false">取消</button>
+          <button class="ok-btn" @click="doRestart">确定</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref, computed, useAttrs } from 'vue'
+import { useRoute } from 'vue-router'
 import { useSound } from '@/composables/useSound'
+import { useGameStore } from '@/stores/game'
 
 export interface InfoItem {
   label: string
   value: string | number
 }
 
-defineProps<{
+const props = defineProps<{
   title: string
   accentColor: string
   gradientEnd?: string
   hints?: string[]
   infoItems?: InfoItem[]
+  confirmRestart?: boolean
+  tutorial?: string
 }>()
 
 defineEmits<{
@@ -57,6 +85,43 @@ defineEmits<{
 }>()
 
 const { muted, toggleMute } = useSound()
+const gameStore = useGameStore()
+const route = useRoute()
+const attrs = useAttrs()
+
+const gameKey = computed(() => {
+  const path = route.path.slice(1)
+  return path && path !== 'achievements' ? path : ''
+})
+
+const bestScore = computed(() =>
+  gameKey.value ? gameStore.getTopScore(gameKey.value) : 0
+)
+
+const showRestartConfirm = ref(false)
+
+function handleRestart() {
+  if (props.confirmRestart) {
+    showRestartConfirm.value = true
+  } else {
+    ;(attrs.onRestart as (() => void) | undefined)?.()
+  }
+}
+
+function doRestart() {
+  showRestartConfirm.value = false
+  ;(attrs.onRestart as (() => void) | undefined)?.()
+}
+
+const TUTORIAL_PREFIX = 'game-tutorial-seen-'
+const showTutorial = ref(
+  !!props.tutorial && localStorage.getItem(TUTORIAL_PREFIX + gameKey.value) !== 'true'
+)
+
+function dismissTutorial() {
+  showTutorial.value = false
+  if (gameKey.value) localStorage.setItem(TUTORIAL_PREFIX + gameKey.value, 'true')
+}
 </script>
 
 <style scoped>
@@ -104,11 +169,36 @@ const { muted, toggleMute } = useSound()
   border-color: var(--game-accent);
 }
 
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: var(--game-btn-bg);
+  border: 1px solid var(--game-btn-border);
+  color: var(--game-text);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--game-accent);
+}
+
 .game-info {
   display: flex;
   gap: 20px;
   font-size: 0.95em;
   color: var(--game-text-info);
+}
+
+.best-score {
+  color: #FFD700;
+  white-space: nowrap;
 }
 
 .sound-btn {
@@ -146,6 +236,42 @@ const { muted, toggleMute } = useSound()
   border-radius: 4px;
 }
 
+.tutorial-bubble {
+  max-width: 600px;
+  margin: 0 auto 16px;
+  background: rgba(0, 255, 255, 0.06);
+  border: 1px solid rgba(0, 255, 255, 0.2);
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: dialog-in 0.3s ease-out;
+}
+
+.tutorial-content {
+  flex: 1;
+  color: var(--game-text-info);
+  font-size: 0.9em;
+  line-height: 1.5;
+}
+
+.tutorial-close {
+  background: rgba(0, 255, 255, 0.15);
+  border: 1px solid rgba(0, 255, 255, 0.3);
+  color: #00FFFF;
+  padding: 4px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85em;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.tutorial-close:hover {
+  background: rgba(0, 255, 255, 0.25);
+}
+
 .game-container {
   max-width: 600px;
   margin: 0 auto;
@@ -155,6 +281,65 @@ const { muted, toggleMute } = useSound()
   max-width: 600px;
   margin: 25px auto 0;
   text-align: center;
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+}
+
+.confirm-dialog {
+  background: linear-gradient(135deg, #1A1A2E, #0D0D1A);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 30px 40px;
+  border-radius: 16px;
+  text-align: center;
+}
+
+.confirm-dialog p {
+  color: var(--game-text);
+  margin: 0 0 20px;
+  font-size: 1.05em;
+}
+
+.confirm-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.cancel-btn, .ok-btn {
+  padding: 8px 28px;
+  border-radius: 20px;
+  font-size: 0.95em;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid;
+}
+
+.cancel-btn {
+  background: var(--game-btn-bg);
+  border-color: var(--game-btn-border);
+  color: var(--game-text);
+}
+
+.cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.ok-btn {
+  background: rgba(255, 0, 110, 0.2);
+  border-color: #FF006E;
+  color: #FF006E;
+}
+
+.ok-btn:hover {
+  background: rgba(255, 0, 110, 0.35);
 }
 
 /* ===== 移动端适配 ===== */
@@ -171,27 +356,44 @@ const { muted, toggleMute } = useSound()
     margin-bottom: 18px;
   }
 
-  /* 返回 / 静音按钮留在顶部一行，标题与分数各自占满一行居中 */
-  .back-btn { order: 1; }
-  .sound-btn { order: 1; }
-
   .game-header h2 {
-    order: 2;
+    order: 1;
     flex: 1 1 100%;
     text-align: center;
     font-size: 1.5em;
   }
 
+  .back-btn { order: 2; }
+  .restart-btn { order: 2; }
+  .sound-btn { order: 2; }
+
+  ::slotted([slot="header-extra"]),
+  .header-extra {
+    order: 2;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
   .game-info {
-    order: 3;
-    flex: 1 1 100%;
+    order: 2;
+    flex: 2 1 0;
     justify-content: center;
-    gap: 16px;
+    gap: 12px;
     font-size: 0.9em;
+    min-width: 0;
+  }
+
+  .game-header {
+    justify-content: flex-start;
   }
 
   .controls-area {
-    margin-top: 18px;
+    margin-top: 8px;
+  }
+
+  .tutorial-bubble {
+    margin-left: 0;
+    margin-right: 0;
   }
 }
 </style>

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
+import { defaultScoreKeys } from '@/lib/games'
 
 export interface GameScore {
   name: string
@@ -10,7 +11,9 @@ export interface GameScore {
 const STORAGE_KEY = 'game-collection-scores'
 
 function defaultScores(): Record<string, GameScore[]> {
-  return { sokoban: [], link: [], 'catch-fruit': [], snake: [], tetris: [], breakout: [], '2048': [], whackamole: [], 'tic-tac-toe': [] }
+  const obj: Record<string, GameScore[]> = {}
+  for (const name of defaultScoreKeys()) obj[name] = []
+  return obj
 }
 
 function loadScores(): Record<string, GameScore[]> {
