@@ -5,9 +5,12 @@
     gradientEnd="#B967FF"
     :hints="['方向键/WASD 移动', 'Enter/空格 确认', 'R 重置']"
     :infoItems="[{ label: '分数', value: score }, { label: '剩余', value: remaining }]"
+    :confirmRestart="score > 0"
+    tutorial="找出相同图案，用不超过两个弯的路径连接消除。全部消除即胜利！"
     @back="router.push('/')"
+    @restart="initGame"
   >
-    <div class="game-board">
+    <div class="game-board" ref="boardEl">
       <div v-for="(row, y) in board" :key="y" class="game-row">
         <div
           v-for="(cell, x) in row"
@@ -21,6 +24,18 @@
           </svg>
         </div>
       </div>
+      <svg
+        v-if="linkShow"
+        :key="linkId"
+        class="link-overlay"
+        :width="linkBox.w"
+        :height="linkBox.h"
+        :style="{ '--len': pathLen }"
+      >
+        <polyline :points="polyStr" class="link-line" />
+        <circle v-for="(p, i) in linkPoints" :key="i" :cx="p.x" :cy="p.y" r="3.5" class="link-dot" />
+      </svg>
+      <ScoreFloat :popups="popups" />
     </div>
     <LeaderboardStrip game="link" />
     <template #controls>
@@ -44,6 +59,7 @@
       @update:visible="showLeaderboard = $event"
       @replay="initGame"
     />
+    <ResumePrompt :visible="showResume" @continue="continueGame" @new-game="newGame" />
   </GameLayout>
 </template>
 
@@ -55,15 +71,23 @@ import { useSound } from '@/composables/useSound'
 import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
 import { useGameSave } from '@/composables/useGameSave'
+import { useHaptics } from '@/composables/useHaptics'
+import { useScoreFloats } from '@/composables/useScoreFloats'
+import { useAutoPause } from '@/composables/useAutoPause'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
 import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
+import ResumePrompt from '@/components/ResumePrompt.vue'
+import ScoreFloat from '@/components/ScoreFloat.vue'
 
 const router = useRouter()
 const sound = useSound()
 const achievements = useAchievements()
 const toast = useToast()
+const haptics = useHaptics()
+const { popups, pop } = useScoreFloats()
+const showResume = ref(false)
 
 interface Cell { type: number; matched: boolean }
 
@@ -75,6 +99,45 @@ const score = ref(0)
 const winDialog = ref(false)
 const showLeaderboard = ref(false)
 const lastScore = ref(0)
+
+// 消除连接线（瞬时动画）
+const boardEl = ref<HTMLElement | null>(null)
+const linkShow = ref(false)
+const linkId = ref(0)
+const linkPoints = ref<{ x: number; y: number }[]>([])
+const linkBox = ref({ w: 0, h: 0 })
+let linkTimer: ReturnType<typeof setTimeout> | null = null
+const GAP = 4
+
+const polyStr = computed(() => linkPoints.value.map(p => `${p.x},${p.y}`).join(' '))
+const pathLen = computed(() =>
+  linkPoints.value.reduce((acc, p, i) =>
+    i === 0 ? 0 : acc + Math.hypot(p.x - linkPoints.value[i - 1].x, p.y - linkPoints.value[i - 1].y), 0)
+)
+
+/** 把网格坐标（可超出棋盘边界，用于外环绕）映射到棋盘内像素坐标 */
+function gridToScreen(p: Pt): { x: number; y: number } {
+  const board = boardEl.value!
+  const boardRect = board.getBoundingClientRect()
+  const cells = board.querySelectorAll('.game-cell')
+  const gx = Math.max(0, Math.min(COLS - 1, p.x))
+  const gy = Math.max(0, Math.min(ROWS - 1, p.y))
+  const cellEl = cells[gy * COLS + gx] as HTMLElement
+  const r = cellEl.getBoundingClientRect()
+  const x = r.left + r.width / 2 + (p.x - gx) * (r.width + GAP) - boardRect.left
+  const y = r.top + r.height / 2 + (p.y - gy) * (r.height + GAP) - boardRect.top
+  return { x, y }
+}
+
+function showLink(path: Pt[]) {
+  const br = boardEl.value!.getBoundingClientRect()
+  linkBox.value = { w: br.width, h: br.height }
+  linkPoints.value = path.map(gridToScreen)
+  linkId.value++
+  linkShow.value = true
+  if (linkTimer) clearTimeout(linkTimer)
+  linkTimer = setTimeout(() => { linkShow.value = false }, 460)
+}
 
 const remaining = computed(() => board.value.flat().filter(c => !c.matched).length)
 
@@ -103,58 +166,71 @@ onMounted(() => {
   if (data && Array.isArray(data.board) && typeof data.score === 'number') {
     const b = data.board as unknown[][]
     if (b.length === ROWS && b.every(r => r.length === COLS)) {
+      showResume.value = true
       board.value = data.board as typeof board.value
       score.value = data.score
       selected.value = null
       cursor.value = { x: 0, y: 0 }
       winDialog.value = false
     }
+  } else {
+    initGame()
   }
 })
-onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer) })
+onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer); if (linkTimer) clearTimeout(linkTimer) })
 
 useGameKeyboard({
   bindings: [
     {
       key: ['ArrowUp', 'w', 'W'],
       handler: () => {
-        if (winDialog.value) return
+        if (winDialog.value || showResume.value) return
         cursor.value = { x: cursor.value.x, y: Math.max(0, cursor.value.y - 1) }
       }
     },
     {
       key: ['ArrowDown', 's', 'S'],
       handler: () => {
-        if (winDialog.value) return
+        if (winDialog.value || showResume.value) return
         cursor.value = { x: cursor.value.x, y: Math.min(ROWS - 1, cursor.value.y + 1) }
       }
     },
     {
       key: ['ArrowLeft', 'a', 'A'],
       handler: () => {
-        if (winDialog.value) return
+        if (winDialog.value || showResume.value) return
         cursor.value = { x: Math.max(0, cursor.value.x - 1), y: cursor.value.y }
       }
     },
     {
       key: ['ArrowRight', 'd', 'D'],
       handler: () => {
-        if (winDialog.value) return
+        if (winDialog.value || showResume.value) return
         cursor.value = { x: Math.min(COLS - 1, cursor.value.x + 1), y: cursor.value.y }
       }
     },
     {
       key: ['Enter', ' '],
       handler: () => {
+        if (showResume.value) return
         if (winDialog.value) { initGame(); clearSave(); return }
         selectCell(cursor.value.x, cursor.value.y)
       }
     },
     {
       key: ['r', 'R'],
-      handler: () => { if (!winDialog.value) shuffle(true) }
+      handler: () => { if (!winDialog.value && !showResume.value) shuffle(true) }
+    },
+    {
+      key: ['p', 'P', 'Escape'],
+      handler: () => { if (!winDialog.value && !showResume.value) showResume.value = true }
     }
   ]
+})
+
+// 失焦自动暂停
+useAutoPause(() => {
+  if (!winDialog.value && !showResume.value) showResume.value = true
 })
 
 function getIcon(type: number): string { return icons[type] || '❓' }
@@ -171,6 +247,22 @@ function submitScore() {
   winDialog.value = false
   showLeaderboard.value = true
   clearSave()
+}
+
+function continueGame() {
+  showResume.value = false
+}
+
+function newGame() {
+  showResume.value = false
+  clearSave()
+  initGame()
+}
+
+function popScoreAt(ax: number, ay: number, bx: number, by: number) {
+  const ra = gridToScreen({ x: ax, y: ay })
+  const rb = gridToScreen({ x: bx, y: by })
+  pop('+10', (ra.x + rb.x) / 2, (ra.y + rb.y) / 2)
 }
 
 function initGame() {
@@ -194,6 +286,7 @@ function initGame() {
   score.value = 0
   winDialog.value = false
   selected.value = null
+  linkShow.value = false
 }
 
 function isSelected(x: number, y: number): boolean {
@@ -225,34 +318,47 @@ function isLineEmpty(x1: number, y1: number, x2: number, y2: number): boolean {
   return false
 }
 
-/** 检查 (x1,y1) 到 (x2,y2) 是否能通过 ≤2 转弯路径连通 */
-function canConnect(x1: number, y1: number, x2: number, y2: number): boolean {
+interface Pt { x: number; y: number }
+
+/** 查找 (x1,y1) 到 (x2,y2) 的 ≤2 转弯连通路径，返回拐点序列（含端点），不可连返回 null */
+function findPath(x1: number, y1: number, x2: number, y2: number): Pt[] | null {
   // 同一位置
-  if (x1 === x2 && y1 === y2) return false
+  if (x1 === x2 && y1 === y2) return null
 
   // 0 转弯：直线连接
-  if ((x1 === x2 || y1 === y2) && isLineEmpty(x1, y1, x2, y2)) return true
+  if ((x1 === x2 || y1 === y2) && isLineEmpty(x1, y1, x2, y2)) {
+    return [{ x: x1, y: y1 }, { x: x2, y: y2 }]
+  }
 
   // 1 转弯：通过一个拐点
-  if (isEmpty(x1, y2) && isLineEmpty(x1, y1, x1, y2) && isLineEmpty(x1, y2, x2, y2)) return true
-  if (isEmpty(x2, y1) && isLineEmpty(x1, y1, x2, y1) && isLineEmpty(x2, y1, x2, y2)) return true
+  if (isEmpty(x1, y2) && isLineEmpty(x1, y1, x1, y2) && isLineEmpty(x1, y2, x2, y2)) {
+    return [{ x: x1, y: y1 }, { x: x1, y: y2 }, { x: x2, y: y2 }]
+  }
+  if (isEmpty(x2, y1) && isLineEmpty(x1, y1, x2, y1) && isLineEmpty(x2, y1, x2, y2)) {
+    return [{ x: x1, y: y1 }, { x: x2, y: y1 }, { x: x2, y: y2 }]
+  }
 
   // 2 转弯：通过两个拐点 — 水平扫描线
   for (let x = -1; x <= COLS; x++) {
     if (isEmpty(x, y1) && isEmpty(x, y2) &&
         isLineEmpty(x1, y1, x, y1) && isLineEmpty(x, y1, x, y2) && isLineEmpty(x, y2, x2, y2)) {
-      return true
+      return [{ x: x1, y: y1 }, { x, y: y1 }, { x, y: y2 }, { x: x2, y: y2 }]
     }
   }
   // 2 转弯：垂直扫描线
   for (let y = -1; y <= ROWS; y++) {
     if (isEmpty(x1, y) && isEmpty(x2, y) &&
         isLineEmpty(x1, y1, x1, y) && isLineEmpty(x1, y, x2, y) && isLineEmpty(x2, y, x2, y2)) {
-      return true
+      return [{ x: x1, y: y1 }, { x: x1, y }, { x: x2, y }, { x: x2, y: y2 }]
     }
   }
 
-  return false
+  return null
+}
+
+/** 检查 (x1,y1) 到 (x2,y2) 是否能通过 ≤2 转弯路径连通 */
+function canConnect(x1: number, y1: number, x2: number, y2: number): boolean {
+  return findPath(x1, y1, x2, y2) !== null
 }
 
 /** 死局检测：是否存在至少一对可连通的同类型方块 */
@@ -274,6 +380,7 @@ function hasValidPair(): boolean {
 }
 
 function selectCell(x: number, y: number) {
+  if (showResume.value) return
   const cell = board.value[y][x]
   if (cell.matched) return
 
@@ -283,10 +390,14 @@ function selectCell(x: number, y: number) {
   if (sel.x === x && sel.y === y) { selected.value = null; return }
 
   const selCell = board.value[sel.y][sel.x]
-  if (selCell.type === cell.type && canConnect(sel.x, sel.y, x, y)) {
+  const path = findPath(sel.x, sel.y, x, y)
+  if (selCell.type === cell.type && path) {
     cell.matched = true; selCell.matched = true
     score.value += 10; selected.value = null
     sound.match()
+    haptics.pulse()
+    popScoreAt(sel.x, sel.y, x, y)
+    showLink(path)
     if (remaining.value === 0) {
       winDialog.value = true
       sound.win()
@@ -317,7 +428,6 @@ function shuffle(explicit = false) {
   if (explicit) clearSave()
 }
 
-initGame()
 </script>
 
 <style scoped>
@@ -331,6 +441,42 @@ initGame()
   max-width: 520px;
   box-sizing: border-box;
   box-shadow: 0 0 30px rgba(255,0,110,0.1);
+  position: relative;
+}
+
+.link-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  z-index: 6;
+  overflow: visible;
+}
+
+.link-line {
+  fill: none;
+  stroke: #FF006E;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px rgba(255, 0, 110, 0.85));
+  stroke-dasharray: var(--len);
+  stroke-dashoffset: var(--len);
+  animation: linkDraw 0.18s ease-out forwards, linkFade 0.3s ease-in 0.18s forwards;
+}
+
+.link-dot {
+  fill: #fff;
+  filter: drop-shadow(0 0 4px #FF006E);
+  animation: linkFade 0.3s ease-in 0.18s forwards;
+}
+
+@keyframes linkDraw {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes linkFade {
+  to { opacity: 0; }
 }
 
 .game-row {

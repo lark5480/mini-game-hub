@@ -5,7 +5,10 @@
     gradientEnd="#FF6B6B"
     :hints="['方向键/WASD 移动', 'Z 撤销', 'R 重新开始']"
     :infoItems="infoItems"
+    :confirmRestart="score > 0"
+    tutorial="滑动合并相同数字的方块，目标达到2048！每次滑动会随机出现新方块。"
     @back="router.push('/')"
+    @restart="restart"
   >
     <div class="game-board" ref="boardEl">
       <div v-for="(row, y) in grid" :key="y" class="board-row">
@@ -20,6 +23,7 @@
           </span>
         </div>
       </div>
+      <ScoreFloat :popups="popups" />
     </div>
     <LeaderboardStrip game="2048" />
     <template #controls>
@@ -63,6 +67,7 @@
       @update:visible="showLeaderboard = $event"
       @replay="restart"
     />
+    <ResumePrompt :visible="showResume" @continue="continueGame" @new-game="newGame" />
   </GameLayout>
 </template>
 
@@ -76,11 +81,16 @@ import { useSound } from '@/composables/useSound'
 import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
 import { useGameSave } from '@/composables/useGameSave'
+import { useHaptics } from '@/composables/useHaptics'
+import { useAutoPause } from '@/composables/useAutoPause'
+import { useScoreFloats } from '@/composables/useScoreFloats'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
 import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
+import ResumePrompt from '@/components/ResumePrompt.vue'
+import ScoreFloat from '@/components/ScoreFloat.vue'
 
 type Direction = 'up' | 'down' | 'left' | 'right'
 type Grid = number[][]
@@ -92,6 +102,9 @@ const gameStore = useGameStore()
 const sound = useSound()
 const achievements = useAchievements()
 const toast = useToast()
+const haptics = useHaptics()
+const { popups, pop } = useScoreFloats()
+const showResume = ref(false)
 
 const grid = ref<Grid>(createEmptyGrid())
 const score = ref(0)
@@ -130,14 +143,19 @@ watch([grid, score, won, history], scheduleSave, { deep: true })
 onMounted(() => {
   const data = save.loadGame()
   if (data && Array.isArray(data.grid) && Array.isArray(data.history)) {
+    showResume.value = true
     grid.value = data.grid as Grid
     score.value = typeof data.score === 'number' ? data.score : 0
     won.value = !!data.won
     history.value = data.history as History[]
     newTiles.value = []
+  } else {
+    restart({ restoring: true })
   }
 })
 onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer) })
+
+const gameActive = () => !gameOverDialog.value && !winDialog.value && !showResume.value
 
 useGameKeyboard({
   bindings: [
@@ -146,15 +164,21 @@ useGameKeyboard({
     { key: ['ArrowLeft', 'a', 'A'], handler: () => handleMove('left') },
     { key: ['ArrowRight', 'd', 'D'], handler: () => handleMove('right') },
     { key: ['z', 'Z'], handler: () => undo() },
-    { key: ['r', 'R'], handler: () => restart() }
+    { key: ['r', 'R'], handler: () => restart() },
+    { key: ['p', 'P', 'Escape'], handler: () => { if (gameActive()) showResume.value = true } }
   ]
+})
+
+// 失焦自动暂停：弹出 ResumePrompt 让用户选择继续还是重开
+useAutoPause(() => {
+  if (gameActive()) showResume.value = true
 })
 
 // 移动端滑动手势：直接在棋盘上滑动即可移动方块
 const boardEl = ref<HTMLElement | null>(null)
 useSwipe({
   el: () => boardEl.value,
-  active: () => winDialog.value === false && gameOverDialog.value === false,
+  active: () => gameActive(),
   onSwipe: (dir) => move(dir)
 })
 
@@ -259,7 +283,7 @@ function canMove(g: Grid): boolean {
 }
 
 function handleMove(dir: Direction) {
-  if (winDialog.value || gameOverDialog.value) return
+  if (winDialog.value || gameOverDialog.value || showResume.value) return
 
   const prevGrid = cloneGrid(grid.value)
   const prevScore = score.value
@@ -279,7 +303,11 @@ function handleMove(dir: Direction) {
   if (history.value.length > 20) history.value.shift()
 
   score.value += totalMerged
-  if (totalMerged > 0) sound.merge(totalMerged)
+  if (totalMerged > 0) {
+    sound.merge(totalMerged)
+    haptics.pulse()
+    popScoreAt(totalMerged)
+  }
   spawnTile()
 
   // 检查是否达到 2048
@@ -358,15 +386,31 @@ function submitScore() {
   clearSave()
 }
 
+function continueGame() {
+  showResume.value = false
+}
+
+function newGame() {
+  showResume.value = false
+  restart({ restoring: false })
+}
+
+function popScoreAt(amount: number) {
+  const el = boardEl.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  pop('+' + amount, rect.width / 2, rect.height / 2)
+}
+
 function isAnimating(x: number, y: number): boolean {
   return newTiles.value.some(t => t.x === x && t.y === y)
 }
 
-restart({ restoring: true })
 </script>
 
 <style scoped>
 .game-board {
+  position: relative;
   background: rgba(0, 0, 0, 0.5);
   border: 1px solid rgba(255, 215, 0, 0.2);
   border-radius: 12px;

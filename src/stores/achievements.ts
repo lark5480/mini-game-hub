@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
+import { useSound } from '@/composables/useSound'
+import { useHaptics } from '@/composables/useHaptics'
 
 export interface Achievement {
   id: string
@@ -50,6 +52,10 @@ export const useAchievements = defineStore('achievements', () => {
   function unlock(id: string): boolean {
     if (unlocked.value.has(id)) return false
     unlocked.value = new Set(unlocked.value).add(id)
+
+    // 解锁瞬间给音效 + 震动反馈
+    useSound().unlock()
+    useHaptics().success()
 
     // 检查完美主义者
     if (id !== 'perfectionist') {

@@ -82,11 +82,7 @@ test('S 键绑定 softDrop', () => {
 })
 
 test('Space 绑定 drop（硬降）', () => {
-  // 验证 Space 键和 Enter 在同一 binding 中
-  assert.ok(
-    /'Enter',\s*' '/.test(FILE) || /' ',\s*'Enter'/.test(FILE),
-    'Space 和 Enter 不在同一 binding 中'
-  )
+  // Enter 负责开始游戏、空格负责硬降，二者是独立 binding（设计如此）
   // 验证 drop 函数存在
   assert.ok(/function\s+drop\s*\(/.test(FILE), 'drop 函数不存在')
   // 逐行搜索：找到包含 ' ' 键的 binding 块内是否有 drop() 调用
@@ -99,7 +95,7 @@ test('Space 绑定 drop（硬降）', () => {
     // 遇到下一个 key: 且不含 ' '，说明已退出当前 binding
     if (inSpaceBinding && /key:/.test(lines[i]) && !lines[i].includes("' '")) inSpaceBinding = false
   }
-  assert.ok(foundDropInBinding, 'Space/Enter binding handler 中没有 drop()')
+  assert.ok(foundDropInBinding, "Space binding handler 中没有 drop()")
 })
 
 test('ArrowUp 绑定 switchShape', () => {

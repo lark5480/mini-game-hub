@@ -65,6 +65,21 @@ npm run preview
 
 ---
 
+## ✨ 体验特性
+
+| 特性 | 说明 |
+|------|------|
+| 🎬 弹窗动画 | 所有对话框/遮罩统一 fade + scale 过渡（`src/styles/animations.css`） |
+| 📱 触摸优化 | 弹球支持触屏拖拽挡板、所有 overlay 适配 `safe-area-inset`（iPhone 刘海） |
+| ⌨️ 键盘连发 | `useGameKeyboard` 支持 `binding.repeat` 长按连发（ Snake / 俄罗斯方块移动更跟手） |
+| 🔊 音效反馈 | 暂停/恢复/成就解锁各有独立音效；`toggleMute()` 后给确认短 click |
+| 📳 震动反馈 | `useHaptics` 命中/连击/miss/胜利各有振动（移动端） |
+| ⏸️ 失焦暂停 | 切到后台自动暂停，回前台弹 `ResumePrompt` 确认继续 |
+| ♿ 可访问性 | 全局 `:focus-visible` 键盘环、`prefers-reduced-motion` 禁用动效 |
+| 🛡️ 排行榜容错 | 5s 超时、友好中文错误文案、重试按钮、Toast 降级 |
+
+---
+
 ## 🛠️ 技术栈
 
 - **框架**: [Vue 3](https://vuejs.org/) - 渐进式 JavaScript 框架
@@ -83,41 +98,53 @@ game-collection/
 ├── src/
 │   ├── components/          # 公共组件
 │   │   ├── GameLayout.vue         # 游戏布局组件
-│   │   ├── GameDialog.vue         # 游戏对话框
+│   │   ├── GameDialog.vue         # 游戏对话框（带过渡动画）
 │   │   ├── DirectionPad.vue       # 方向控制键盘
-│   │   ├── LeaderboardOverlay.vue  # 排行榜提交弹窗
+│   │   ├── LeaderboardOverlay.vue  # 排行榜提交弹窗（带过渡动画 + 重试按钮）
 │   │   ├── LeaderboardStrip.vue   # 内嵌排行榜条
-│   │   └── GameToast.vue          # 成就解锁 Toast
+│   │   ├── GameToast.vue          # 成就解锁 Toast（带过渡动画 + safe-area）
+│   │   ├── PauseOverlay.vue       # 暂停遮罩（带过渡动画）
+│   │   ├── ResumePrompt.vue       # 继续/重开选择弹窗（带过渡动画）
+│   │   └── ScoreFloat.vue         # 浮动分数动画（"+10" 等）
 │   ├── composables/         # 组合式函数
-│   │   ├── useGameKeyboard.ts  # 键盘输入处理
-│   │   ├── useGameLoop.ts      # 游戏循环管理
-│   │   ├── useSound.ts         # 音效系统（Web Audio API）
-│   │   ├── useLeaderboard.ts   # 排行榜数据（Supabase）
-│   │   └── useToast.ts         # Toast 通知管理
-│   ├── router/              # 路由配置
+│   │   ├── useGameKeyboard.ts  # 键盘输入处理（支持 repeat 长按连发 + isDown 查询）
+│   │   ├── useGameLoop.ts      # 游戏循环管理（暂停停 rAF + dt clamp）
+│   │   ├── useSound.ts         # 音效系统（Web Audio API，23+ 预设）
+│   │   ├── useLeaderboard.ts   # 排行榜数据（Supabase，5s 超时 + 错误映射）
+│   │   ├── useToast.ts         # Toast 通知管理
+│   │   ├── useAutoPause.ts     # 失焦自动暂停
+│   │   ├── useHaptics.ts       # 触觉反馈（移动端震动）
+│   │   ├── useScoreFloats.ts   # 浮动分数堆叠管理
+│   │   ├── useGameSave.ts      # 存档/读档/继续游戏
+│   │   ├── useSwipe.ts         # 移动端滑动手势
+│   │   └── usePause.ts         # 统一的暂停/恢复（P/Esc + 失焦 + ResumePrompt）
+│   ├── router/              # 路由配置（从 GAMES 注册表循环生成）
 │   │   └── index.ts
 │   ├── lib/
-│   │   └── supabase.ts       # Supabase 客户端
+│   │   ├── supabase.ts       # Supabase 客户端
+│   │   └── games.ts          # 🎮 游戏注册表 — 单一数据源（新增游戏只改这里）
 │   ├── stores/               # 状态管理
-│   │   ├── game.ts            # 游戏本地分数管理
-│   │   └── achievements.ts    # 成就系统管理
+│   │   ├── game.ts            # 游戏本地分数管理（分数自动引用 defaultScoreKeys）
+│   │   └── achievements.ts    # 成就系统管理（解锁时自动触发音效+震动）
 │   ├── styles/              # 全局样式
-│   │   └── game-theme.css    # 游戏主题样式
+│   │   ├── game-theme.css    # 主题变量 + 间距 token
+│   │   └── animations.css    # 共享动画 keyframes（弹窗/路由/Toast）+ focus-visible + reduced-motion
 │   ├── views/               # 游戏页面
-│   │   ├── HomeView.vue      # 首页 - 游戏选择
+│   │   ├── HomeView.vue      # 首页 - 游戏选择（从 GAMES 派生卡片列表）
 │   │   ├── AchievementsView.vue # 成就展示页
 │   │   ├── SokobanView.vue   # 推箱子
 │   │   ├── LinkGameView.vue  # 连连看
 │   │   ├── CatchFruitView.vue # 接水果
 │   │   ├── SnakeView.vue     # 贪吃蛇
 │   │   ├── TetrisView.vue    # 俄罗斯方块
-│   │   ├── BreakoutView.vue  # 弹球打砖块
+│   │   ├── BreakoutView.vue  # 弹球打砖块（支持触摸拖拽挡板）
 │   │   ├── Game2048View.vue  # 2048
-│   │   └── WhackAMoleView.vue # 打地鼠
-│   ├── App.vue              # 根组件
+│   │   ├── WhackAMoleView.vue # 打地鼠（已补震动反馈）
+│   │   └── TicTacToeView.vue # 井字棋
+│   ├── App.vue              # 根组件（页面路由过渡 + 全局动画样式引入）
 │   └── main.ts              # 入口文件
 ├── public/                  # 静态资源
-├── tests/                   # 测试文件
+├── tests/                   # 测试文件（node test-xxx.cjs 直接跑）
 ├── docs/                    # 文档
 │   ├── system_design.md     # 系统设计文档
 │   ├── class-diagram.mermaid # 类图
@@ -154,10 +181,11 @@ game-collection/
 - 部分游戏支持键盘控制（方向键、WASD）
 - 流畅的键盘响应
 
-### 🔊 音效系统
-- 基于 Web Audio API 的合成音效，无需加载音频文件
+### 🔊 音效系统（23+ 预设）
+- 基于 Web Audio API 的合成音效，零加载、零资源体积
 - 全局静音切换按钮（GameLayout 顶部栏），状态持久化到 localStorage
-- 适配各游戏场景：碰撞、消除、收集、移动、胜负等事件
+- 静音→开启时自动给一声短 click 确认
+- 完整音效列表：`click / move / push / place / select / match / eat / crash / drop / rotate / clear / bounce / brick / loseLife / merge / hit / miss / collect / win / gameOver / pause / resume / unlock`
 
 ### 🏅 成就系统
 - 10 个可解锁成就，覆盖所有 8 款游戏与里程碑事件
@@ -170,14 +198,22 @@ game-collection/
 
 ## 📝 添加新游戏
 
-1. 在 `src/views/` 创建游戏视图文件（如 `YourGameView.vue`）
-2. 在 `src/router/index.ts` 添加路由配置
-3. 在 `src/stores/game.ts` 的 `defaultScores` 注册游戏名称
-4. 在 `src/views/HomeView.vue` 添加游戏卡片（包含图标、标题、描述、颜色）
-5. 在游戏视图中嵌入 `<LeaderboardStrip :game="'xxx'" />`
-6. 在 GameDialog 结束回调中调用 `openLeaderboard` 弹出排行榜提交
+> **核心：新增游戏只需要改 `src/lib/games.ts`**，路由、Store、首页卡片全部自动同步。
 
-参考现有游戏的实现方式。
+1. 在 `src/lib/games.ts` 的 `GAMES` 数组添加一条：`{ name: 'xxx', title: '中文名', desc: '一句话描述', color: '#HEX', path: '/xxx' }`
+2. 在 `src/router/index.ts` 的 `GAME_COMPONENTS` 映射里加一条：`'xxx': 'XxxView'`
+3. 在 `src/views/XxxView.vue` 写游戏逻辑：
+   - 用 `<GameLayout>` 包裹（提供标题栏、返回、重新开始、暂停按钮）
+   - 用 `useGameLoop` 驱动渲染、用 `useGameKeyboard({ bindings, active })` 处理键盘
+   - 用 `useSound()` 给关键事件加音效
+   - 嵌入 `<LeaderboardStrip :game="'xxx'" />`（底部 Top 5）
+   - 游戏结束打开 `LeaderboardOverlay` → "提交分数 → 排行榜 → 再来一局"
+   - 接入 `useAutoPause` 失焦暂停 + `ResumePrompt` / `PauseOverlay` 继续选择
+   - 调用 `useGameStore().addScore('xxx', score)` 存档
+4. 在 `src/views/HomeView.vue` 的 `iconMap` 里加一个图标
+5. （可选）在 `src/stores/achievements.ts` 加成就 + 在游戏触发点调用 `achievements.unlock('id')`
+
+参考 `SnakeView.vue`（最完整的实现模板）。
 
 ---
 

@@ -50,10 +50,11 @@
 </template>
 
 <script setup lang="ts">
-import { h, ref } from 'vue'
+import { h, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useAchievements } from '@/stores/achievements'
+import { GAMES } from '@/lib/games'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
 
 const router = useRouter()
@@ -100,17 +101,28 @@ const MoleIcon = () => [
   h('ellipse', { cx: '12', cy: '11.5', rx: '2', ry: '1.5', fill: '#FF69B4' })
 ]
 
-const games = [
-  { name: 'sokoban', path: '/sokoban', icon: BoxIcon, title: '推箱子', desc: '经典仓库搬运工', color: '#00FFFF' },
-  { name: 'link', path: '/link', icon: LinkIcon, title: '连连看', desc: '消除配对乐趣', color: '#FF006E' },
-  { name: 'catch-fruit', path: '/catch-fruit', icon: AppleIcon, title: '接水果', desc: '眼疾手快', color: '#05FFA1' },
-  { name: 'snake', path: '/snake', icon: SnakeIcon, title: '贪吃蛇', desc: '童年经典回忆', color: '#B967FF' },
-  { name: 'tetris', path: '/tetris', icon: TetrisIcon, title: '俄罗斯方块', desc: '经典益智游戏', color: '#00FFFF' },
-  { name: 'breakout', path: '/breakout', icon: BreakoutIcon, title: '弹球打砖块', desc: '经典街机游戏', color: '#FF6B6B' },
-  { name: '2048', path: '/2048', icon: Game2048Icon, title: '2048', desc: '数字合成挑战', color: '#FFD700' },
-  { name: 'whackamole', path: '/whackamole', icon: MoleIcon, title: '打地鼠', desc: '反应力大考验', color: '#FF6B6B' },
-  { name: 'tic-tac-toe', path: '/tic-tac-toe', icon: TicTacToeIcon, title: '井字棋', desc: '经典对战 AI', color: '#FF006E' }
-]
+const iconMap: Record<string, () => unknown> = {
+  sokoban: BoxIcon,
+  link: LinkIcon,
+  'catch-fruit': AppleIcon,
+  snake: SnakeIcon,
+  tetris: TetrisIcon,
+  breakout: BreakoutIcon,
+  '2048': Game2048Icon,
+  whackamole: MoleIcon,
+  'tic-tac-toe': TicTacToeIcon,
+}
+
+const games = computed(() =>
+  GAMES.map(g => ({
+    name: g.name,
+    path: g.path,
+    icon: iconMap[g.name],
+    title: g.title,
+    desc: g.desc,
+    color: g.color,
+  }))
+)
 
 function goToGame(path: string) {
   router.push(path)

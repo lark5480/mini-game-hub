@@ -1,29 +1,31 @@
 <template>
-  <div v-if="visible" class="dialog-overlay" @click.self="$emit('update:visible', false)">
-    <div class="dialog">
-      <div class="dialog-icon">
-        <slot name="icon">
-          <!-- 预设图标 -->
-          <svg v-if="icon === 'success'" width="48" height="48" viewBox="0 0 24 24" fill="none" :stroke="accentColor" stroke-width="2">
-            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-          </svg>
-          <svg v-else-if="icon === 'fail'" width="48" height="48" viewBox="0 0 24 24" fill="none" :stroke="accentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
-          </svg>
-          <svg v-else-if="icon === 'info'" width="48" height="48" viewBox="0 0 24 24" fill="none" :stroke="accentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
-          </svg>
+  <Transition name="dialog">
+    <div v-if="visible" class="dialog-overlay" @click.self="$emit('update:visible', false)">
+      <div class="dialog">
+        <div class="dialog-icon">
+          <slot name="icon">
+            <!-- 预设图标 -->
+            <svg v-if="icon === 'success'" width="48" height="48" viewBox="0 0 24 24" fill="none" :stroke="accentColor" stroke-width="2">
+              <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+            </svg>
+            <svg v-else-if="icon === 'fail'" width="48" height="48" viewBox="0 0 24 24" fill="none" :stroke="accentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/>
+            </svg>
+            <svg v-else-if="icon === 'info'" width="48" height="48" viewBox="0 0 24 24" fill="none" :stroke="accentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
+            </svg>
+          </slot>
+        </div>
+        <slot>
+          <h3>{{ title }}</h3>
+          <p v-if="message">{{ message }}</p>
+        </slot>
+        <slot name="action">
+          <button v-if="actionText" @click="$emit('action')">{{ actionText }}</button>
         </slot>
       </div>
-      <slot>
-        <h3>{{ title }}</h3>
-        <p v-if="message">{{ message }}</p>
-      </slot>
-      <slot name="action">
-        <button v-if="actionText" @click="$emit('action')">{{ actionText }}</button>
-      </slot>
     </div>
-  </div>
+  </Transition>
 </template>
 
 <script setup lang="ts">
@@ -51,6 +53,20 @@ defineEmits<{
   align-items: center;
   justify-content: center;
   z-index: 200;
+  padding: max(20px, env(safe-area-inset-top) + 16px) 20px max(20px, env(safe-area-inset-bottom) + 16px);
+}
+
+.dialog-enter-active {
+  animation: overlay-in 0.2s ease-out;
+}
+.dialog-enter-active .dialog {
+  animation: dialog-in 0.25s ease-out;
+}
+.dialog-leave-active {
+  animation: overlay-out 0.18s ease-in;
+}
+.dialog-leave-active .dialog {
+  animation: dialog-out 0.18s ease-in;
 }
 
 .dialog {

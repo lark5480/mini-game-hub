@@ -67,7 +67,7 @@ test('preventKeys 包含方向键和空格', () => {
 // ────────────── 2. 验证每个游戏视图使用 useGameKeyboard ──────────────
 
 const games = [
-  { file: 'SokobanView.vue', name: '推箱子 Sokoban', keys: ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', ' '] },
+  { file: 'SokobanView.vue', name: '推箱子 Sokoban', keys: ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'r', 'R'] },
   { file: 'LinkGameView.vue', name: '连连看 LinkGame', keys: ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', ' '] },
   { file: 'SnakeView.vue', name: '贪吃蛇 Snake', keys: ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', ' '] },
   { file: 'CatchFruitView.vue', name: '接水果 CatchFruit', keys: ['ArrowLeft', 'ArrowRight', 'Enter', ' '] },

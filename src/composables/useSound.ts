@@ -150,9 +150,25 @@ function gameOver() {
   ;[400, 350, 300, 200].forEach((f, i) => tone(f, 0.2, 'sine', 0.1, i * 0.15))
 }
 
+function pause() {
+  tone(600, 0.06, 'triangle', 0.06)
+  tone(400, 0.06, 'triangle', 0.05, 0.06)
+}
+
+function resume() {
+  tone(400, 0.06, 'triangle', 0.06)
+  tone(600, 0.06, 'triangle', 0.05, 0.06)
+}
+
+function unlock() {
+  ;[659, 784, 1047].forEach((f, i) => tone(f, 0.18, 'sine', 0.12, i * 0.1))
+}
+
 function toggleMute() {
   muted.value = !muted.value
   try { localStorage.setItem(STORAGE_KEY, String(muted.value)) } catch {}
+  // 解锁静音后给一个短暂确认音
+  if (!muted.value) click()
 }
 
 export function useSound() {
@@ -179,5 +195,8 @@ export function useSound() {
     collect,
     win,
     gameOver,
+    pause,
+    resume,
+    unlock,
   }
 }

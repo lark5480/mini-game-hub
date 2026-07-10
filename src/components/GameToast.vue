@@ -18,7 +18,7 @@ const { state } = useToast()
 <style scoped>
 .game-toast {
   position: fixed;
-  top: 24px;
+  top: max(24px, env(safe-area-inset-top) + 8px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 1000;
@@ -55,27 +55,5 @@ const { state } = useToast()
 
 .toast-leave-active {
   animation: toast-out 0.3s ease-in;
-}
-
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-30px) scale(0.8);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
-  }
-}
-
-@keyframes toast-out {
-  from {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0) scale(1);
-  }
-  to {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-20px) scale(0.9);
-  }
 }
 </style>

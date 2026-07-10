@@ -33,21 +33,39 @@ export function useLeaderboard(game: string, limit = 10) {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
+  // 给任意 Promise 加超时保护
+  function withTimeout<T>(p: PromiseLike<T>, ms = 5000): Promise<T> {
+    return Promise.race([
+      Promise.resolve(p),
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
+    ])
+  }
+
+  // 后端错误 → 友好中文文案
+  function friendlyError(raw: string): string {
+    if (raw === 'timeout') return '网络超时，请检查网络后重试'
+    if (/fetch|network|failed to fetch/i.test(raw)) return '网络连接失败，请检查网络'
+    if (/unauthorized|401/i.test(raw)) return '服务未授权，请联系管理员'
+    return '提交失败，请稍后重试'
+  }
+
   async function fetch() {
     if (!supabase) return
     loading.value = true
     error.value = null
     try {
-      const { data, error: err } = await supabase
+      const query = supabase
         .from('leaderboard')
         .select('*')
         .eq('game', game)
         .order('score', { ascending: false })
         .limit(limit)
+        .then()
+      const { data, error: err } = await withTimeout(query)
       if (err) throw err
       entries.value = data ?? []
     } catch (e) {
-      error.value = (e as Error).message
+      error.value = friendlyError((e as Error).message)
     } finally {
       loading.value = false
     }
@@ -56,45 +74,41 @@ export function useLeaderboard(game: string, limit = 10) {
   async function submit(nickname: string, score: number): Promise<boolean> {
     if (!supabase) return false
     const name = nickname.trim() || '匿名玩家'
-    const { data: existing } = await supabase
-      .from('leaderboard')
-      .select('id, score')
-      .eq('game', game)
-      .eq('nickname', name)
-      .maybeSingle()
-    if (existing) {
-      if (score > existing.score) {
-        const { error: err } = await supabase
-          .from('leaderboard')
-          .update({ score })
-          .eq('id', existing.id)
-        if (err) { error.value = err.message; await fetch(); return false }
+    try {
+      const { data: existing } = await withTimeout(
+        supabase.from('leaderboard').select('id, score').eq('game', game).eq('nickname', name).maybeSingle().then()
+      )
+      if (existing) {
+        if (score > existing.score) {
+          const { error: err } = await withTimeout(
+            supabase.from('leaderboard').update({ score }).eq('id', existing.id).then()
+          )
+          if (err) throw err
+        }
+      } else {
+        const { error: err } = await withTimeout(
+          supabase.from('leaderboard').insert({ game, nickname: name, score }).then()
+        )
+        if (err) throw err
       }
-    } else {
-      const { error: err } = await supabase
-        .from('leaderboard')
-        .insert({ game, nickname: name, score })
-      if (err) { error.value = err.message; return false }
+    } catch (e) {
+      error.value = friendlyError((e as Error).message)
+      return false
     }
     leaderboardVersion.value++
-    await fetch()
+    // 全局广播会自动触发 strip 刷新，此处无需单独 await fetch()
 
-    // 排行榜成就检查（异步，不阻塞提交流程）
+    // 排行榜成就检查（异步，不阻塞提交流程，隔离避免抛出影响 submit）
     setTimeout(() => {
-      const store = useAchievements()
-      const toast = useToast()
-
-      if (store.unlock('first_submit')) {
-        toast.show('成就解锁：排行榜新人', '🏆')
-      }
-
-      const submittedGames = loadSubmittedGames()
-      submittedGames.add(game)
-      saveSubmittedGames(submittedGames)
-
-      if (submittedGames.size >= 8 && store.unlock('all_games')) {
-        toast.show('成就解锁：全能玩家', '🎮')
-      }
+      try {
+        const store = useAchievements()
+        const toast = useToast()
+        if (store.unlock('first_submit')) toast.show('成就解锁：排行榜新人', '🏆')
+        const submittedGames = loadSubmittedGames()
+        submittedGames.add(game)
+        saveSubmittedGames(submittedGames)
+        if (submittedGames.size >= 8 && store.unlock('all_games')) toast.show('成就解锁：全能玩家', '🎮')
+      } catch { /* 成就/Toast 异常不应影响提交主流程 */ }
     }, 0)
 
     return true
