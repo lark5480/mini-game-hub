@@ -52,6 +52,8 @@ import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useGameLoop } from '@/composables/useGameLoop'
 import { useSound } from '@/composables/useSound'
+import { useAchievements } from '@/stores/achievements'
+import { useToast } from '@/composables/useToast'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
@@ -62,6 +64,8 @@ const router = useRouter()
 const gameStore = useGameStore()
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const sound = useSound()
+const achievements = useAchievements()
+const toast = useToast()
 
 const score = ref(0)
 const lives = ref(3)
@@ -328,6 +332,9 @@ function gameUpdate(dt: number) {
     sound.win()
     lastScore.value = score.value
     gameStore.addScore('breakout', score.value)
+    if (achievements.unlock('breakout_master')) {
+      toast.show('成就解锁：砖块终结者', '🧱')
+    }
   }
 
   if (leftPressed) paddleX = Math.max(0, paddleX - PADDLE_SPEED * scale)
@@ -362,10 +369,16 @@ onMounted(() => {
 <style scoped>
 canvas {
   display: block;
+  width: 100%;
+  max-width: 600px;
+  height: auto;
+  aspect-ratio: 600 / 450;
+  margin: 0 auto;
   background: rgba(0,0,0,0.4);
   border: 1px solid rgba(0,255,255,0.2);
   border-radius: 12px;
   box-shadow: 0 0 30px rgba(0,255,255,0.1);
+  touch-action: none;
 }
 
 .launch-btn {

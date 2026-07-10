@@ -4,6 +4,13 @@
       <h1>GameHub</h1>
       <p class="subtitle">指尖娱乐时光</p>
     </div>
+    <button class="achievements-btn" @click="router.push('/achievements')">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20 17 22M18 2H6v7a6 6 0 0 0 12 0V2z"/>
+      </svg>
+      成就
+      <span v-if="unlockedCount > 0" class="ach-badge">{{ unlockedCount }}</span>
+    </button>
     <div class="game-grid">
       <div
         v-for="game in games"
@@ -46,10 +53,13 @@
 import { h, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
+import { useAchievements } from '@/stores/achievements'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
 
 const router = useRouter()
 const gameStore = useGameStore()
+const achievements = useAchievements()
+const unlockedCount = achievements.progress.unlocked
 
 const leaderboardGame = ref<{ name: string; title: string } | null>(null)
 
@@ -71,6 +81,15 @@ const Game2048Icon = () => [
   h('text', { x: '7', y: '10', 'font-size': '5', fill: 'currentColor', 'font-weight': 'bold' }, '2'),
   h('text', { x: '14.5', y: '10', 'font-size': '4', fill: 'currentColor', 'font-weight': 'bold' }, '8')
 ]
+const TicTacToeIcon = () => [
+  h('line', { x1: '8', y1: '3', x2: '8', y2: '21', stroke: 'currentColor', 'stroke-width': '1.5' }),
+  h('line', { x1: '16', y1: '3', x2: '16', y2: '21', stroke: 'currentColor', 'stroke-width': '1.5' }),
+  h('line', { x1: '3', y1: '8', x2: '21', y2: '8', stroke: 'currentColor', 'stroke-width': '1.5' }),
+  h('line', { x1: '3', y1: '16', x2: '21', y2: '16', stroke: 'currentColor', 'stroke-width': '1.5' }),
+  h('path', { d: 'M4.5 4.5l3 3M7.5 4.5l-3 3', stroke: '#FF006E', 'stroke-width': '1.8', fill: 'none', 'stroke-linecap': 'round' }),
+  h('circle', { cx: '12', cy: '12', r: '2.2', stroke: '#00CFFF', 'stroke-width': '1.6', fill: 'none' }),
+  h('path', { d: 'M12.5 19.5l3 3M15.5 19.5l-3 3', stroke: '#FF006E', 'stroke-width': '1.8', fill: 'none', 'stroke-linecap': 'round' })
+]
 const MoleIcon = () => [
   h('ellipse', { cx: '12', cy: '16', rx: '8', ry: '6', fill: 'currentColor' }),
   h('circle', { cx: '8', cy: '14', r: '4', fill: 'currentColor' }),
@@ -89,7 +108,8 @@ const games = [
   { name: 'tetris', path: '/tetris', icon: TetrisIcon, title: '俄罗斯方块', desc: '经典益智游戏', color: '#00FFFF' },
   { name: 'breakout', path: '/breakout', icon: BreakoutIcon, title: '弹球打砖块', desc: '经典街机游戏', color: '#FF6B6B' },
   { name: '2048', path: '/2048', icon: Game2048Icon, title: '2048', desc: '数字合成挑战', color: '#FFD700' },
-  { name: 'whackamole', path: '/whackamole', icon: MoleIcon, title: '打地鼠', desc: '反应力大考验', color: '#FF6B6B' }
+  { name: 'whackamole', path: '/whackamole', icon: MoleIcon, title: '打地鼠', desc: '反应力大考验', color: '#FF6B6B' },
+  { name: 'tic-tac-toe', path: '/tic-tac-toe', icon: TicTacToeIcon, title: '井字棋', desc: '经典对战 AI', color: '#FF006E' }
 ]
 
 function goToGame(path: string) {
@@ -104,8 +124,10 @@ function getTopScore(name: string): number {
 <style scoped>
 .home {
   min-height: 100vh;
+  min-height: 100dvh;
   background: linear-gradient(180deg, #0D0D1A 0%, #1A1A2E 50%, #0D0D1A 100%);
   padding: 60px 20px;
+  padding: max(40px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(40px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
   position: relative;
   overflow: hidden;
 }
@@ -251,6 +273,43 @@ function getTopScore(name: string): number {
   background: rgba(129, 140, 248, 0.15);
   border-color: #818CF8;
   color: #fff;
+}
+
+.achievements-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px auto 0;
+  padding: 8px 20px;
+  background: rgba(255, 215, 0, 0.08);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: 20px;
+  color: #FFD700;
+  font-size: 0.95em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+}
+
+.achievements-btn:hover {
+  background: rgba(255, 215, 0, 0.15);
+  border-color: #FFD700;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);
+}
+
+.ach-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: #FFD700;
+  color: #0D0D1A;
+  border-radius: 10px;
+  font-size: 0.75em;
+  font-weight: 700;
 }
 
 .footer {

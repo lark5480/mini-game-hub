@@ -7,7 +7,7 @@
     :infoItems="infoItems"
     @back="router.push('/')"
   >
-    <div class="game-board">
+    <div class="game-board" ref="boardEl">
       <div v-for="(row, y) in grid" :key="y" class="board-row">
         <div
           v-for="(cell, x) in row"
@@ -24,6 +24,7 @@
     <LeaderboardStrip game="2048" />
     <template #controls>
       <DirectionPad
+        :repeat="false"
         @up="move('up')"
         @down="move('down')"
         @left="move('left')"
@@ -32,7 +33,7 @@
         <template #extra>
           <button @click="undo" class="extra-btn" :disabled="history.length === 0">撤销</button>
           <button @click="submitScore" class="extra-btn">提交分数</button>
-          <button @click="restart" class="extra-btn">重来</button>
+          <button @click="restart()" class="extra-btn">重来</button>
         </template>
       </DirectionPad>
     </template>
@@ -66,11 +67,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
+import { useSwipe } from '@/composables/useSwipe'
 import { useSound } from '@/composables/useSound'
+import { useAchievements } from '@/stores/achievements'
+import { useToast } from '@/composables/useToast'
+import { useGameSave } from '@/composables/useGameSave'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
@@ -85,6 +90,8 @@ const SIZE = 4
 const router = useRouter()
 const gameStore = useGameStore()
 const sound = useSound()
+const achievements = useAchievements()
+const toast = useToast()
 
 const grid = ref<Grid>(createEmptyGrid())
 const score = ref(0)
@@ -102,6 +109,36 @@ const infoItems = computed(() => [
   { label: '最高', value: bestScore.value }
 ])
 
+// 存档
+const save = useGameSave('2048')
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleSave() {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    if (gameOverDialog.value) return
+    save.saveGame({ grid: grid.value, score: score.value, won: won.value, history: history.value })
+  }, 300)
+}
+
+function clearSave() {
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
+  save.clearGame()
+}
+
+watch([grid, score, won, history], scheduleSave, { deep: true })
+onMounted(() => {
+  const data = save.loadGame()
+  if (data && Array.isArray(data.grid) && Array.isArray(data.history)) {
+    grid.value = data.grid as Grid
+    score.value = typeof data.score === 'number' ? data.score : 0
+    won.value = !!data.won
+    history.value = data.history as History[]
+    newTiles.value = []
+  }
+})
+onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer) })
+
 useGameKeyboard({
   bindings: [
     { key: ['ArrowUp', 'w', 'W'], handler: () => handleMove('up') },
@@ -111,6 +148,14 @@ useGameKeyboard({
     { key: ['z', 'Z'], handler: () => undo() },
     { key: ['r', 'R'], handler: () => restart() }
   ]
+})
+
+// 移动端滑动手势：直接在棋盘上滑动即可移动方块
+const boardEl = ref<HTMLElement | null>(null)
+useSwipe({
+  el: () => boardEl.value,
+  active: () => winDialog.value === false && gameOverDialog.value === false,
+  onSwipe: (dir) => move(dir)
 })
 
 function createEmptyGrid(): Grid {
@@ -252,6 +297,18 @@ function handleMove(dir: Direction) {
     }
   }
 
+  // 检查是否达到 4096
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      if (grid.value[y][x] >= 4096) {
+        if (achievements.unlock('number_master')) {
+          toast.show('成就解锁：数字大师', '🔢')
+        }
+        break
+      }
+    }
+  }
+
   // 检查游戏结束
   if (!canMove(grid.value)) {
     lastScore.value = score.value
@@ -273,7 +330,7 @@ function undo() {
   newTiles.value = []
 }
 
-function restart() {
+function restart(opts: { restoring?: boolean } = {}) {
   showLeaderboard.value = false
   grid.value = createEmptyGrid()
   score.value = 0
@@ -284,11 +341,13 @@ function restart() {
   newTiles.value = []
   spawnTile()
   spawnTile()
+  if (!opts.restoring) clearSave()
 }
 
 function openLeaderboard() {
   gameOverDialog.value = false
   showLeaderboard.value = true
+  clearSave()
 }
 
 function submitScore() {
@@ -296,13 +355,14 @@ function submitScore() {
   gameOverDialog.value = false
   winDialog.value = false
   showLeaderboard.value = true
+  clearSave()
 }
 
 function isAnimating(x: number, y: number): boolean {
   return newTiles.value.some(t => t.x === x && t.y === y)
 }
 
-restart()
+restart({ restoring: true })
 </script>
 
 <style scoped>
@@ -316,6 +376,7 @@ restart()
   width: 100%;
   max-width: 380px;
   box-sizing: border-box;
+  touch-action: none;
 }
 
 .board-row {

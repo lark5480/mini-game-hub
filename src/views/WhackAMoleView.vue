@@ -102,6 +102,8 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useSound } from '@/composables/useSound'
+import { useAchievements } from '@/stores/achievements'
+import { useToast } from '@/composables/useToast'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
@@ -115,6 +117,8 @@ interface Hole {
 const router = useRouter()
 const gameStore = useGameStore()
 const sound = useSound()
+const achievements = useAchievements()
+const toast = useToast()
 
 const difficulties = [
   { name: 'easy', label: '简单', gridCols: 3, gridRows: 3, interval: 1200, duration: 1000 },
@@ -252,6 +256,11 @@ function gameOver() {
   sound.gameOver()
   lastScore.value = score.value
   gameStore.addScore('whackamole', score.value)
+  if (score.value >= 300) {
+    if (achievements.unlock('whack_master')) {
+      toast.show('成就解锁：神速', '🔨')
+    }
+  }
 }
 
 function openLeaderboard() {
@@ -326,20 +335,26 @@ onUnmounted(() => {
 .mole-board {
   display: grid;
   grid-template-columns: repeat(var(--grid-cols), 1fr);
-  grid-template-rows: repeat(var(--grid-rows), 1fr);
+  grid-template-rows: repeat(var(--grid-rows), auto);
   gap: 15px;
   background: rgba(0,0,0,0.4);
   border: 2px solid rgba(255,107,107,0.3);
   border-radius: 16px;
   padding: 20px;
+  width: 100%;
+  max-width: 460px;
+  margin: 0 auto;
+  box-sizing: border-box;
   box-shadow: 0 0 40px rgba(255,107,107,0.2);
 }
 
 .mole-hole {
-  width: 80px;
-  height: 80px;
+  width: 100%;
+  aspect-ratio: 1;
+  max-width: 110px;
   cursor: pointer;
   position: relative;
+  container-type: size;
 }
 
 .hole {
@@ -354,16 +369,16 @@ onUnmounted(() => {
 
 .mole {
   position: absolute;
-  bottom: -80px;
+  bottom: -86cqh;
   left: 50%;
   transform: translateX(-50%);
-  width: 70px;
-  height: 70px;
+  width: 86cqw;
+  height: 86cqh;
   transition: bottom 0.2s ease;
 }
 
 .mole.visible {
-  bottom: -10px;
+  bottom: -6cqh;
 }
 
 .mole.hit {
@@ -371,9 +386,9 @@ onUnmounted(() => {
 }
 
 @keyframes hitMole {
-  0% { bottom: -10px; }
-  50% { bottom: -30px; }
-  100% { bottom: -80px; }
+  0% { bottom: -6cqh; }
+  50% { bottom: -28cqh; }
+  100% { bottom: -86cqh; }
 }
 
 .mole-body {
@@ -387,19 +402,19 @@ onUnmounted(() => {
 
 .mole-face {
   position: absolute;
-  top: 15px;
+  top: 16cqh;
   left: 50%;
   transform: translateX(-50%);
 }
 
 .mole-eyes {
   display: flex;
-  gap: 12px;
+  gap: 16cqw;
 }
 
 .eye {
-  width: 10px;
-  height: 10px;
+  width: 16cqw;
+  height: 16cqh;
   background: #000;
   border-radius: 50%;
   position: relative;
@@ -408,30 +423,30 @@ onUnmounted(() => {
 .eye::after {
   content: '';
   position: absolute;
-  top: 2px;
-  left: 3px;
-  width: 4px;
-  height: 4px;
+  top: 18%;
+  left: 22%;
+  width: 35%;
+  height: 35%;
   background: #fff;
   border-radius: 50%;
 }
 
 .mole-nose {
   display: block;
-  width: 8px;
-  height: 6px;
+  width: 14cqw;
+  height: 10cqh;
   background: #FF69B4;
   border-radius: 50%;
-  margin: 6px auto 0;
+  margin: 8cqh auto 0;
 }
 
 .mole-mouth {
   display: block;
-  width: 15px;
-  height: 6px;
+  width: 26cqw;
+  height: 12cqh;
   border-bottom: 3px solid #000;
   border-radius: 0 0 10px 10px;
-  margin: 4px auto 0;
+  margin: 4cqh auto 0;
 }
 
 .dirt {
@@ -439,7 +454,7 @@ onUnmounted(() => {
   bottom: 0;
   left: 0;
   right: 0;
-  height: 15px;
+  height: 15%;
   background: linear-gradient(180deg, #5D3A1A 0%, #3D2817 100%);
   border-radius: 0 0 50% 50%;
 }
@@ -510,5 +525,16 @@ onUnmounted(() => {
 .start-btn:hover, .restart-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 5px 20px rgba(255,107,107,0.4);
+}
+
+@media (max-width: 640px) {
+  .mole-board {
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .mole-hole {
+    max-width: 96px;
+  }
 }
 </style>

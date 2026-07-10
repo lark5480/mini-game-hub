@@ -7,7 +7,7 @@
     :infoItems="[{ label: '分数', value: score }]"
     @back="handleBack"
   >
-    <div class="game-board">
+    <div class="game-board" ref="boardEl">
       <div v-for="(row, y) in grid" :key="y" class="game-row">
         <div
           v-for="(cell, x) in row"
@@ -52,12 +52,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useGameLoop } from '@/composables/useGameLoop'
 import { useSound } from '@/composables/useSound'
+import { useAchievements } from '@/stores/achievements'
+import { useToast } from '@/composables/useToast'
+import { useGameSave } from '@/composables/useGameSave'
+import { useSwipe } from '@/composables/useSwipe'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
@@ -67,6 +71,8 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 const router = useRouter()
 const gameStore = useGameStore()
 const sound = useSound()
+const achievements = useAchievements()
+const toast = useToast()
 
 const showLeaderboard = ref(false)
 
@@ -81,10 +87,62 @@ const isPlaying = ref(false)
 const gameOver = ref(false)
 const lastScore = ref(0)
 
+// 存档
+const save = useGameSave('snake')
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleSave() {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    if (!isPlaying.value || gameOver.value) return
+    save.saveGame({
+      snake: snake.value,
+      food: food.value,
+      direction: direction.value,
+      nextDir: nextDir.value,
+      score: score.value,
+      grid: grid.value,
+      isPlaying: isPlaying.value
+    })
+  }, 300)
+}
+
+function clearSave() {
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
+  save.clearGame()
+}
+
+watch([snake, food, direction, nextDir, score, isPlaying, grid], scheduleSave, { deep: true })
+onMounted(() => {
+  const data = save.loadGame()
+  if (data && Array.isArray(data.snake) && data.food && typeof data.score === 'number' && !!data.isPlaying) {
+    snake.value = data.snake as { x: number; y: number }[]
+    food.value = data.food as { x: number; y: number }
+    direction.value = data.direction as 'up' | 'down' | 'left' | 'right'
+    nextDir.value = data.nextDir as 'up' | 'down' | 'left' | 'right'
+    score.value = data.score
+    if (Array.isArray(data.grid)) grid.value = data.grid as number[][]
+    gameOver.value = false
+    isPlaying.value = true
+    gameLoop.start()
+  }
+})
+onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer) })
+
 const gameLoop = useGameLoop({
   mode: 'interval',
   intervalMs: 150,
   onUpdate: () => step()
+})
+
+// 棋盘 DOM ref（用于绑定滑动手势）
+const boardEl = ref<HTMLElement | null>(null)
+const isPlayingActive = computed(() => isPlaying.value && !gameOver.value)
+
+useSwipe({
+  el: () => boardEl.value,
+  active: () => isPlayingActive.value,
+  onSwipe: (dir) => changeDir(dir)
 })
 
 useGameKeyboard({
@@ -187,6 +245,7 @@ function startGame() {
   initGrid(); initSnake(); spawnFood(); render()
   score.value = 0; gameOver.value = false; isPlaying.value = true
   direction.value = 'right'; nextDir.value = 'right'
+  clearSave()
   gameLoop.start()
 }
 
@@ -196,11 +255,17 @@ function endGame() {
   sound.gameOver()
   lastScore.value = score.value
   gameStore.addScore('snake', score.value)
+  if (score.value >= 200) {
+    if (achievements.unlock('snake_king')) {
+      toast.show('成就解锁：蛇王', '🐍')
+    }
+  }
 }
 
 function openLeaderboard() {
   gameOver.value = false
   showLeaderboard.value = true
+  clearSave()
 }
 
 function handleBack() {
@@ -214,19 +279,26 @@ initGrid(); render()
 <style scoped>
 .game-board {
   background: rgba(0,0,0,0.5);
-  border: 1px solid rgba(185,103,255,0.2);
+  border: 2px solid rgba(185,103,255,0.5);
   border-radius: 8px;
-  padding: 5px;
-  display: inline-block;
-  box-shadow: 0 0 30px rgba(185,103,255,0.1);
+  padding: 4px;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  box-shadow: 0 0 40px rgba(185,103,255,0.25);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .game-row { display: flex; }
 
 .game-cell {
-  width: 25px;
-  height: 25px;
+  width: calc((100% - 1px) / 20);
+  aspect-ratio: 1;
   border: 1px solid rgba(255,255,255,0.03);
+  box-sizing: border-box;
 }
 
 .game-cell.snake {

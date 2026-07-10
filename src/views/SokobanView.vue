@@ -69,11 +69,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useSound } from '@/composables/useSound'
+import { useAchievements } from '@/stores/achievements'
+import { useToast } from '@/composables/useToast'
+import { useGameSave } from '@/composables/useGameSave'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
@@ -83,6 +86,8 @@ import DirectionPad from '@/components/DirectionPad.vue'
 const router = useRouter()
 const gameStore = useGameStore()
 const sound = useSound()
+const achievements = useAchievements()
+const toast = useToast()
 
 const showLeaderboard = ref(false)
 const lastScore = ref(0)
@@ -209,6 +214,37 @@ const winDialog = ref(false)
 const totalScore = ref(0)
 const gameComplete = ref(false)
 
+// 存档
+const save = useGameSave('sokoban')
+let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleSave() {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    if (winDialog.value) return
+    save.saveGame({ levelIndex: levelIndex.value, steps: steps.value, totalScore: totalScore.value, board: board.value })
+  }, 300)
+}
+
+function clearSave() {
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
+  save.clearGame()
+}
+
+watch([levelIndex, steps, totalScore, board], scheduleSave, { deep: true })
+onMounted(() => {
+  const data = save.loadGame()
+  if (data && Array.isArray(data.board) && typeof data.levelIndex === 'number') {
+    levelIndex.value = data.levelIndex
+    steps.value = typeof data.steps === 'number' ? data.steps : 0
+    totalScore.value = typeof data.totalScore === 'number' ? data.totalScore : 0
+    board.value = data.board as number[][]
+    winDialog.value = false
+    gameComplete.value = false
+  }
+})
+onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer) })
+
 useGameKeyboard({
   bindings: [
     {
@@ -320,6 +356,12 @@ function checkWin() {
   lastScore.value = levelScore
   totalScore.value += levelScore
   gameStore.addScore('sokoban', totalScore.value)
+  // levelIndex 从 0 开始，通过第5关时 levelIndex === 4
+  if (levelIndex.value >= 4) {
+    if (achievements.unlock('sokoban_master')) {
+      toast.show('成就解锁：搬运工', '📦')
+    }
+  }
 }
 
 function resetLevel() { initLevel() }
@@ -340,6 +382,7 @@ function submitScore() {
   winDialog.value = false
   gameComplete.value = false
   showLeaderboard.value = true
+  clearSave()
 }
 
 function handleDialogAction() {
@@ -356,6 +399,7 @@ function restartGame() {
   gameComplete.value = false
   showLeaderboard.value = false
   initLevel()
+  clearSave()
 }
 
 initLevel()
@@ -368,18 +412,29 @@ initLevel()
   border-radius: 12px;
   padding: 15px;
   display: inline-block;
+  width: 100%;
+  max-width: 500px;
+  box-sizing: border-box;
   box-shadow: 0 0 30px rgba(0,255,255,0.1);
 }
 
 .game-row { display: flex; }
 
 .game-cell {
-  width: 50px;
-  height: 50px;
+  flex: 1 1 0;
+  aspect-ratio: 1;
+  min-width: 0;
+  max-width: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--game-cell-border);
+  box-sizing: border-box;
+}
+
+.game-cell svg {
+  width: 68%;
+  height: 68%;
 }
 
 .game-cell.wall { background: rgba(93,52,208,0.4); }

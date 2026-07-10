@@ -62,8 +62,10 @@ const { muted, toggleMute } = useSound()
 <style scoped>
 .game-view {
   min-height: 100vh;
+  min-height: 100dvh;
   background: linear-gradient(180deg, var(--game-bg-dark) 0%, var(--game-bg-mid) 50%, var(--game-bg-dark) 100%);
   padding: 20px;
+  padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
   position: relative;
 }
 
@@ -153,5 +155,43 @@ const { muted, toggleMute } = useSound()
   max-width: 600px;
   margin: 25px auto 0;
   text-align: center;
+}
+
+/* ===== 移动端适配 ===== */
+@media (max-width: 640px) {
+  .game-view {
+    padding: 12px;
+    padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
+
+  .game-header {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    row-gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  /* 返回 / 静音按钮留在顶部一行，标题与分数各自占满一行居中 */
+  .back-btn { order: 1; }
+  .sound-btn { order: 1; }
+
+  .game-header h2 {
+    order: 2;
+    flex: 1 1 100%;
+    text-align: center;
+    font-size: 1.5em;
+  }
+
+  .game-info {
+    order: 3;
+    flex: 1 1 100%;
+    justify-content: center;
+    gap: 16px;
+    font-size: 0.9em;
+  }
+
+  .controls-area {
+    margin-top: 18px;
+  }
 }
 </style>

@@ -10,7 +10,7 @@ export interface GameScore {
 const STORAGE_KEY = 'game-collection-scores'
 
 function defaultScores(): Record<string, GameScore[]> {
-  return { sokoban: [], link: [], 'catch-fruit': [], snake: [], tetris: [], breakout: [], '2048': [], whackamole: [] }
+  return { sokoban: [], link: [], 'catch-fruit': [], snake: [], tetris: [], breakout: [], '2048': [], whackamole: [], 'tic-tac-toe': [] }
 }
 
 function loadScores(): Record<string, GameScore[]> {

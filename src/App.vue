@@ -2,15 +2,15 @@
   <div id="app">
     <div class="scanlines"></div>
     <router-view />
+    <GameToast />
   </div>
 </template>
 
 <script setup lang="ts">
+import GameToast from '@/components/GameToast.vue'
 </script>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap');
-
 * {
   margin: 0;
   padding: 0;
@@ -19,15 +19,24 @@
 
 html, body, #app {
   width: 100%;
+  /* 回退 100vh，再覆盖为动态视口高度，避免移动端地址栏导致的布局跳动 */
   min-height: 100vh;
+  min-height: 100dvh;
   font-family: 'Fredoka', 'Nunito', 'Microsoft YaHei', sans-serif;
   background: #0D0D1A;
   color: #E0E0FF;
 }
 
+body {
+  /* 禁止移动端下拉刷新 / 橡皮筋滚动干扰游戏操作 */
+  overscroll-behavior-y: none;
+}
+
 button {
   cursor: pointer;
   font-family: inherit;
+  /* 去除移动端 300ms 点击延迟，避免双击缩放 */
+  touch-action: manipulation;
 }
 
 ::selection {
