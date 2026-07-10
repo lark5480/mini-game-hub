@@ -327,23 +327,37 @@ initGame()
   border-radius: 12px;
   padding: 12px;
   display: inline-block;
+  width: 100%;
+  max-width: 520px;
+  box-sizing: border-box;
   box-shadow: 0 0 30px rgba(255,0,110,0.1);
 }
 
-.game-row { display: flex; }
+.game-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
 
 .game-cell {
-  width: 48px;
-  height: 48px;
+  flex: 1 1 0;
+  aspect-ratio: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(26,26,46,0.9);
   border: 1px solid var(--game-cell-border);
   border-radius: 8px;
-  margin: 4px;
+  margin: 0;
   cursor: pointer;
   transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.game-cell svg {
+  width: 62%;
+  height: 62%;
 }
 
 .game-cell:hover {

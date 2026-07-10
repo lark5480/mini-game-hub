@@ -391,16 +391,23 @@ initGrid()
   border: 1px solid rgba(0,255,255,0.2);
   border-radius: 8px;
   padding: 5px;
-  display: inline-block;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 2px;
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto;
   box-shadow: 0 0 30px rgba(0,255,255,0.1);
 }
 
-.game-row { display: flex; }
+.game-row { display: contents; }
 
 .game-cell {
-  width: 22px;
-  height: 22px;
+  width: 100%;
+  aspect-ratio: 1;
+  min-width: 0;
   border: 1px solid rgba(255,255,255,0.03);
+  box-sizing: border-box;
 }
 
 .game-cell.filled {
@@ -419,14 +426,22 @@ initGrid()
 
 .next-label { color: #818CF8; font-size: 0.85em; margin-bottom: 8px; }
 
-.next-grid { display: inline-block; }
+.next-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  width: 88px;
+  max-width: 100%;
+}
 
-.next-row { display: flex; }
+.next-row { display: contents; }
 
 .next-cell {
-  width: 18px;
-  height: 18px;
+  width: 100%;
+  aspect-ratio: 1;
+  min-width: 0;
   border: 1px solid rgba(255,255,255,0.05);
+  box-sizing: border-box;
 }
 
 .next-cell.filled { border-radius: 2px; }

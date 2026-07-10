@@ -55,8 +55,10 @@ function goBack() {
 <style scoped>
 .achievements-page {
   min-height: 100vh;
+  min-height: 100dvh;
   background: linear-gradient(180deg, #0D0D1A 0%, #1A1A2E 50%, #0D0D1A 100%);
   padding: 40px 20px;
+  padding: max(40px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(40px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
 }
 
 .header {
@@ -69,6 +71,7 @@ function goBack() {
   position: absolute;
   top: 0;
   left: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: 8px;

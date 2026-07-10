@@ -56,7 +56,10 @@ defineEmits<{
 .dialog {
   background: linear-gradient(135deg, #1A1A2E, #0D0D1A);
   border: 1px solid color-mix(in srgb, var(--game-accent, #00FFFF) 30%, transparent);
-  padding: 40px 50px;
+  padding: clamp(28px, 7vw, 40px) clamp(22px, 6vw, 50px);
+  max-width: calc(100vw - 40px);
+  width: auto;
+  box-sizing: border-box;
   border-radius: 20px;
   text-align: center;
   box-shadow: 0 0 50px color-mix(in srgb, var(--game-accent, #00FFFF) 20%, transparent);

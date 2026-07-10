@@ -412,18 +412,29 @@ initLevel()
   border-radius: 12px;
   padding: 15px;
   display: inline-block;
+  width: 100%;
+  max-width: 500px;
+  box-sizing: border-box;
   box-shadow: 0 0 30px rgba(0,255,255,0.1);
 }
 
 .game-row { display: flex; }
 
 .game-cell {
-  width: 50px;
-  height: 50px;
+  flex: 1 1 0;
+  aspect-ratio: 1;
+  min-width: 0;
+  max-width: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: 1px solid var(--game-cell-border);
+  box-sizing: border-box;
+}
+
+.game-cell svg {
+  width: 68%;
+  height: 68%;
 }
 
 .game-cell.wall { background: rgba(93,52,208,0.4); }

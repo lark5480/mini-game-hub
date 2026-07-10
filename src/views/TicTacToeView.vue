@@ -323,20 +323,33 @@ function minimax(b: Board, current: Cell, alpha: number, beta: number): number {
   return best
 }
 
+// AI 犯错概率：在"不立即输"的走法中随机选，给玩家留出可乘之机
+const BOT_MISTAKE_CHANCE = 0.3
+
 function bestMove(b: Board): number {
-  let bestVal = -Infinity
-  let bestIdx = -1
+  const moves: { idx: number; score: number }[] = []
   for (let i = 0; i < 9; i++) {
     if (b[i] !== null) continue
     b[i] = BOT
-    const moveVal = minimax(b, PLAYER, -Infinity, Infinity)
+    const score = minimax(b, PLAYER, -Infinity, Infinity)
     b[i] = null
-    if (moveVal > bestVal) {
-      bestVal = moveVal
-      bestIdx = i
-    }
+    moves.push({ idx: i, score })
   }
-  return bestIdx
+  if (moves.length === 0) return -1
+
+  // 找出最优分数
+  const bestScore = Math.max(...moves.map(m => m.score))
+
+  // 以一定概率"犯错"：从"不能获胜"的走法中随机选（含平局/落败局面）
+  if (Math.random() < BOT_MISTAKE_CHANCE) {
+    const nonWinning = moves.filter(m => m.score <= 0)
+    const pool = nonWinning.length > 0 ? nonWinning : moves
+    return pool[Math.floor(Math.random() * pool.length)].idx
+  }
+
+  // 正常情况：选最优
+  const best = moves.filter(m => m.score === bestScore)
+  return best[Math.floor(Math.random() * best.length)].idx
 }
 
 onMounted(() => {

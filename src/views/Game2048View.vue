@@ -7,7 +7,7 @@
     :infoItems="infoItems"
     @back="router.push('/')"
   >
-    <div class="game-board">
+    <div class="game-board" ref="boardEl">
       <div v-for="(row, y) in grid" :key="y" class="board-row">
         <div
           v-for="(cell, x) in row"
@@ -24,6 +24,7 @@
     <LeaderboardStrip game="2048" />
     <template #controls>
       <DirectionPad
+        :repeat="false"
         @up="move('up')"
         @down="move('down')"
         @left="move('left')"
@@ -70,6 +71,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
+import { useSwipe } from '@/composables/useSwipe'
 import { useSound } from '@/composables/useSound'
 import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
@@ -146,6 +148,14 @@ useGameKeyboard({
     { key: ['z', 'Z'], handler: () => undo() },
     { key: ['r', 'R'], handler: () => restart() }
   ]
+})
+
+// 移动端滑动手势：直接在棋盘上滑动即可移动方块
+const boardEl = ref<HTMLElement | null>(null)
+useSwipe({
+  el: () => boardEl.value,
+  active: () => winDialog.value === false && gameOverDialog.value === false,
+  onSwipe: (dir) => move(dir)
 })
 
 function createEmptyGrid(): Grid {
@@ -366,6 +376,7 @@ restart({ restoring: true })
   width: 100%;
   max-width: 380px;
   box-sizing: border-box;
+  touch-action: none;
 }
 
 .board-row {

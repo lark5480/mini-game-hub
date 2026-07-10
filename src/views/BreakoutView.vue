@@ -369,10 +369,16 @@ onMounted(() => {
 <style scoped>
 canvas {
   display: block;
+  width: 100%;
+  max-width: 600px;
+  height: auto;
+  aspect-ratio: 600 / 450;
+  margin: 0 auto;
   background: rgba(0,0,0,0.4);
   border: 1px solid rgba(0,255,255,0.2);
   border-radius: 12px;
   box-shadow: 0 0 30px rgba(0,255,255,0.1);
+  touch-action: none;
 }
 
 .launch-btn {

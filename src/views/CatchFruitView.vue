@@ -7,14 +7,14 @@
     :infoItems="[{ label: '分数', value: score }, { label: '生命', value: lives }]"
     @back="handleBack"
   >
-    <div class="game-board" :style="{ width: boardWidth + 'px', height: boardHeight + 'px' }">
+    <div class="game-board">
       <div
         v-for="fruit in fruits"
         :key="fruit.id"
         class="fruit"
-        :style="{ left: fruit.x + 'px', top: fruit.y + 'px' }"
+        :style="{ left: ((fruit.x + 20) / boardWidth * 100) + '%', top: ((fruit.y + 20) / boardHeight * 100) + '%' }"
       >{{ fruit.emoji }}</div>
-      <div class="basket" :style="{ left: basketX + 'px' }">
+      <div class="basket" :style="{ left: ((basketX + 40) / boardWidth * 100) + '%' }">
         <svg width="80" height="40" viewBox="0 0 80 40" fill="none">
           <path d="M5 5 L10 35 L70 35 L75 5 Z" fill="url(#basketGrad)" stroke="#5D3A1A" stroke-width="2"/>
           <defs>
@@ -168,24 +168,38 @@ function handleBack() {
 
 <style scoped>
 .game-board {
+  width: 100%;
+  max-width: 400px;
+  aspect-ratio: 4 / 5;
+  margin: 0 auto;
   background: rgba(0,0,0,0.4);
   border: 1px solid rgba(5,255,161,0.2);
   border-radius: 12px;
   position: relative;
   overflow: hidden;
   box-shadow: 0 0 30px rgba(5,255,161,0.1);
+  touch-action: none;
 }
 
 .fruit {
   position: absolute;
-  font-size: 30px;
+  transform: translate(-50%, -50%);
+  font-size: min(30px, 8vw);
   filter: drop-shadow(0 0 10px rgba(255,255,255,0.3));
 }
 
 .basket {
   position: absolute;
   bottom: 15px;
+  width: 20%;
+  transform: translateX(-50%);
   filter: drop-shadow(0 0 10px rgba(139,69,19,0.5));
+}
+
+.basket svg {
+  width: 100%;
+  height: auto;
+  display: block;
 }
 
 .start-btn {
