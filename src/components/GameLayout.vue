@@ -115,12 +115,27 @@ function doRestart() {
 
 const TUTORIAL_PREFIX = 'game-tutorial-seen-'
 const showTutorial = ref(
-  !!props.tutorial && localStorage.getItem(TUTORIAL_PREFIX + gameKey.value) !== 'true'
+  !!props.tutorial && readTutorialFlag() !== 'true'
 )
+
+function readTutorialFlag(): string | null {
+  try {
+    return localStorage.getItem(TUTORIAL_PREFIX + gameKey.value)
+  } catch {
+    // 隐私模式 / 禁用 localStorage 时静默降级
+    return null
+  }
+}
 
 function dismissTutorial() {
   showTutorial.value = false
-  if (gameKey.value) localStorage.setItem(TUTORIAL_PREFIX + gameKey.value, 'true')
+  if (gameKey.value) {
+    try {
+      localStorage.setItem(TUTORIAL_PREFIX + gameKey.value, 'true')
+    } catch {
+      // 隐私模式 / 禁用 localStorage 时静默降级
+    }
+  }
 }
 </script>
 

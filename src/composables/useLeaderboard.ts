@@ -2,6 +2,7 @@ import { ref, watch } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
+import { GAMES } from '@/lib/games'
 
 const SUBMITTED_GAMES_KEY = 'game-submitted-games'
 
@@ -107,7 +108,7 @@ export function useLeaderboard(game: string, limit = 10) {
         const submittedGames = loadSubmittedGames()
         submittedGames.add(game)
         saveSubmittedGames(submittedGames)
-        if (submittedGames.size >= 8 && store.unlock('all_games')) toast.show('成就解锁：全能玩家', '🎮')
+        if (submittedGames.size >= GAMES.length && store.unlock('all_games')) toast.show('成就解锁：全能玩家', '🎮')
       } catch { /* 成就/Toast 异常不应影响提交主流程 */ }
     }, 0)
 

@@ -70,6 +70,7 @@ import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useSound } from '@/composables/useSound'
 import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
+import { useGameStore } from '@/stores/game'
 import { useGameSave } from '@/composables/useGameSave'
 import { useHaptics } from '@/composables/useHaptics'
 import { useScoreFloats } from '@/composables/useScoreFloats'
@@ -86,6 +87,7 @@ const sound = useSound()
 const achievements = useAchievements()
 const toast = useToast()
 const haptics = useHaptics()
+const gameStore = useGameStore()
 const { popups, pop } = useScoreFloats()
 const showResume = ref(false)
 
@@ -238,6 +240,7 @@ function getIcon(type: number): string { return icons[type] || '❓' }
 function openLeaderboard() {
   winDialog.value = false
   lastScore.value = score.value
+  gameStore.addScore('link', score.value)
   showLeaderboard.value = true
   clearSave()
 }

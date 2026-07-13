@@ -33,6 +33,12 @@ const router = createRouter({
       path: '/achievements',
       name: 'achievements',
       component: () => import('@/views/AchievementsView.vue')
+    },
+    // 任意未匹配路径兜底到首页（避免白屏）
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      redirect: '/'
     }
   ]
 })

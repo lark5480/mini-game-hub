@@ -56,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
@@ -414,6 +414,11 @@ onMounted(() => {
     canvasRef.value.addEventListener('touchmove', onTouchMove, { passive: false })
     initGame()
     gameLoop.start()
+  }
+})
+onUnmounted(() => {
+  if (canvasRef.value) {
+    canvasRef.value.removeEventListener('touchmove', onTouchMove)
   }
 })
 </script>

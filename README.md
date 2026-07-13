@@ -21,6 +21,7 @@
 | 6 | 🎱 弹球打砖块 | 经典街机游戏 | ⭐⭐ |
 | 7 | 🔢 2048 | 数字合成挑战 | ⭐⭐ |
 | 8 | 🔨 打地鼠 | 反应力大考验 | ⭐ |
+| 9 | ⭕ 井字棋 | 经典对战 AI | ⭐ |
 
 ---
 
@@ -28,7 +29,7 @@
 
 ### 前置要求
 
-- Node.js >= 16.0
+- Node.js >= 18.0
 - npm >= 7.0 或 pnpm >= 7.0
 
 ### 安装依赖
@@ -67,16 +68,9 @@ npm run preview
 
 ## ✨ 体验特性
 
-| 特性 | 说明 |
-|------|------|
-| 🎬 弹窗动画 | 所有对话框/遮罩统一 fade + scale 过渡（`src/styles/animations.css`） |
-| 📱 触摸优化 | 弹球支持触屏拖拽挡板、所有 overlay 适配 `safe-area-inset`（iPhone 刘海） |
-| ⌨️ 键盘连发 | `useGameKeyboard` 支持 `binding.repeat` 长按连发（ Snake / 俄罗斯方块移动更跟手） |
-| 🔊 音效反馈 | 暂停/恢复/成就解锁各有独立音效；`toggleMute()` 后给确认短 click |
-| 📳 震动反馈 | `useHaptics` 命中/连击/miss/胜利各有振动（移动端） |
-| ⏸️ 失焦暂停 | 切到后台自动暂停，回前台弹 `ResumePrompt` 确认继续 |
-| ♿ 可访问性 | 全局 `:focus-visible` 键盘环、`prefers-reduced-motion` 禁用动效 |
-| 🛡️ 排行榜容错 | 5s 超时、友好中文错误文案、重试按钮、Toast 降级 |
+弹窗动画 / 触屏拖拽 / 键盘连发 / 音效反馈（23+ 预设）/ 震动反馈 / 失焦暂停 / 可访问性（focus-visible + reduced-motion）/ 排行榜容错（5s 超时 + 重试）
+
+详细机制见 [docs/system_design.md](./docs/system_design.md)。
 
 ---
 
@@ -165,12 +159,9 @@ game-collection/
 - 首页显示各游戏的最高分记录
 
 ### 🏆 全局排行榜（Supabase）
-- 基于 Supabase PostgreSQL 的跨玩家积分排行榜
-- 匿名昵称制，无需注册登录
-- 同昵称自动保留最高分
-- 每款游戏内嵌实时排行榜条（Top 5）
-- 游戏结束可一键提交分数、查看排行、再来一局
-- 2048 和连连看支持中途提交分数
+- 跨玩家积分排行榜，匿名昵称制，同昵称保留最高分
+- 每款游戏内嵌实时排行榜条（Top 5），支持中途提交分数
+- 架构（SQL / 核心文件 / 环境变量 / 昵称去重逻辑）见 [docs/system_design.md](./docs/system_design.md) 的「部署与基础设施」
 
 ### 🎨 统一的游戏布局
 - 所有游戏共享统一的布局组件（GameLayout）
@@ -181,84 +172,28 @@ game-collection/
 - 部分游戏支持键盘控制（方向键、WASD）
 - 流畅的键盘响应
 
-### 🔊 音效系统（23+ 预设）
-- 基于 Web Audio API 的合成音效，零加载、零资源体积
+### 🔊 音效系统
+- 基于 Web Audio API 的合成音效，23+ 预设，零加载
 - 全局静音切换按钮（GameLayout 顶部栏），状态持久化到 localStorage
 - 静音→开启时自动给一声短 click 确认
-- 完整音效列表：`click / move / push / place / select / match / eat / crash / drop / rotate / clear / bounce / brick / loseLife / merge / hit / miss / collect / win / gameOver / pause / resume / unlock`
+- 完整音效列表见 [docs/class-diagram.mermaid](./docs/class-diagram.mermaid) 的 `useSound` 类
 
 ### 🏅 成就系统
-- 10 个可解锁成就，覆盖所有 8 款游戏与里程碑事件
-- 进度自动保存到 localStorage（key: `game-achievements`）
-- 解锁时顶部弹入 Toast 通知（2 秒自动消失）
-- 首页右上角成就入口按钮显示已解锁数量
+- 10 个可解锁成就 + 自动 `perfectionist` 元成就
+- 解锁时顶部弹入 Toast 通知 + 音效 + 震动，进度保存到 localStorage
 - 成就页面（`/achievements`）网格展示所有成就的解锁状态
 
 ---
 
 ## 📝 添加新游戏
 
-> **核心：新增游戏只需要改 `src/lib/games.ts`**，路由、Store、首页卡片全部自动同步。
-
-1. 在 `src/lib/games.ts` 的 `GAMES` 数组添加一条：`{ name: 'xxx', title: '中文名', desc: '一句话描述', color: '#HEX', path: '/xxx' }`
-2. 在 `src/router/index.ts` 的 `GAME_COMPONENTS` 映射里加一条：`'xxx': 'XxxView'`
-3. 在 `src/views/XxxView.vue` 写游戏逻辑：
-   - 用 `<GameLayout>` 包裹（提供标题栏、返回、重新开始、暂停按钮）
-   - 用 `useGameLoop` 驱动渲染、用 `useGameKeyboard({ bindings, active })` 处理键盘
-   - 用 `useSound()` 给关键事件加音效
-   - 嵌入 `<LeaderboardStrip :game="'xxx'" />`（底部 Top 5）
-   - 游戏结束打开 `LeaderboardOverlay` → "提交分数 → 排行榜 → 再来一局"
-   - 接入 `useAutoPause` 失焦暂停 + `ResumePrompt` / `PauseOverlay` 继续选择
-   - 调用 `useGameStore().addScore('xxx', score)` 存档
-4. 在 `src/views/HomeView.vue` 的 `iconMap` 里加一个图标
-5. （可选）在 `src/stores/achievements.ts` 加成就 + 在游戏触发点调用 `achievements.unlock('id')`
-
-参考 `SnakeView.vue`（最完整的实现模板）。
+新增游戏步骤（模板 + 流程 + 参考 SnakeView.vue）详见 [AGENTS.md](./AGENTS.md) 的「新增游戏 checklist」。
 
 ---
 
-## 🚀 部署到 Netlify
+## 🚀 部署
 
-### 前置条件
-- Supabase 项目已创建，SQL 已执行（见下方）
-- `.env` 已配置（本地开发用，不提交到 git）
-
-### 1. Supabase 初始化
-
-在 Supabase Dashboard → SQL Editor 执行：
-
-```sql
-create table leaderboard (
-  id bigint generated always as identity primary key,
-  game text not null,
-  nickname text not null,
-  score integer not null,
-  created_at timestamptz default now()
-);
-create index idx_leaderboard_game_score on leaderboard (game, score desc);
-alter table leaderboard enable row level security;
-create policy "anon select" on leaderboard for select to anon using (true);
-create policy "anon insert" on leaderboard for insert to anon with check (true);
-create policy "anon update" on leaderboard for update to anon using (true) with check (true);
-```
-
-### 2. Netlify 配置
-
-1. 推送代码到 GitHub
-2. Netlify 导入 GitHub 仓库
-3. **Site settings → Environment variables** 添加：
-   - `VITE_SUPABASE_URL` = 你的 Supabase 项目 URL
-   - `VITE_SUPABASE_ANON_KEY` = Publishable key（不是 Secret key）
-4. Deploy settings 保持默认：
-   - Build command: `npm run build`
-   - Publish directory: `dist`
-5. 触发部署
-
-### 3. 验证
-
-- 访问部署 URL，打开任一游戏
-- 游戏结束 → 提交分数 → 应看到排行榜
-- 排行榜条自动显示最新数据
+Supabase 初始化（SQL + 环境变量）+ Netlify 配置 + 验证，详见 [docs/system_design.md](./docs/system_design.md) 的「部署与基础设施」。
 
 ---
 
