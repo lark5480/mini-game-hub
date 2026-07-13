@@ -55,6 +55,9 @@ out/
 coverage/
 .nyc_output/
 
+# E2E 测试产物
+tests/e2e-artifacts/
+
 # 本地开发配置
 *.local
 
