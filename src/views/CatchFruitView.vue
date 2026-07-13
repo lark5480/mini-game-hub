@@ -72,6 +72,7 @@ import { useGameLoop } from '@/composables/useGameLoop'
 import { useSound } from '@/composables/useSound'
 import { useAutoPause } from '@/composables/useAutoPause'
 import { useHaptics } from '@/composables/useHaptics'
+import { useGameStore } from '@/stores/game'
 import { useScoreFloats } from '@/composables/useScoreFloats'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
@@ -85,6 +86,7 @@ const router = useRouter()
 const sound = useSound()
 const haptics = useHaptics()
 const { popups, pop } = useScoreFloats()
+const gameStore = useGameStore()
 
 const boardWidth = 400, boardHeight = 500, basketWidth = 80, basketSpeed = 30
 const basketX = ref(boardWidth / 2 - basketWidth / 2)
@@ -201,6 +203,7 @@ function endGame() {
 function openLeaderboard() {
   gameOver.value = false
   lastScore.value = score.value
+  gameStore.addScore('catch-fruit', score.value)
   showLeaderboard.value = true
 }
 

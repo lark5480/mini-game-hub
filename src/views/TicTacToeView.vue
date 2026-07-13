@@ -87,7 +87,7 @@
       @update:visible="showLeaderboard = $event"
       @replay="resetGame(false)"
     />
-    <ResumePrompt :visible="showResume" @continue="continueGame" @new-game="newGame" />
+    <ResumePrompt :visible="paused" @continue="continueGame" @new-game="newGame" />
   </GameLayout>
 </template>
 
@@ -98,6 +98,7 @@ import { useGameStore } from '@/stores/game'
 import { useSound } from '@/composables/useSound'
 import { useGameSave } from '@/composables/useGameSave'
 import { useHaptics } from '@/composables/useHaptics'
+import { usePause } from '@/composables/usePause'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
@@ -120,8 +121,6 @@ const router = useRouter()
 const gameStore = useGameStore()
 const sound = useSound()
 const haptics = useHaptics()
-const showResume = ref(false)
-
 const board = ref<Board>(Array(9).fill(null))
 const isPlayerTurn = ref(true)
 const gameOver = ref(false)
@@ -136,6 +135,14 @@ const stats = ref({ wins: 0, draws: 0, losses: 0 })
 const save = useGameSave('tic-tac-toe')
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let botTimer: ReturnType<typeof setTimeout> | null = null
+
+// 暂停/恢复：回合制游戏仅在非结束状态且轮到玩家时可暂停
+const { paused, pause: pauseGame, resume: resumeGame } = usePause({
+  isPlaying: () => !gameOver.value && result.value === null,
+  isGameOver: () => gameOver.value,
+  onPause: () => { if (botTimer) { clearTimeout(botTimer); botTimer = null } },
+  onResume: () => { if (!isPlayerTurn.value && !gameOver.value) botTimer = setTimeout(makeBotMove, 380) }
+})
 
 const statusLabel = computed(() => {
   if (gameOver.value) {
@@ -254,14 +261,11 @@ function endGame(res: Exclude<Result, null>, line: number[]) {
 }
 
 function continueGame() {
-  showResume.value = false
-  if (!isPlayerTurn.value && !gameOver.value) {
-    botTimer = setTimeout(makeBotMove, 380)
-  }
+  resumeGame()
 }
 
 function newGame() {
-  showResume.value = false
+  resumeGame()
   resetGame(false)
 }
 
@@ -393,7 +397,7 @@ onMounted(() => {
           losses: s.losses || 0
         }
       }
-      showResume.value = true
+      pauseGame()
       return
     }
   }

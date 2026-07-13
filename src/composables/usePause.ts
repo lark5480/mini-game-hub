@@ -20,6 +20,7 @@ export interface UsePauseOptions {
  *  - 默认绑定 P / Esc 键暂停
  *  - 切到后台自动暂停
  *  - 恢复时给出明显反馈
+ *  - 暴露 `pause`/`resume` 方法供 view 主动调用（如读存档后拉起恢复提示）
  */
 export function usePause(opts: UsePauseOptions) {
   const paused = ref(false)
