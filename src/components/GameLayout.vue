@@ -18,7 +18,7 @@
       <h2>{{ title }}</h2>
       <slot name="header-extra"></slot>
       <div class="game-info">
-        <span v-for="item in infoItems" :key="item.label">{{ item.label }} {{ item.value }}</span>
+        <span v-for="item in infoItems" :key="item.label" :class="{ 'score-value': item.label === '分数' || item.label === '总分' }">{{ item.label }} {{ item.value }}</span>
         <span v-if="bestScore > 0" class="best-score">最佳 {{ bestScore }}</span>
       </div>
       <button class="sound-btn" @click="toggleMute" :title="muted ? '开启音效' : '关闭音效'">
@@ -41,7 +41,7 @@
       <div class="tutorial-content">{{ tutorial }}</div>
       <button class="tutorial-close" @click="dismissTutorial">知道了</button>
     </div>
-    <div class="game-container">
+    <div class="game-container" :class="entrance ? 'entrance-' + entrance : ''">
       <slot></slot>
     </div>
     <div class="controls-area" v-if="$slots.controls">
@@ -78,6 +78,7 @@ const props = defineProps<{
   infoItems?: InfoItem[]
   confirmRestart?: boolean
   tutorial?: string
+  entrance?: string
 }>()
 
 defineEmits<{
@@ -147,6 +148,9 @@ function dismissTutorial() {
   padding: 20px;
   padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
   position: relative;
+  /* 防止 accent 光晕(::before inset:-28px)在窄屏超出视口导致横向滚动；
+     clip 不建立滚动容器，不影响垂直滚动与 fixed 遮罩 */
+  overflow-x: clip;
 }
 
 .game-header {
@@ -161,6 +165,7 @@ function dismissTutorial() {
 .game-header h2 {
   margin: 0;
   font-weight: 600;
+  color: var(--game-accent);
   background: linear-gradient(135deg, var(--game-accent), var(--gradient-end, var(--game-accent)));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -211,6 +216,13 @@ function dismissTutorial() {
   color: var(--game-text-info);
 }
 
+/* 顶部分数/总分值随各游戏 accent 着色发光——accent 加深渗透的收口（标题/游戏区/暂停遮罩已渗透） */
+.game-info .score-value {
+  color: var(--game-accent);
+  font-weight: 600;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--game-accent) 40%, transparent);
+}
+
 .best-score {
   color: #FFD700;
   white-space: nowrap;
@@ -220,8 +232,8 @@ function dismissTutorial() {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   background: var(--game-btn-bg);
   border: 1px solid var(--game-btn-border);
   color: var(--game-text);
@@ -290,6 +302,60 @@ function dismissTutorial() {
 .game-container {
   max-width: 600px;
   margin: 0 auto;
+  position: relative;
+  /* accent 渗透：游戏区一圈主题色柔光 + 细描边，不挤压内容布局 */
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--game-accent) 20%, transparent),
+    0 0 30px color-mix(in srgb, var(--game-accent) 12%, transparent);
+  /* 进场：淡入 + 轻微放大，随 accent 光色形成每游戏的记忆点；
+     prefers-reduced-motion 由 animations.css 全局守卫自动关掉 */
+  animation: board-in 0.4s ease-out both;
+}
+
+/* ===== 每游戏独特进场（entrance prop 驱动，accent 渗透已存在于 box-shadow/::before）=====
+   全部仅用 transform/opacity，无布局影响；keyframes 统一定义在 animations.css。
+   未识别的 entrance 类型会回退到默认 board-in（.game-container 基础规则，keyframes 亦在 animations.css）。 */
+.game-container.entrance-snake {
+  animation: entrance-snake 0.5s cubic-bezier(.22,.8,.3,1) both;
+}
+.game-container.entrance-tetris {
+  animation: entrance-tetris 0.5s ease-out both;
+}
+.game-container.entrance-breakout {
+  animation: entrance-breakout 0.45s ease-out both;
+}
+.game-container.entrance-catchfruit {
+  animation: entrance-catchfruit 0.5s ease-out both;
+}
+.game-container.entrance-game2048 {
+  animation: entrance-game2048 0.45s ease-out both;
+}
+.game-container.entrance-linkgame {
+  animation: entrance-linkgame 0.5s ease-out both;
+}
+.game-container.entrance-sokoban {
+  animation: entrance-sokoban 0.5s cubic-bezier(.22,.8,.3,1) both;
+}
+.game-container.entrance-whackmole {
+  animation: entrance-whackmole 0.55s ease-out both;
+}
+.game-container.entrance-ttt {
+  animation: entrance-ttt 0.5s ease-out both;
+}
+
+/* 游戏区背后的主题色光晕：进不同游戏光色不同，形成记忆点 */
+.game-container::before {
+  content: "";
+  position: absolute;
+  inset: -28px;
+  z-index: -1;
+  border-radius: 30px;
+  background: radial-gradient(
+    65% 55% at 50% 25%,
+    color-mix(in srgb, var(--game-accent) 16%, transparent) 0%,
+    transparent 70%
+  );
+  pointer-events: none;
 }
 
 .controls-area {

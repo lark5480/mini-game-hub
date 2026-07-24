@@ -2,6 +2,7 @@
   <GameLayout
     title="贪吃蛇"
     accentColor="#B967FF"
+    entrance="snake"
     gradientEnd="#FF006E"
     :hints="['空格/Enter 开始', '方向键/WASD 移动', 'P/Esc 暂停']"
     :infoItems="[{ label: '分数', value: score }]"
@@ -62,7 +63,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
+import { ref, watch, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
@@ -71,6 +72,7 @@ import { useSound } from '@/composables/useSound'
 import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
 import { useGameSave } from '@/composables/useGameSave'
+import { useAutoSave } from '@/composables/useAutoSave'
 import { useSwipe } from '@/composables/useSwipe'
 import { useAutoPause } from '@/composables/useAutoPause'
 import { useHaptics } from '@/composables/useHaptics'
@@ -109,28 +111,15 @@ const showResume = ref(false)
 
 // 存档
 const save = useGameSave('snake')
-let saveTimer: ReturnType<typeof setTimeout> | null = null
-
-function scheduleSave() {
-  if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => {
-    if (!isPlaying.value || gameOver.value) return
-    save.saveGame({
-      snake: snake.value,
-      food: food.value,
-      direction: direction.value,
-      nextDir: nextDir.value,
-      score: score.value,
-      grid: grid.value,
-      isPlaying: isPlaying.value
-    })
-  }, 300)
-}
-
-function clearSave() {
-  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
-  save.clearGame()
-}
+const { scheduleSave, clearSave } = useAutoSave('snake', () => ({
+  snake: snake.value,
+  food: food.value,
+  direction: direction.value,
+  nextDir: nextDir.value,
+  score: score.value,
+  grid: grid.value,
+  isPlaying: isPlaying.value
+}), { beforeSave: () => isPlaying.value && !gameOver.value })
 
 watch([snake, food, direction, nextDir, score, isPlaying, grid], scheduleSave, { deep: true })
 onMounted(() => {
@@ -147,8 +136,6 @@ onMounted(() => {
     showResume.value = true
   }
 })
-onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer) })
-
 const gameLoop = useGameLoop({
   mode: 'interval',
   intervalMs: 150,
@@ -244,7 +231,12 @@ function spawnFood() {
 }
 
 function render() {
-  initGrid()
+  // 原地清零，避免每 tick 重新分配整个网格
+  for (let y = 0; y < GRID_HEIGHT; y++) {
+    for (let x = 0; x < GRID_WIDTH; x++) {
+      grid.value[y][x] = 0
+    }
+  }
   snake.value.forEach((s, i) => {
     if (s.y >= 0 && s.y < GRID_HEIGHT && s.x >= 0 && s.x < GRID_WIDTH) {
       grid.value[s.y][s.x] = i === 0 ? 3 : 1
@@ -412,12 +404,6 @@ initGrid(); render()
 /* 反向（掉头）无效时的蛇头抖动反馈 */
 .game-cell.shake {
   animation: headShake 0.22s ease;
-}
-
-@keyframes headShake {
-  0%, 100% { transform: translateX(0); }
-  25% { transform: translateX(-2px); }
-  75% { transform: translateX(2px); }
 }
 
 .game-cell.food {

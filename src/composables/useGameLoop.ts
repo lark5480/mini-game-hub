@@ -68,6 +68,11 @@ export function useGameLoop(options: UseGameLoopOptions) {
   function pause() {
     if (!isRunning.value) return
     paused.value = true
+    // interval 模式下暂停时清除定时器，避免空转（与 rAF 模式对称）
+    if (intervalId !== null) {
+      clearInterval(intervalId)
+      intervalId = null
+    }
   }
 
   function resume() {
@@ -77,6 +82,13 @@ export function useGameLoop(options: UseGameLoopOptions) {
     // 暂停时 rAF 链已自行停止，需要重新启动
     if (options.mode === 'raf' && animationId === null) {
       startRaf()
+    } else if (options.mode !== 'raf' && intervalId === null) {
+      // interval 模式下定时器已被 pause 清除，重建
+      const ms = options.intervalMs || 150
+      intervalId = window.setInterval(() => {
+        if (paused.value) return
+        options.onUpdate(ms)
+      }, ms)
     }
   }
 

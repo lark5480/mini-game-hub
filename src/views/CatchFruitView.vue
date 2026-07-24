@@ -2,6 +2,7 @@
   <GameLayout
     title="接水果"
     accentColor="#05FFA1"
+    entrance="catchfruit"
     gradientEnd="#00FFFF"
     :hints="['空格/Enter 开始', '方向键/AD 左右移动']"
     :infoItems="[{ label: '分数', value: score }, { label: '生命', value: lives }]"

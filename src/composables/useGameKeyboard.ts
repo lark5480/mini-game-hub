@@ -15,13 +15,13 @@ export interface UseGameKeyboardOptions {
   active?: Ref<boolean> | boolean
 }
 
-/** 当前按下的所有键（小写） */
-const heldKeys = new Set<string>()
-
-/** 连发定时器 */
-const repeatTimers = new Map<string, ReturnType<typeof setTimeout>>()
-
 export function useGameKeyboard(options: UseGameKeyboardOptions) {
+  /** 当前按下的所有键（小写）——实例级，避免多实例共享状态 */
+  const heldKeys = new Set<string>()
+
+  /** 连发定时器——实例级，onUnmounted 只清理本实例的定时器 */
+  const repeatTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
   const preventKeys = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '])
 
   function isActive(): boolean {

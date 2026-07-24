@@ -1,6 +1,7 @@
 /* =====================================================
    全局共享动画 & 过渡
-   —— 所有弹窗、Toast、页面过渡的 keyframes 统一管理
+   —— 所有 keyframes 统一管理（弹窗 / Toast / 页面过渡 / 游戏进场）
+   —— 组件内不得再定义通用 keyframes，统一放此处
    ===================================================== */
 
 /* ---------- 弹窗：淡入 + 轻微上移 ---------- */
@@ -62,6 +63,120 @@
 @keyframes page-fade-out {
   from { opacity: 1 }
   to   { opacity: 0 }
+}
+
+/* ---------- 首页标题入场 ---------- */
+@keyframes glow-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- 游戏区默认进场 ---------- */
+@keyframes board-in {
+  from { opacity: 0; transform: scale(0.98); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* ---------- 浮动分数 ---------- */
+@keyframes scoreFloatUp {
+  0% { opacity: 0; transform: translate(-50%, -30%) scale(0.8); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -160%) scale(1.1); }
+}
+
+/* ---------- 连连看：连线绘制 ---------- */
+@keyframes linkDraw {
+  to { stroke-dashoffset: 0; }
+}
+
+/* ---------- 连连看：连线淡出 ---------- */
+@keyframes linkFade {
+  to { opacity: 0; }
+}
+
+/* ---------- 2048：方块弹出 ---------- */
+@keyframes pop {
+  0% { transform: scale(0); }
+  100% { transform: scale(1); }
+}
+
+/* ---------- 2048：胜利发光脉冲 ---------- */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 30px rgba(255, 215, 0, 0.3), 0 0 15px rgba(255, 0, 110, 0.15); }
+  50% { box-shadow: 0 0 50px rgba(255, 215, 0, 0.5), 0 0 25px rgba(255, 0, 110, 0.3); }
+}
+
+/* ---------- 蛇：碰撞摇头 ---------- */
+@keyframes headShake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
+}
+
+/* ---------- 井字棋：胜利脉冲 ---------- */
+@keyframes winPulse {
+  0%, 100% { box-shadow: 0 0 15px rgba(255, 215, 0, 0.4); }
+  50% { box-shadow: 0 0 30px rgba(255, 215, 0, 0.8); }
+}
+
+/* ---------- 井字棋：棋子出现 ---------- */
+@keyframes appear {
+  from { transform: scale(0.3); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* ---------- 打地鼠：连击脉冲 ---------- */
+@keyframes comboPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+/* ---------- 打地鼠：地鼠被砸 ---------- */
+@keyframes hitMole {
+  0% { bottom: -6cqh; }
+  50% { bottom: -28cqh; }
+  100% { bottom: -86cqh; }
+}
+
+/* ---------- 每游戏独特进场（entrance prop 驱动）---------- */
+@keyframes entrance-snake {
+  from { opacity: 0; transform: translateX(-26px) scale(.99); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes entrance-tetris {
+  0%   { opacity: 0; transform: translateY(-20px); }
+  65%  { opacity: 1; transform: translateY(5px); }
+  100% { transform: translateY(0); }
+}
+@keyframes entrance-breakout {
+  from { opacity: 0; transform: translateY(18px) scaleY(.985); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes entrance-catchfruit {
+  0%   { opacity: 0; transform: translateY(-22px); }
+  60%  { opacity: 1; transform: translateY(7px); }
+  100% { transform: translateY(0); }
+}
+@keyframes entrance-game2048 {
+  from { opacity: 0; transform: scale(.92); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes entrance-linkgame {
+  from { opacity: 0; transform: scale(1.025); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes entrance-sokoban {
+  from { opacity: 0; transform: translateX(22px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes entrance-whackmole {
+  0%   { opacity: 0; transform: translateY(26px); }
+  70%  { opacity: 1; transform: translateY(-5px); }
+  100% { transform: translateY(0); }
+}
+@keyframes entrance-ttt {
+  from { opacity: 0; transform: rotate(-3deg) scale(.95); }
+  to   { opacity: 1; transform: rotate(0) scale(1); }
 }
 
 /* ---------- 可访问性：prefers-reduced-motion ---------- */

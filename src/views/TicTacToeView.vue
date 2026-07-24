@@ -2,6 +2,7 @@
   <GameLayout
     title="井字棋"
     accentColor="#FF006E"
+    entrance="ttt"
     gradientEnd="#00CFFF"
     :hints="['点击空位落子', 'X 先手，AI 为 O']"
     :infoItems="[{ label: '状态', value: statusLabel }]"
@@ -97,6 +98,7 @@ import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useSound } from '@/composables/useSound'
 import { useGameSave } from '@/composables/useGameSave'
+import { useAutoSave } from '@/composables/useAutoSave'
 import { useHaptics } from '@/composables/useHaptics'
 import { usePause } from '@/composables/usePause'
 import GameLayout from '@/components/GameLayout.vue'
@@ -133,7 +135,13 @@ const lastScore = ref(0)
 const stats = ref({ wins: 0, draws: 0, losses: 0 })
 
 const save = useGameSave('tic-tac-toe')
-let saveTimer: ReturnType<typeof setTimeout> | null = null
+const { scheduleSave, clearSave } = useAutoSave('tic-tac-toe', () => ({
+  board: board.value,
+  isPlayerTurn: isPlayerTurn.value,
+  gameOver: gameOver.value,
+  result: result.value,
+  stats: stats.value
+}), { beforeSave: () => !gameOver.value })
 let botTimer: ReturnType<typeof setTimeout> | null = null
 
 // 暂停/恢复：回合制游戏仅在非结束状态且轮到玩家时可暂停
@@ -170,25 +178,6 @@ const resultIcon = computed<'success' | 'fail' | 'info'>(() => {
   if (result.value === 'lose') return 'fail'
   return 'info'
 })
-
-function scheduleSave() {
-  if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => {
-    if (gameOver.value) return
-    save.saveGame({
-      board: board.value,
-      isPlayerTurn: isPlayerTurn.value,
-      gameOver: gameOver.value,
-      result: result.value,
-      stats: stats.value
-    })
-  }, 300)
-}
-
-function clearSave() {
-  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
-  save.clearGame()
-}
 
 function handleCellClick(index: number) {
   if (gameOver.value || !isPlayerTurn.value || board.value[index] !== null) return
@@ -405,7 +394,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (saveTimer) clearTimeout(saveTimer)
   if (botTimer) clearTimeout(botTimer)
 })
 </script>
@@ -502,20 +490,10 @@ onUnmounted(() => {
   background: rgba(255, 215, 0, 0.15);
 }
 
-@keyframes winPulse {
-  0%, 100% { box-shadow: 0 0 15px rgba(255, 215, 0, 0.4); }
-  50% { box-shadow: 0 0 30px rgba(255, 215, 0, 0.8); }
-}
-
 .mark {
   width: 75%;
   height: 75%;
   animation: appear 0.25s ease;
-}
-
-@keyframes appear {
-  from { transform: scale(0.3); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
 }
 
 .score-row {

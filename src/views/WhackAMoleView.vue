@@ -2,6 +2,7 @@
   <GameLayout
     title="打地鼠"
     accentColor="#FF6B6B"
+    entrance="whackmole"
     gradientEnd="#FFD700"
     :hints="['点击地鼠得分', '别打空！']"
     :infoItems="[{ label: '分数', value: score }, { label: '时间', value: timeLeft + 's' }, { label: '连击', value: combo }]"
@@ -375,11 +376,6 @@ onUnmounted(() => {
   animation: comboPulse 0.3s ease;
 }
 
-@keyframes comboPulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.2); }
-}
-
 .combo-text {
   font-size: 1.5em;
   font-weight: bold;
@@ -442,12 +438,6 @@ onUnmounted(() => {
 
 .mole.hit {
   animation: hitMole 0.2s ease;
-}
-
-@keyframes hitMole {
-  0% { bottom: -6cqh; }
-  50% { bottom: -28cqh; }
-  100% { bottom: -86cqh; }
 }
 
 .mole-body {

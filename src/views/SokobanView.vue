@@ -2,6 +2,7 @@
   <GameLayout
     title="推箱子"
     accentColor="#00FFFF"
+    entrance="sokoban"
     gradientEnd="#FF006E"
     :hints="['方向键/WASD 移动', 'R 重置当前关', '重玩从第1关开始']"
     :infoItems="[{ label: '关卡', value: levelIndex + 1 }, { label: '步数', value: steps }, { label: '总分', value: totalScore }]"
@@ -74,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
@@ -82,6 +83,7 @@ import { useSound } from '@/composables/useSound'
 import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
 import { useGameSave } from '@/composables/useGameSave'
+import { useAutoSave } from '@/composables/useAutoSave'
 import { useHaptics } from '@/composables/useHaptics'
 import { useAutoPause } from '@/composables/useAutoPause'
 import GameLayout from '@/components/GameLayout.vue'
@@ -226,20 +228,12 @@ const gameComplete = ref(false)
 
 // 存档
 const save = useGameSave('sokoban')
-let saveTimer: ReturnType<typeof setTimeout> | null = null
-
-function scheduleSave() {
-  if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => {
-    if (winDialog.value) return
-    save.saveGame({ levelIndex: levelIndex.value, steps: steps.value, totalScore: totalScore.value, board: board.value })
-  }, 300)
-}
-
-function clearSave() {
-  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
-  save.clearGame()
-}
+const { scheduleSave, clearSave } = useAutoSave('sokoban', () => ({
+  levelIndex: levelIndex.value,
+  steps: steps.value,
+  totalScore: totalScore.value,
+  board: board.value
+}), { beforeSave: () => !winDialog.value })
 
 watch([levelIndex, steps, totalScore, board], scheduleSave, { deep: true })
 onMounted(() => {
@@ -256,8 +250,6 @@ onMounted(() => {
     initLevel()
   }
 })
-onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer) })
-
 useGameKeyboard({
   bindings: [
     {
@@ -292,7 +284,7 @@ useGameKeyboard({
 
 // 失焦自动暂停
 useAutoPause(() => {
-  if (gameActive && !showResume.value) showResume.value = true
+  if (gameActive.value && !showResume.value) showResume.value = true
 })
 
 function continueGame() {

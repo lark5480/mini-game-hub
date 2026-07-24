@@ -153,22 +153,13 @@ function getTopScore(name: string): number {
 .header h1 {
   font-size: 4em;
   font-weight: 700;
+  color: #00FFFF;
   background: linear-gradient(135deg, #00FFFF, #FF006E, #B967FF);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  text-shadow: none;
-  filter: drop-shadow(0 0 30px rgba(0, 255, 255, 0.5));
-  animation: glow 2s ease-in-out infinite alternate;
-}
-
-@keyframes glow {
-  from {
-    filter: drop-shadow(0 0 20px rgba(0, 255, 255, 0.5));
-  }
-  to {
-    filter: drop-shadow(0 0 40px rgba(255, 0, 110, 0.5));
-  }
+  filter: drop-shadow(0 0 24px rgba(0, 255, 255, 0.45));
+  animation: glow-in 0.6s ease-out both;
 }
 
 .subtitle {
@@ -201,9 +192,9 @@ function getTopScore(name: string): number {
 }
 
 .game-card:hover {
-  transform: translateY(-8px);
+  transform: translateY(-4px);
   border-color: var(--glow-color);
-  box-shadow: 0 0 30px color-mix(in srgb, var(--glow-color) 40%, transparent);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--glow-color) 35%, transparent);
 }
 
 .game-card:hover .card-glow {
