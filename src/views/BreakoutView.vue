@@ -2,6 +2,7 @@
   <GameLayout
     title="弹球打砖块"
     accentColor="#FF6B6B"
+    entrance="breakout"
     gradientEnd="#00FFFF"
     :hints="['← → 或 A D 移动挡板', 'Enter 开始/发球', 'P 暂停']"
     :infoItems="[{ label: '分数', value: score }, { label: '生命', value: lives }]"
@@ -117,6 +118,7 @@ let ballY = 0
 let ballDX = 0
 let ballDY = 0
 let bricks: boolean[][] = []
+let remainingBricks = 0
 let ctx: CanvasRenderingContext2D | null = null
 let launched = false
 let leftPressed = false
@@ -178,10 +180,12 @@ function initGame() {
   victory.value = false
   paused.value = false
   bricks = []
+  remainingBricks = 0
   for (let r = 0; r < BRICK_ROWS; r++) {
     bricks[r] = []
     for (let c = 0; c < BRICK_COLS; c++) {
       bricks[r][c] = true
+      remainingBricks++
     }
   }
 }
@@ -339,6 +343,7 @@ function gameUpdate(dt: number) {
         }
 
         bricks[r][c] = false
+        remainingBricks--
         score.value += 10
         sound.brick()
         haptics.pulse()
@@ -347,14 +352,7 @@ function gameUpdate(dt: number) {
     }
   }
 
-  let allBroken = true
-  for (let r = 0; r < BRICK_ROWS; r++) {
-    for (let c = 0; c < BRICK_COLS; c++) {
-      if (bricks[r][c]) { allBroken = false; break }
-    }
-    if (!allBroken) break
-  }
-  if (allBroken) {
+  if (remainingBricks <= 0) {
     victory.value = true
     launched = false
     sound.win()

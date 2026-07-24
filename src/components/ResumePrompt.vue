@@ -28,7 +28,7 @@ defineEmits<{ continue: []; 'new-game': [] }>()
   align-items: center;
   justify-content: center;
   z-index: 260;
-  padding: max(20px, env(safe-area-inset-top) + 16px) 20px max(20px, env(safe-area-inset-bottom) + 16px);
+  padding: max(24px, env(safe-area-inset-top) + 16px) 20px max(24px, env(safe-area-inset-bottom) + 16px);
 }
 
 .resume-enter-active {

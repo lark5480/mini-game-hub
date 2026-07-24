@@ -27,7 +27,7 @@ html, body, #app {
   /* 回退 100vh，再覆盖为动态视口高度，避免移动端地址栏导致的布局跳动 */
   min-height: 100vh;
   min-height: 100dvh;
-  font-family: 'Fredoka', 'Nunito', 'Microsoft YaHei', sans-serif;
+  font-family: 'Fredoka', system-ui, -apple-system, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', sans-serif;
   background: #0D0D1A;
   color: #E0E0FF;
 }
@@ -68,26 +68,25 @@ button {
 
 .scanlines {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: repeating-linear-gradient(
     0deg,
-    rgba(0, 0, 0, 0.1) 0px,
-    rgba(0, 0, 0, 0.1) 1px,
+    rgba(0, 0, 0, 0.15) 0px,
+    rgba(0, 0, 0, 0.15) 1px,
     transparent 1px,
-    transparent 2px
+    transparent 3px
   );
   pointer-events: none;
   z-index: 100;
+  opacity: 0.35;
+  mix-blend-mode: overlay;
 }
 
 .page-fade-enter-active {
-  animation: page-fade-in 0.25s ease-out;
+  animation: page-fade-in 0.18s ease-out;
 }
 
 .page-fade-leave-active {
-  animation: page-fade-out 0.15s ease-in;
+  animation: page-fade-out 0.1s ease-in;
 }
 </style>

@@ -2,6 +2,7 @@
   <GameLayout
     title="2048"
     accentColor="#FFD700"
+    entrance="game2048"
     gradientEnd="#FF6B6B"
     :hints="['方向键/WASD 移动', 'Z 撤销', 'R 重新开始']"
     :infoItems="infoItems"
@@ -72,7 +73,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
@@ -81,6 +82,7 @@ import { useSound } from '@/composables/useSound'
 import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
 import { useGameSave } from '@/composables/useGameSave'
+import { useAutoSave } from '@/composables/useAutoSave'
 import { useHaptics } from '@/composables/useHaptics'
 import { useAutoPause } from '@/composables/useAutoPause'
 import { useScoreFloats } from '@/composables/useScoreFloats'
@@ -124,20 +126,12 @@ const infoItems = computed(() => [
 
 // 存档
 const save = useGameSave('2048')
-let saveTimer: ReturnType<typeof setTimeout> | null = null
-
-function scheduleSave() {
-  if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => {
-    if (gameOverDialog.value) return
-    save.saveGame({ grid: grid.value, score: score.value, won: won.value, history: history.value })
-  }, 300)
-}
-
-function clearSave() {
-  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
-  save.clearGame()
-}
+const { scheduleSave, clearSave } = useAutoSave('2048', () => ({
+  grid: grid.value,
+  score: score.value,
+  won: won.value,
+  history: history.value
+}), { beforeSave: () => !gameOverDialog.value })
 
 watch([grid, score, won, history], scheduleSave, { deep: true })
 onMounted(() => {
@@ -153,7 +147,6 @@ onMounted(() => {
     restart({ restoring: true })
   }
 })
-onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer) })
 
 const gameActive = () => !gameOverDialog.value && !winDialog.value && !showResume.value
 
@@ -536,15 +529,6 @@ function isAnimating(x: number, y: number): boolean {
   animation: pop 0.15s ease-out;
 }
 
-@keyframes pop {
-  0% { transform: scale(0); }
-  100% { transform: scale(1); }
-}
-
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 30px rgba(255, 215, 0, 0.3), 0 0 15px rgba(255, 0, 110, 0.15); }
-  50% { box-shadow: 0 0 50px rgba(255, 215, 0, 0.5), 0 0 25px rgba(255, 0, 110, 0.3); }
-}
 
 .extra-btn {
   background: var(--game-btn-bg);

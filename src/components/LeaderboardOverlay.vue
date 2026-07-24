@@ -7,13 +7,8 @@
       <!-- 标题 -->
       <h3>{{ gameName }} 排行榜</h3>
 
-      <!-- Supabase 未配置 -->
-      <div v-if="!supabaseConfigured" class="submit-area">
-        <p class="status error">排行榜未配置：缺少 Supabase 环境变量</p>
-      </div>
-
-      <!-- 提交阶段：有分数且尚未提交 -->
-      <div v-else-if="mode === 'submit'" class="submit-area">
+      <!-- 提交阶段：已配置 Supabase 且尚未提交 -->
+      <div v-if="supabaseConfigured && mode === 'submit'" class="submit-area">
         <p class="score-line">你的得分 <strong>{{ score }}</strong></p>
         <div class="nickname-row">
           <input
@@ -29,8 +24,8 @@
         <button class="skip-btn" @click="switchToView">稍后再说</button>
       </div>
 
-      <!-- 排行榜展示 -->
-      <div v-else class="leaderboard-area">
+      <!-- 排行榜展示（已配置） -->
+      <div v-else-if="supabaseConfigured" class="leaderboard-area">
         <p v-if="loading" class="status">加载中…</p>
         <template v-else-if="error">
           <p class="status error">{{ error }}</p>
@@ -48,23 +43,42 @@
             <span class="rank-score">{{ entry.score }}</span>
           </li>
         </ul>
-        <button
-          v-if="props.score > 0"
-          class="play-again-btn"
-          @click="emit('replay')"
-        >
-          再来一局
-        </button>
       </div>
+
+      <!-- Supabase 未配置：仅展示成绩（成绩仍可分享） -->
+      <div v-else class="submit-area">
+        <p v-if="props.score > 0" class="score-line">你的得分 <strong>{{ score }}</strong></p>
+        <p class="status error">排行榜未配置（成绩仍可分享）</p>
+      </div>
+
+      <!-- 分享成绩：只要有分数就常驻，不依赖 Supabase -->
+      <button
+        v-if="props.score > 0"
+        class="share-btn"
+        :class="{ done: shareState !== 'idle' }"
+        @click="shareScore"
+      >
+        {{ shareLabel }}
+      </button>
+
+      <!-- 再来一局：非提交阶段 -->
+      <button
+        v-if="props.score > 0 && mode !== 'submit'"
+        class="play-again-btn"
+        @click="emit('replay')"
+      >
+        再来一局
+      </button>
     </div>
   </div>
   </Transition>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onUnmounted } from 'vue'
 import { supabase } from '@/lib/supabase'
 import { useLeaderboard, useLeaderboardAutoRefresh } from '@/composables/useLeaderboard'
+import { rankLabel } from '@/lib/rank'
 
 type Mode = 'submit' | 'view' | 'viewing-after-submit'
 
@@ -93,11 +107,11 @@ const mode = ref<Mode>('view')
 
 watch(() => props.visible, (val) => {
   if (!val) return
-  if (props.score > 0) {
+  if (props.score > 0 && supabaseConfigured.value) {
     mode.value = 'submit'
   } else {
     mode.value = 'view'
-    fetch()
+    if (supabaseConfigured.value) fetch()
   }
 }, { immediate: true })
 
@@ -117,9 +131,72 @@ function switchToView() {
   fetch()
 }
 
-function rankLabel(idx: number): string {
-  return ['🥇', '🥈', '🥉'][idx] ?? `${idx + 1}`
+// 一键分享成绩：移动端走原生系统分享面板；桌面端直接复制到剪贴板（更稳，避免系统分享面板卡死）
+const shareState = ref<'idle' | 'shared' | 'copied'>('idle')
+let shareTimer: number | undefined
+
+// 触屏设备（手机/平板）才走 navigator.share；桌面直接复制，避免系统分享面板卡死转圈
+const isTouchDevice = computed(
+  () => typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches === true
+)
+
+const shareLabel = computed(() => {
+  if (shareState.value === 'shared') return '已分享 ✓'
+  if (shareState.value === 'copied') return '已复制 ✓'
+  return isTouchDevice.value ? '分享成绩' : '复制成绩'
+})
+
+async function shareScore() {
+  const url = `${location.origin}/#/${props.game}`
+  const text = `我在「${props.gameName}」拿了 ${props.score} 分！来小游戏合集挑战我：${url}`
+  // 桌面端 navigator.share 常打开系统分享面板后卡死（无可用目标/缺 url），直接复制最稳；
+  // 仅移动端走原生分享（可分享到微信等）。
+  if (navigator.share && isTouchDevice.value) {
+    try {
+      await navigator.share({ title: '小游戏合集', text, url })
+      markShared('shared')
+      return
+    } catch (err) {
+      // 用户主动取消（AbortError）则保持原状；其它失败（无分享目标等）降级复制
+      if ((err as Error)?.name === 'AbortError') return
+    }
+  }
+  try {
+    await copyText(text)
+    markShared('copied')
+  } catch {
+    // 复制也失败：保持原状
+  }
 }
+
+async function copyText(text: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+  } else {
+    fallbackCopy(text)
+  }
+}
+
+function markShared(state: 'shared' | 'copied') {
+  shareState.value = state
+  clearTimeout(shareTimer)
+  shareTimer = window.setTimeout(() => (shareState.value = 'idle'), 2000)
+}
+
+function fallbackCopy(text: string) {
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.style.position = 'fixed'
+  ta.style.top = '-9999px'
+  ta.style.opacity = '0'
+  document.body.appendChild(ta)
+  ta.focus()
+  ta.select()
+  try { document.execCommand('copy') } catch { /* ignore */ }
+  document.body.removeChild(ta)
+}
+
+onUnmounted(() => clearTimeout(shareTimer))
 </script>
 
 <style scoped>
@@ -131,7 +208,7 @@ function rankLabel(idx: number): string {
   align-items: center;
   justify-content: center;
   z-index: 300;
-  padding: max(20px, env(safe-area-inset-top) + 16px) 20px max(20px, env(safe-area-inset-bottom) + 16px);
+  padding: max(24px, env(safe-area-inset-top) + 16px) 20px max(24px, env(safe-area-inset-bottom) + 16px);
 }
 
 .leaderboard-enter-active {
@@ -335,5 +412,32 @@ h3 {
 .play-again-btn:hover {
   transform: scale(1.02);
   box-shadow: 0 0 20px color-mix(in srgb, var(--game-accent, #818CF8) 40%, transparent);
+}
+
+/* 分享成绩（次级按钮，区别于主按钮"再来一局"） */
+.share-btn {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  background: rgba(129, 140, 248, 0.1);
+  border: 1px solid rgba(129, 140, 248, 0.4);
+  color: #C7D2FE;
+  padding: 12px;
+  font-size: 1em;
+  font-weight: 600;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.share-btn:hover {
+  background: rgba(129, 140, 248, 0.2);
+  box-shadow: 0 0 16px rgba(129, 140, 248, 0.3);
+}
+
+.share-btn.done {
+  border-color: #34D399;
+  color: #34D399;
+  background: rgba(52, 211, 153, 0.12);
 }
 </style>

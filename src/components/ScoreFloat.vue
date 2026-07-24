@@ -34,10 +34,4 @@ defineProps<{ popups: ScorePopup[] }>()
   white-space: nowrap;
   animation: scoreFloatUp 0.8s ease-out forwards;
 }
-
-@keyframes scoreFloatUp {
-  0% { opacity: 0; transform: translate(-50%, -30%) scale(0.8); }
-  20% { opacity: 1; }
-  100% { opacity: 0; transform: translate(-50%, -160%) scale(1.1); }
-}
 </style>

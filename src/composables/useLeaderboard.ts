@@ -29,10 +29,34 @@ export interface LeaderboardEntry {
 // 全局刷新信号：每次成功提交后递增，所有 LeaderboardStrip 自动重新拉取
 export const leaderboardVersion = ref(0)
 
+// fetch 去重缓存：key = `${game}:${limit}`
+const fetchInFlight = new Map<string, Promise<void>>()
+
 export function useLeaderboard(game: string, limit = 10) {
   const entries = ref<LeaderboardEntry[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
+
+  async function doFetch() {
+    if (!supabase) return
+    loading.value = true
+    error.value = null
+    try {
+      const query = supabase
+        .from('leaderboard')
+        .select('*')
+        .eq('game', game)
+        .order('score', { ascending: false })
+        .limit(limit)
+      const { data, error: err } = await withTimeout(query)
+      if (err) throw err
+      entries.value = data ?? []
+    } catch (e) {
+      error.value = friendlyError((e as Error).message)
+    } finally {
+      loading.value = false
+    }
+  }
 
   // 给任意 Promise 加超时保护
   function withTimeout<T>(p: PromiseLike<T>, ms = 5000): Promise<T> {
@@ -52,50 +76,45 @@ export function useLeaderboard(game: string, limit = 10) {
 
   async function fetch() {
     if (!supabase) return
-    loading.value = true
-    error.value = null
-    try {
-      const query = supabase
-        .from('leaderboard')
-        .select('*')
-        .eq('game', game)
-        .order('score', { ascending: false })
-        .limit(limit)
-        .then()
-      const { data, error: err } = await withTimeout(query)
-      if (err) throw err
-      entries.value = data ?? []
-    } catch (e) {
-      error.value = friendlyError((e as Error).message)
-    } finally {
-      loading.value = false
-    }
+    // 请求去重：相同 game 的并发 fetch 共享同一 Promise，避免 strip+overlay 双订阅重复请求
+    const key = `${game}:${limit}`
+    const inFlight = fetchInFlight.get(key)
+    if (inFlight) return inFlight
+    const p = doFetch()
+    fetchInFlight.set(key, p)
+    p.finally(() => { if (fetchInFlight.get(key) === p) fetchInFlight.delete(key) })
+    return p
   }
 
   async function submit(nickname: string, score: number): Promise<boolean> {
     if (!supabase) return false
     const name = nickname.trim() || '匿名玩家'
+    let wrote = false
     try {
       const { data: existing } = await withTimeout(
-        supabase.from('leaderboard').select('id, score').eq('game', game).eq('nickname', name).maybeSingle().then()
+        supabase.from('leaderboard').select('id, score').eq('game', game).eq('nickname', name).maybeSingle()
       )
       if (existing) {
         if (score > existing.score) {
           const { error: err } = await withTimeout(
-            supabase.from('leaderboard').update({ score }).eq('id', existing.id).then()
+            supabase.from('leaderboard').update({ score }).eq('id', existing.id)
           )
           if (err) throw err
+          wrote = true
         }
       } else {
         const { error: err } = await withTimeout(
-          supabase.from('leaderboard').insert({ game, nickname: name, score }).then()
+          supabase.from('leaderboard').insert({ game, nickname: name, score })
         )
         if (err) throw err
+        wrote = true
       }
     } catch (e) {
       error.value = friendlyError((e as Error).message)
       return false
     }
+    // 仅在真实写入成功后触发版本广播与成就检查，避免未提交时误解锁成就
+    if (!wrote) return true
     leaderboardVersion.value++
     // 全局广播会自动触发 strip 刷新，此处无需单独 await fetch()
 

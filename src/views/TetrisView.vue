@@ -2,6 +2,7 @@
   <GameLayout
     title="俄罗斯方块"
     accentColor="#00FFFF"
+    entrance="tetris"
     gradientEnd="#FF006E"
     :hints="['Enter 开始', '方向键移动 上旋转 下软降 空格硬降']"
     :infoItems="[{ label: '分数', value: score }, { label: '行数', value: lines }]"
@@ -98,7 +99,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
@@ -107,6 +108,7 @@ import { useSound } from '@/composables/useSound'
 import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
 import { useGameSave } from '@/composables/useGameSave'
+import { useAutoSave } from '@/composables/useAutoSave'
 import { useAutoPause } from '@/composables/useAutoPause'
 import { useHaptics } from '@/composables/useHaptics'
 import { useScoreFloats } from '@/composables/useScoreFloats'
@@ -152,27 +154,14 @@ const lastScore = ref(0)
 
 // 存档
 const save = useGameSave('tetris')
-let saveTimer: ReturnType<typeof setTimeout> | null = null
-
-function scheduleSave() {
-  if (saveTimer) clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => {
-    if (!isPlaying.value || gameOver.value) return
-    save.saveGame({
-      grid: grid.value,
-      current: current.value,
-      nextPiece: nextPiece.value,
-      score: score.value,
-      lines: lines.value,
-      isPlaying: isPlaying.value
-    })
-  }, 300)
-}
-
-function clearSave() {
-  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null }
-  save.clearGame()
-}
+const { scheduleSave, clearSave } = useAutoSave('tetris', () => ({
+  grid: grid.value,
+  current: current.value,
+  nextPiece: nextPiece.value,
+  score: score.value,
+  lines: lines.value,
+  isPlaying: isPlaying.value
+}), { beforeSave: () => isPlaying.value && !gameOver.value })
 
 watch([grid, current, nextPiece, score, lines, isPlaying], scheduleSave, { deep: true })
 onMounted(() => {
@@ -189,17 +178,33 @@ onMounted(() => {
     showResume.value = true
   }
 })
-onUnmounted(() => { if (saveTimer) clearTimeout(saveTimer) })
-
+// 缓存显示网格结构，避免每次 computed 重新分配 200 个对象
+const displayGridCache = ref<{ color: string | null }[][]>([])
 const displayGrid = computed(() => {
-  const d = grid.value.map(row => row.map(c => ({ color: c.color })))
+  const g = grid.value
+  const rows = g.length
+  const cols = rows > 0 ? g[0].length : 0
+  let d = displayGridCache.value
+  // 尺寸变化时重建缓存（首次或网格尺寸改变）
+  if (d.length !== rows || (rows > 0 && d[0]?.length !== cols)) {
+    d = Array.from({ length: rows }, (_, y) =>
+      Array.from({ length: cols }, (_, x) => ({ color: g[y][x].color }))
+    )
+    displayGridCache.value = d
+  } else {
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        d[y][x].color = g[y][x].color
+      }
+    }
+  }
   if (current.value) {
     current.value.shape.forEach((row, dy) => {
       row.forEach((c, dx) => {
         if (c) {
           const y = current.value!.y + dy
           const x = current.value!.x + dx
-          if (y >= 0 && y < GRID_H && x >= 0 && x < GRID_W) {
+          if (y >= 0 && y < rows && x >= 0 && x < cols) {
             d[y][x].color = current.value!.color
           }
         }
@@ -255,19 +260,19 @@ useGameKeyboard({
     },
     {
       key: ['ArrowLeft', 'a', 'A'],
-      handler: () => { if (isPlaying.value && !gameOver.value && !paused.value) move(-1) }
+      handler: () => { if (isPlaying.value && !gameOver.value && !paused.value && !showResume.value) move(-1) }
     },
     {
       key: ['ArrowRight', 'd', 'D'],
-      handler: () => { if (isPlaying.value && !gameOver.value && !paused.value) move(1) }
+      handler: () => { if (isPlaying.value && !gameOver.value && !paused.value && !showResume.value) move(1) }
     },
     {
       key: ['ArrowDown', 's', 'S'],
-      handler: () => { if (isPlaying.value && !gameOver.value && !paused.value) softDrop() }
+      handler: () => { if (isPlaying.value && !gameOver.value && !paused.value && !showResume.value) softDrop() }
     },
     {
       key: ['ArrowUp', 'w', 'W'],
-      handler: () => { if (isPlaying.value && !gameOver.value && !paused.value) switchShape() }
+      handler: () => { if (isPlaying.value && !gameOver.value && !paused.value && !showResume.value) switchShape() }
     },
     {
       key: ['p', 'P', 'Escape'],

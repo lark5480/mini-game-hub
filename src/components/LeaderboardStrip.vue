@@ -37,6 +37,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useLeaderboard, useLeaderboardAutoRefresh } from '@/composables/useLeaderboard'
+import { rankLabel } from '@/lib/rank'
 
 const props = defineProps<{
   game: string
@@ -73,9 +74,6 @@ function toggle() {
   collapsed.value = !collapsed.value
 }
 
-function rankLabel(idx: number): string {
-  return ['🥇', '🥈', '🥉'][idx] ?? `${idx + 1}`
-}
 </script>
 
 <style scoped>
