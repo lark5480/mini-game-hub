@@ -16,7 +16,7 @@ export interface RoomApi {
   peerIds: Ref<string[]>
   myId: string
   send: (type: string, data: unknown) => void
-  on: (type: string, handler: (data: any) => void) => () => void
+  on: (type: string, handler: (data: any, from?: string) => void) => () => void
   onPresenceSync: (cb: (ids: string[]) => void) => void
   track: (meta: Record<string, unknown>) => void
   leave: () => void
@@ -36,8 +36,23 @@ function noopRoom(myId: string): RoomApi {
   }
 }
 
+// 稳定的本机身份：写入 localStorage，刷新页面后保持不变 → 角色(X/O)不因刷新而翻转。
+function getStableId(): string {
+  const KEY = 'ttt2p_uid'
+  try {
+    let id = localStorage.getItem(KEY)
+    if (!id) {
+      id = globalThis.crypto?.randomUUID?.() ?? `id-${Math.random().toString(36).slice(2)}`
+      localStorage.setItem(KEY, id)
+    }
+    return id
+  } catch {
+    return globalThis.crypto?.randomUUID?.() ?? `id-${Math.random().toString(36).slice(2)}`
+  }
+}
+
 export function useRealtimeRoom(roomCode: string, meta: Record<string, unknown> = {}): RoomApi {
-  const myId = (globalThis.crypto?.randomUUID?.() ?? `id-${Math.random().toString(36).slice(2)}`)
+  const myId = getStableId()
 
   // 未配置 Supabase：降级，视图应提示如何开启联机。
   if (!supabase) return noopRoom(myId)
@@ -46,7 +61,7 @@ export function useRealtimeRoom(roomCode: string, meta: Record<string, unknown> 
   const peerIds = ref<string[]>([])
   const peerCount = ref(0)
 
-  const handlers = new Map<string, Set<(data: any) => void>>()
+  const handlers = new Map<string, Set<(data: any, from?: string) => void>>()
   const presenceCallbacks: ((ids: string[]) => void)[] = []
 
   const channel = supabase.channel(`room:${roomCode}`, {
@@ -57,8 +72,10 @@ export function useRealtimeRoom(roomCode: string, meta: Record<string, unknown> 
   })
 
   channel.on('broadcast', { event: 'msg' }, (payload: any) => {
-    const set = handlers.get(payload?.payload?.type)
-    if (set) set.forEach(h => h(payload?.payload?.data))
+    const type = payload?.payload?.type
+    const from = payload?.payload?.from as string | undefined
+    const set = handlers.get(type)
+    if (set) set.forEach(h => h(payload?.payload?.data, from))
   })
 
   channel.on('presence', { event: 'sync' }, () => {
@@ -79,7 +96,7 @@ export function useRealtimeRoom(roomCode: string, meta: Record<string, unknown> 
   })
 
   function send(type: string, data: unknown) {
-    channel.send({ type: 'broadcast', event: 'msg', payload: { type, data } })
+    channel.send({ type: 'broadcast', event: 'msg', payload: { type, from: myId, data } })
   }
 
   function on(type: string, handler: (data: any) => void) {
