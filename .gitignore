@@ -21,6 +21,9 @@ dist-ssr
 # Caches
 .cache
 
+# Vite 编译配置时的临时产物（每次启动/构建生成一个，正常会自动清理，异常残留时忽略）
+vite.config.ts.timestamp-*
+
 # Temp (font fetch scratch dir, cannot be deleted by sandbox policy)
 .tmp-font
 

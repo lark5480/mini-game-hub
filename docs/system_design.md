@@ -9,7 +9,7 @@ Vue 3 + TypeScript + Vite + Pinia + Vue Router，原生 CSS（CSS 变量驱动�
 ```
 App.vue（全局样式 + scanlines 特效）
 └── <router-view>
-    ├── HomeView          — 首页游戏选择（9 张卡片）
+    ├── HomeView          — 首页游戏选择（11 张卡片）
     ├── SokobanView       — 推箱子（v-for 网格）
     ├── LinkGameView      — 连连看（v-for 网格 + 键盘光标）
     ├── CatchFruitView    — 接水果（v-for 移动元素）
@@ -17,7 +17,9 @@ App.vue（全局样式 + scanlines 特效）
     ├── TetrisView        — 俄罗斯方块（v-for 网格 + 右侧面板）
     ├── BreakoutView      — 弹球打砖块（Canvas 2D）
     ├── Game2048View      — 2048（v-for 网格 + 撤销历史）
-    └── WhackAMoleView    — 打地鼠（setInterval/Timeout 点触）
+    ├── WhackAMoleView    — 打地鼠（setInterval/Timeout 点触）
+    ├── SimonView         — 西蒙记忆灯（看灯序复述）
+    └── TicTacToeOnlineView — 井字棋·双人（在线实时对战）
 ```
 
 ## 共享组件
