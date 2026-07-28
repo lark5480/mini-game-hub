@@ -31,10 +31,11 @@
 
         <div v-if="room.status.value === 'connecting'" class="banner">连接中…</div>
         <div v-else-if="room.status.value === 'error'" class="banner banner-warn">连接异常，请刷新重试</div>
+        <div v-else-if="amSpectator" class="banner banner-warn">房间已满（已有两人），请换房间或刷新等待空位</div>
         <div v-else-if="!opponentPresent" class="banner banner-wait">
           等待对手加入…（把上面的房间号发给好友即可同玩）
         </div>
-        <div v-else-if="opponentLeft" class="banner banner-warn">对手已离开，等待重连…</div>
+        <div v-else-if="opponentLeft" class="banner banner-warn">对手已离开，可点"重新开始"重置或刷新重新匹配</div>
 
         <div
           class="turn-indicator"
@@ -150,28 +151,39 @@ const winningLine = ref<number[]>([])
 const record = ref({ win: 0, lose: 0, draw: 0 })
 const copied = ref(false)
 
-const opponentPresent = computed(() => room.peerCount.value >= 2)
-const opponentLeft = computed(() => room.peerCount.value < 2 && boardHasMoves())
+// 锁定两名玩家（[X_id, O_id]）：两人同时在线即锁定，任一人离开不足两人时解锁重排，
+// 避免第三人加入时因 id 排序而抢占角色。
+const lockedPlayers = ref<string[]>([])
+const opponentId = ref<string | null>(null)
+const amSpectator = computed(() => lockedPlayers.value.length >= 2 && !lockedPlayers.value.includes(room.myId))
+const opponentPresent = computed(
+  () => !!opponentId.value && room.peerIds.value.includes(opponentId.value),
+)
+const opponentLeft = computed(() => !opponentPresent.value && boardHasMoves())
 const myTurn = computed(
   () => myRole.value !== null && !gameOver.value && turn.value === myRole.value && opponentPresent.value,
 )
-const hints = computed(() =>
-  myRole.value
-    ? ['分享房间号给好友', `你执 ${myRole.value}（${myRole.value === 'X' ? '先手' : '后手'}）`]
-    : ['连接中…'],
-)
+const hints = computed(() => {
+  if (amSpectator.value) return ['房间已满', '请换房间或刷新等待空位']
+  if (myRole.value)
+    return ['分享房间号给好友', `你执 ${myRole.value}（${myRole.value === 'X' ? '先手' : '后手'}）`]
+  return ['连接中…']
+})
 
 const statusText = computed(() => {
   switch (room.status.value) {
     case 'no-supabase': return '未配置 Supabase'
     case 'connecting': return '连接中…'
     case 'error': return '连接异常'
-    case 'connected': return opponentPresent.value ? '已连接' : '等待对手…'
+    case 'connected':
+    if (amSpectator.value) return '房间已满'
+    return opponentPresent.value ? '已连接' : '等待对手…'
     default: return ''
   }
 })
 
 const turnLabel = computed(() => {
+  if (amSpectator.value) return '房间已满，无法加入'
   if (room.status.value !== 'connected') return '连接中…'
   if (!opponentPresent.value) return '等待对手加入…'
   if (gameOver.value) {
@@ -200,43 +212,81 @@ const resultIcon = computed<'success' | 'fail' | 'info'>(() => {
 })
 const gameOverDialog = ref(false)
 
-// ---- 角色分配：presence 成员 id 排序，第一个=X（先手），第二个=O。两端算出同一顺序 → 一致 ----
+// ---- 角色分配：锁定前两位在线成员为 [X, O]，避免第三人加入时抢占角色 ----
 let peerCountPrev = 0
 room.onPresenceSync((ids: string[]) => {
-  if (ids.length === 0) {
-    myRole.value = null
-  } else {
-    myRole.value = ids[0] === room.myId ? 'X' : 'O'
+  const present = ids.slice().sort()
+  // 已锁定：仅当原两人都离开才解锁，保证单人掉线重连后角色不翻转
+  if (lockedPlayers.value.length === 2) {
+    const here = lockedPlayers.value.filter(id => present.includes(id))
+    if (here.length === 0) lockedPlayers.value = []
   }
-  // 后加入者（O）向先手请求当前局面，保证中途加入/重连后棋盘一致
-  if (peerCountPrev < 2 && ids.length >= 2 && myRole.value === 'O') {
+  if (lockedPlayers.value.length === 0 && present.length >= 2) {
+    lockedPlayers.value = present.slice(0, 2)
+  }
+  const iAmP = lockedPlayers.value.includes(room.myId)
+  myRole.value = iAmP ? (lockedPlayers.value[0] === room.myId ? 'X' : 'O') : null
+  opponentId.value = iAmP ? (lockedPlayers.value.find(id => id !== room.myId) ?? null) : null
+  // 中途加入 / 重连且本地无棋局 → 向对手请求权威状态（双向：任一有棋局的端都会回）
+  if (peerCountPrev < 2 && present.length >= 2 && !boardHasMoves() && iAmP) {
     setTimeout(() => room.send('sync-req', {}), 300)
   }
-  peerCountPrev = ids.length
+  peerCountPrev = present.length
 })
 
-room.on('move', (data: any) => applyMove(data.index as number, data.by as Cell))
-room.on('reset', () => resetBoard(false))
-room.on('sync-req', () => room.send('state', snapshot()))
-room.on('state', (s: any) => applyState(s))
+// 仅接受对手(锁定玩家中的另一方)的消息，忽略第三者；离散落子事件，各自确定性推进
+room.on('move', (data: any, from?: string) => {
+  if (!from || from !== opponentId.value) return
+  if (!data || typeof data.index !== 'number') return
+  applyMove(data.index, data.by as Cell)
+})
+room.on('reset', (_data: any, from?: string) => {
+  if (from && opponentId.value && from !== opponentId.value) return
+  resetBoard(false)
+})
+room.on('sync-req', () => {
+  if (!boardHasMoves()) return
+  room.send('state', authorizedState())
+})
+room.on('state', (s: any) => applyRemoteState(s))
 
-function snapshot() {
+// 仅同步权威所需的最小状态（不含 result，result 由接收方按自身角色推导，避免视角错乱）
+function authorizedState() {
   return {
     board: board.value.slice(),
     turn: turn.value,
     gameOver: gameOver.value,
-    result: result.value,
-    winningLine: winningLine.value.slice(),
   }
 }
 
-function applyState(s: any) {
+// 接收方采用对手的权威局面；若已终局则按本地角色推导胜负并更新战绩
+function applyRemoteState(s: any) {
   if (!s || !Array.isArray(s.board) || s.board.length !== 9) return
   board.value = s.board
   turn.value = s.turn === 'O' ? 'O' : 'X'
   gameOver.value = !!s.gameOver
-  result.value = (s.result as Result) ?? null
-  winningLine.value = Array.isArray(s.winningLine) ? s.winningLine : []
+  if (gameOver.value) {
+    if (result.value === null) finalizeFromBoard()
+  } else {
+    result.value = null
+    winningLine.value = []
+    gameOverDialog.value = false
+  }
+}
+
+// 从棋盘推导终局结果（按本端角色），更新战绩与反馈
+function finalizeFromBoard() {
+  const line = findWinningLine(board.value)
+  winningLine.value = line ?? []
+  if (line) {
+    result.value = board.value[line[0]] === myRole.value ? 'win' : 'lose'
+  } else {
+    result.value = 'draw'
+  }
+  if (result.value === 'win') { record.value.win++; sound.win(); haptics.win() }
+  else if (result.value === 'lose') { record.value.lose++; sound.gameOver(); haptics.error() }
+  else { record.value.draw++; haptics.tap() }
+  gameOverDialog.value = true
 }
 
 function boardHasMoves(): boolean {
