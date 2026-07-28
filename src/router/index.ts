@@ -11,6 +11,8 @@ const GAME_COMPONENTS: Record<string, string> = {
   '2048':      'Game2048View',
   whackamole:  'WhackAMoleView',
   'tic-tac-toe': 'TicTacToeView',
+  'simon':       'SimonView',
+  'tic-tac-toe-2p': 'TicTacToeOnlineView',
 }
 
 const gameRoutes = GAMES.map(g => ({

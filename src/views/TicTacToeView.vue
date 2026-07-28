@@ -34,6 +34,13 @@
         </button>
       </div>
 
+      <div class="difficulty-row">
+        <span class="diff-label">难度</span>
+        <button class="diff-btn" :class="{ active: difficulty === 'easy' }" @click="setDifficulty('easy')">简单</button>
+        <button class="diff-btn" :class="{ active: difficulty === 'hard' }" @click="setDifficulty('hard')">困难</button>
+        <span class="diff-tip">{{ difficulty === 'hard' ? 'AI 不失误 · 最多逼平' : 'AI 会失误 · 可取胜' }}</span>
+      </div>
+
       <div class="score-row">
         <div class="score-box">
           <span class="score-label">胜利</span>
@@ -134,6 +141,13 @@ const showLeaderboard = ref(false)
 const lastScore = ref(0)
 const stats = ref({ wins: 0, draws: 0, losses: 0 })
 
+// 难度：困难=纯 minimax 最优（永不输、最多逼平）；简单=保留随机失误（可取胜）
+type Difficulty = 'easy' | 'hard'
+const difficulty = ref<Difficulty>('hard')
+function setDifficulty(d: Difficulty) {
+  difficulty.value = d
+}
+
 const save = useGameSave('tic-tac-toe')
 const { scheduleSave, clearSave } = useAutoSave('tic-tac-toe', () => ({
   board: board.value,
@@ -202,7 +216,7 @@ function handleCellClick(index: number) {
 
 function makeBotMove() {
   if (gameOver.value) return
-  const move = bestMove(board.value)
+  const move = bestMove(board.value, difficulty.value === 'hard')
   if (move !== -1) {
     board.value[move] = BOT
     sound.select()
@@ -343,7 +357,7 @@ function minimax(b: Board, current: Cell, alpha: number, beta: number): number {
 // AI 犯错概率：在"不立即输"的走法中随机选，给玩家留出可乘之机
 const BOT_MISTAKE_CHANCE = 0.3
 
-function bestMove(b: Board): number {
+function bestMove(b: Board, hard: boolean): number {
   const moves: { idx: number; score: number }[] = []
   for (let i = 0; i < 9; i++) {
     if (b[i] !== null) continue
@@ -354,17 +368,16 @@ function bestMove(b: Board): number {
   }
   if (moves.length === 0) return -1
 
-  // 找出最优分数
   const bestScore = Math.max(...moves.map(m => m.score))
 
-  // 以一定概率"犯错"：从"不能获胜"的走法中随机选（含平局/落败局面）
-  if (Math.random() < BOT_MISTAKE_CHANCE) {
+  // 简单档：以一定概率"犯错"，给玩家可乘之机
+  if (!hard && Math.random() < BOT_MISTAKE_CHANCE) {
     const nonWinning = moves.filter(m => m.score <= 0)
     const pool = nonWinning.length > 0 ? nonWinning : moves
     return pool[Math.floor(Math.random() * pool.length)].idx
   }
 
-  // 正常情况：选最优
+  // 困难档（或正常情况）：永远选最优，永不输、最多逼平
   const best = moves.filter(m => m.score === bestScore)
   return best[Math.floor(Math.random() * best.length)].idx
 }
@@ -499,6 +512,47 @@ onUnmounted(() => {
 .score-row {
   display: flex;
   gap: 16px;
+}
+
+.difficulty-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.diff-label {
+  font-size: 0.85em;
+  color: var(--game-text-muted);
+  margin-right: 2px;
+}
+
+.diff-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  padding: 6px 18px;
+  border-radius: 20px;
+  font-size: 0.9em;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.diff-btn:hover {
+  border-color: rgba(0, 207, 255, 0.5);
+}
+
+.diff-btn.active {
+  background: linear-gradient(135deg, #FF006E, #00CFFF);
+  border-color: transparent;
+  box-shadow: 0 4px 15px rgba(255, 0, 110, 0.3);
+}
+
+.diff-tip {
+  font-size: 0.78em;
+  color: var(--game-text-muted);
 }
 
 .score-box {

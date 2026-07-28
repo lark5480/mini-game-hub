@@ -91,6 +91,16 @@ const TicTacToeIcon = () => [
   h('circle', { cx: '12', cy: '12', r: '2.2', stroke: '#00CFFF', 'stroke-width': '1.6', fill: 'none' }),
   h('path', { d: 'M12.5 19.5l3 3M15.5 19.5l-3 3', stroke: '#FF006E', 'stroke-width': '1.8', fill: 'none', 'stroke-linecap': 'round' })
 ]
+const TicTacToe2PIcon = () => [
+  h('line', { x1: '8', y1: '3', x2: '8', y2: '21', stroke: 'currentColor', 'stroke-width': '1.5' }),
+  h('line', { x1: '16', y1: '3', x2: '16', y2: '21', stroke: 'currentColor', 'stroke-width': '1.5' }),
+  h('line', { x1: '3', y1: '8', x2: '21', y2: '8', stroke: 'currentColor', 'stroke-width': '1.5' }),
+  h('line', { x1: '3', y1: '16', x2: '21', y2: '16', stroke: 'currentColor', 'stroke-width': '1.5' }),
+  h('path', { d: 'M4.5 4.5l3 3M7.5 4.5l-3 3', stroke: '#FF9E00', 'stroke-width': '1.8', fill: 'none', 'stroke-linecap': 'round' }),
+  h('circle', { cx: '12', cy: '12', r: '2', stroke: '#B967FF', 'stroke-width': '1.6', fill: 'none' }),
+  h('circle', { cx: '18.5', cy: '5.5', r: '1.6', fill: '#FF9E00' }),
+  h('circle', { cx: '5.5', cy: '18.5', r: '1.6', fill: '#B967FF' }),
+]
 const MoleIcon = () => [
   h('ellipse', { cx: '12', cy: '16', rx: '8', ry: '6', fill: 'currentColor' }),
   h('circle', { cx: '8', cy: '14', r: '4', fill: 'currentColor' }),
@@ -101,6 +111,13 @@ const MoleIcon = () => [
   h('ellipse', { cx: '12', cy: '11.5', rx: '2', ry: '1.5', fill: '#FF69B4' })
 ]
 
+const SimonIcon = () => [
+  h('path', { d: 'M12 3a9 9 0 0 0-9 9h9z', fill: '#05FFA1' }),
+  h('path', { d: 'M12 3a9 9 0 0 1 9 9h-9z', fill: '#FF006E' }),
+  h('path', { d: 'M3 12a9 9 0 0 0 9 9v-9z', fill: '#FFD700' }),
+  h('path', { d: 'M21 12a9 9 0 0 1-9 9v-9z', fill: '#00CFFF' }),
+  h('circle', { cx: '12', cy: '12', r: '3', fill: '#0D0D1A' })
+]
 const iconMap: Record<string, () => unknown> = {
   sokoban: BoxIcon,
   link: LinkIcon,
@@ -111,6 +128,8 @@ const iconMap: Record<string, () => unknown> = {
   '2048': Game2048Icon,
   whackamole: MoleIcon,
   'tic-tac-toe': TicTacToeIcon,
+  simon: SimonIcon,
+  'tic-tac-toe-2p': TicTacToe2PIcon,
 }
 
 const games = computed(() =>

@@ -198,5 +198,6 @@ export function useSound() {
     pause,
     resume,
     unlock,
+    tone,
   }
 }
