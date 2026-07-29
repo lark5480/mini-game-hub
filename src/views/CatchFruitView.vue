@@ -37,8 +37,8 @@
         <template #extra>
           <button v-if="!isPlaying" @click="startGame" class="start-btn">开始</button>
           <template v-else>
-            <button v-if="!paused" @click="togglePause" class="extra-btn">暂停</button>
-            <button v-else @click="togglePause" class="extra-btn">继续</button>
+            <button v-if="!paused" @click="toggle" class="extra-btn">暂停</button>
+            <button v-else @click="toggle" class="extra-btn">继续</button>
             <button @click="startGame" class="extra-btn">重新开始</button>
           </template>
         </template>
@@ -61,7 +61,7 @@
       @update:visible="showLeaderboard = $event"
       @replay="startGame"
     />
-    <PauseOverlay :visible="paused" @resume="togglePause" />
+    <PauseOverlay :visible="paused" @resume="toggle" />
   </GameLayout>
 </template>
 
@@ -71,7 +71,7 @@ import { useRouter } from 'vue-router'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useGameLoop } from '@/composables/useGameLoop'
 import { useSound } from '@/composables/useSound'
-import { useAutoPause } from '@/composables/useAutoPause'
+import { useGamePause } from '@/composables/useGamePause'
 import { useHaptics } from '@/composables/useHaptics'
 import { useGameStore } from '@/stores/game'
 import { useScoreFloats } from '@/composables/useScoreFloats'
@@ -107,16 +107,10 @@ const gameLoop = useGameLoop({
     if (Math.random() < 0.03) spawnFruit()
   }
 })
-const paused = gameLoop.paused
-
-function togglePause() {
-  if (gameOver.value || !isPlaying.value) return
-  if (paused.value) { gameLoop.resume(); sound.resume() }
-  else { gameLoop.pause(); sound.pause() }
-}
-
-useAutoPause(() => {
-  if (isPlaying.value && !gameOver.value) gameLoop.pause()
+const { paused, toggle } = useGamePause({
+  canPause: () => isPlaying.value && !gameOver.value,
+  onPause: gameLoop.pause,
+  onResume: gameLoop.resume
 })
 
 const boardEl = ref<HTMLElement | null>(null)
@@ -149,7 +143,7 @@ useGameKeyboard({
     },
     {
       key: ['p', 'P', 'Escape'],
-      handler: () => togglePause()
+      handler: () => toggle()
     }
   ]
 })

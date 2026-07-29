@@ -81,8 +81,7 @@
       </div>
     </template>
 
-    <PauseOverlay :visible="wasActiveBeforePause" @resume="resumeAfterPause" />
-    <ResumePrompt :visible="showResume" @continue="continueGame" @new-game="newGame" />
+    <PauseOverlay :visible="paused" @resume="resumeGame" />
     <GameDialog
       v-model:visible="gameOverDialog"
       accentColor="#FF6B6B"
@@ -110,13 +109,12 @@ import { useGameStore } from '@/stores/game'
 import { useSound } from '@/composables/useSound'
 import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
-import { useAutoPause } from '@/composables/useAutoPause'
+import { useGamePause } from '@/composables/useGamePause'
 import { useHaptics } from '@/composables/useHaptics'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
 import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
-import ResumePrompt from '@/components/ResumePrompt.vue'
 
 interface Hole {
   active: boolean
@@ -129,7 +127,6 @@ const sound = useSound()
 const achievements = useAchievements()
 const toast = useToast()
 const haptics = useHaptics()
-let wasActiveBeforePause = false
 
 const difficulties = [
   { name: 'easy', label: '简单', gridCols: 3, gridRows: 3, interval: 1200, duration: 1000 },
@@ -144,7 +141,6 @@ const combo = ref(0)
 const gameStarted = ref(false)
 const gameOverDialog = ref(false)
 const showLeaderboard = ref(false)
-const showResume = ref(false)
 const lastScore = ref(0)
 
 const gridCols = ref(3)
@@ -182,19 +178,7 @@ function startGame() {
 
 function restartGame() {
   stopAllTimers()
-  wasActiveBeforePause = false
   startGame()
-}
-
-function continueGame() {
-  showResume.value = false
-  resumeAfterPause()
-}
-
-function newGame() {
-  showResume.value = false
-  wasActiveBeforePause = false
-  restartGame()
 }
 
 function setDifficulty(name: string) {
@@ -306,44 +290,20 @@ function stopAllTimers() {
   pendingTimeouts.clear()
 }
 
-// 失焦自动暂停
-useAutoPause(() => {
-  if (gameStarted.value && !gameOverDialog.value) {
-    wasActiveBeforePause = true
-    stopAllTimers()
-  }
+// 暂停 / 恢复：统一 composable（失焦自动暂停 + P/Esc + 音效 + 停/启计时器）
+const { paused, resume: resumeGame } = useGamePause({
+  canPause: () => gameStarted.value && !gameOverDialog.value,
+  onPause: stopAllTimers,
+  onResume: () => { countdown(); spawnMoles() }
 })
-
-// 暂停键 P / Esc
-function onKeydown(e: KeyboardEvent) {
-  if ((e.key === 'p' || e.key === 'P' || e.key === 'Escape') && gameStarted.value && !gameOverDialog.value) {
-    e.preventDefault()
-    if (wasActiveBeforePause) {
-      // 已在暂停状态 → 恢复
-      resumeAfterPause()
-    } else {
-      wasActiveBeforePause = true
-      stopAllTimers()
-    }
-  }
-}
-
-function resumeAfterPause() {
-  if (!wasActiveBeforePause) return
-  wasActiveBeforePause = false
-  countdown()
-  spawnMoles()
-}
 
 onMounted(() => {
   updateDifficultySettings()
   initHoles()
-  window.addEventListener('keydown', onKeydown)
 })
 
 onUnmounted(() => {
   stopAllTimers()
-  window.removeEventListener('keydown', onKeydown)
 })
 </script>
 

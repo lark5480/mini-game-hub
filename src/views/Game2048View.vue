@@ -68,7 +68,7 @@
       @update:visible="showLeaderboard = $event"
       @replay="restart"
     />
-    <ResumePrompt :visible="showResume" @continue="continueGame" @new-game="newGame" />
+    <ResumePrompt :visible="paused" @continue="continueGame" @new-game="newGame" />
   </GameLayout>
 </template>
 
@@ -84,7 +84,7 @@ import { useToast } from '@/composables/useToast'
 import { useGameSave } from '@/composables/useGameSave'
 import { useAutoSave } from '@/composables/useAutoSave'
 import { useHaptics } from '@/composables/useHaptics'
-import { useAutoPause } from '@/composables/useAutoPause'
+import { useGamePause } from '@/composables/useGamePause'
 import { useScoreFloats } from '@/composables/useScoreFloats'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
@@ -106,7 +106,6 @@ const achievements = useAchievements()
 const toast = useToast()
 const haptics = useHaptics()
 const { popups, pop } = useScoreFloats()
-const showResume = ref(false)
 
 const grid = ref<Grid>(createEmptyGrid())
 const score = ref(0)
@@ -137,7 +136,7 @@ watch([grid, score, won, history], scheduleSave, { deep: true })
 onMounted(() => {
   const data = save.loadGame()
   if (data && Array.isArray(data.grid) && Array.isArray(data.history)) {
-    showResume.value = true
+    paused.value = true
     grid.value = data.grid as Grid
     score.value = typeof data.score === 'number' ? data.score : 0
     won.value = !!data.won
@@ -148,7 +147,13 @@ onMounted(() => {
   }
 })
 
-const gameActive = () => !gameOverDialog.value && !winDialog.value && !showResume.value
+const gameActive = () => !gameOverDialog.value && !winDialog.value && !paused.value
+
+// 暂停 / 恢复：回合制游戏统一 composable（失焦自动暂停 + P/Esc + 音效）
+const { paused } = useGamePause({
+  canPause: () => gameActive(),
+  autoPause: true
+})
 
 useGameKeyboard({
   bindings: [
@@ -157,14 +162,8 @@ useGameKeyboard({
     { key: ['ArrowLeft', 'a', 'A'], handler: () => handleMove('left') },
     { key: ['ArrowRight', 'd', 'D'], handler: () => handleMove('right') },
     { key: ['z', 'Z'], handler: () => undo() },
-    { key: ['r', 'R'], handler: () => restart() },
-    { key: ['p', 'P', 'Escape'], handler: () => { if (gameActive()) showResume.value = true } }
+    { key: ['r', 'R'], handler: () => restart() }
   ]
-})
-
-// 失焦自动暂停：弹出 ResumePrompt 让用户选择继续还是重开
-useAutoPause(() => {
-  if (gameActive()) showResume.value = true
 })
 
 // 移动端滑动手势：直接在棋盘上滑动即可移动方块
@@ -276,7 +275,7 @@ function canMove(g: Grid): boolean {
 }
 
 function handleMove(dir: Direction) {
-  if (winDialog.value || gameOverDialog.value || showResume.value) return
+  if (winDialog.value || gameOverDialog.value || paused.value) return
 
   const prevGrid = cloneGrid(grid.value)
   const prevScore = score.value
@@ -380,11 +379,11 @@ function submitScore() {
 }
 
 function continueGame() {
-  showResume.value = false
+  paused.value = false
 }
 
 function newGame() {
-  showResume.value = false
+  paused.value = false
   restart({ restoring: false })
 }
 

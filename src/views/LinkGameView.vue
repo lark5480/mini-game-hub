@@ -60,7 +60,7 @@
       @update:visible="showLeaderboard = $event"
       @replay="initGame"
     />
-    <ResumePrompt :visible="showResume" @continue="continueGame" @new-game="newGame" />
+    <ResumePrompt :visible="paused" @continue="continueGame" @new-game="newGame" />
   </GameLayout>
 </template>
 
@@ -76,7 +76,7 @@ import { useGameSave } from '@/composables/useGameSave'
 import { useAutoSave } from '@/composables/useAutoSave'
 import { useHaptics } from '@/composables/useHaptics'
 import { useScoreFloats } from '@/composables/useScoreFloats'
-import { useAutoPause } from '@/composables/useAutoPause'
+import { useGamePause } from '@/composables/useGamePause'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
@@ -91,7 +91,12 @@ const toast = useToast()
 const haptics = useHaptics()
 const gameStore = useGameStore()
 const { popups, pop } = useScoreFloats()
-const showResume = ref(false)
+
+// 暂停 / 恢复：回合制游戏统一 composable（失焦自动暂停 + P/Esc + 音效）
+const { paused } = useGamePause({
+  canPause: () => !winDialog.value,
+  autoPause: true
+})
 
 interface Cell { type: number; matched: boolean }
 
@@ -160,7 +165,7 @@ onMounted(() => {
   if (data && Array.isArray(data.board) && typeof data.score === 'number') {
     const b = data.board as unknown[][]
     if (b.length === ROWS && b.every(r => r.length === COLS)) {
-      showResume.value = true
+      paused.value = true
       board.value = data.board as typeof board.value
       score.value = data.score
       selected.value = null
@@ -178,53 +183,44 @@ useGameKeyboard({
     {
       key: ['ArrowUp', 'w', 'W'],
       handler: () => {
-        if (winDialog.value || showResume.value) return
+        if (winDialog.value || paused.value) return
         cursor.value = { x: cursor.value.x, y: Math.max(0, cursor.value.y - 1) }
       }
     },
     {
       key: ['ArrowDown', 's', 'S'],
       handler: () => {
-        if (winDialog.value || showResume.value) return
+        if (winDialog.value || paused.value) return
         cursor.value = { x: cursor.value.x, y: Math.min(ROWS - 1, cursor.value.y + 1) }
       }
     },
     {
       key: ['ArrowLeft', 'a', 'A'],
       handler: () => {
-        if (winDialog.value || showResume.value) return
+        if (winDialog.value || paused.value) return
         cursor.value = { x: Math.max(0, cursor.value.x - 1), y: cursor.value.y }
       }
     },
     {
       key: ['ArrowRight', 'd', 'D'],
       handler: () => {
-        if (winDialog.value || showResume.value) return
+        if (winDialog.value || paused.value) return
         cursor.value = { x: Math.min(COLS - 1, cursor.value.x + 1), y: cursor.value.y }
       }
     },
     {
       key: ['Enter', ' '],
       handler: () => {
-        if (showResume.value) return
+        if (paused.value) return
         if (winDialog.value) { initGame(); clearSave(); return }
         selectCell(cursor.value.x, cursor.value.y)
       }
     },
     {
       key: ['r', 'R'],
-      handler: () => { if (!winDialog.value && !showResume.value) shuffle(true) }
-    },
-    {
-      key: ['p', 'P', 'Escape'],
-      handler: () => { if (!winDialog.value && !showResume.value) showResume.value = true }
+      handler: () => { if (!winDialog.value && !paused.value) shuffle(true) }
     }
   ]
-})
-
-// 失焦自动暂停
-useAutoPause(() => {
-  if (!winDialog.value && !showResume.value) showResume.value = true
 })
 
 function getIcon(type: number): string { return icons[type] || '❓' }
@@ -246,11 +242,11 @@ function submitScore() {
 }
 
 function continueGame() {
-  showResume.value = false
+  paused.value = false
 }
 
 function newGame() {
-  showResume.value = false
+  paused.value = false
   clearSave()
   initGame()
 }
@@ -376,7 +372,7 @@ function hasValidPair(): boolean {
 }
 
 function selectCell(x: number, y: number) {
-  if (showResume.value) return
+  if (paused.value) return
   const cell = board.value[y][x]
   if (cell.matched) return
 

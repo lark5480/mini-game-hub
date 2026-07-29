@@ -20,8 +20,8 @@
       <DirectionPad layout="horizontal" :showUp="false" :showDown="false" @left="moveLeft" @right="moveRight">
         <template #extra>
           <button @click="launchBall" class="launch-btn">发球</button>
-          <button v-if="!paused" @click="paused = true" class="extra-btn">暂停</button>
-          <button v-else @click="paused = false" class="extra-btn">继续</button>
+          <button v-if="!paused" @click="toggle" class="extra-btn">暂停</button>
+          <button v-else @click="toggle" class="extra-btn">继续</button>
           <button @click="restart" class="extra-btn">重新开始</button>
         </template>
       </DirectionPad>
@@ -52,7 +52,7 @@
       @update:visible="showLeaderboard = $event"
       @replay="restart"
     />
-    <PauseOverlay :visible="paused" @resume="paused = false" />
+    <PauseOverlay :visible="paused" @resume="toggle" />
   </GameLayout>
 </template>
 
@@ -65,7 +65,7 @@ import { useGameLoop } from '@/composables/useGameLoop'
 import { useSound } from '@/composables/useSound'
 import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
-import { useAutoPause } from '@/composables/useAutoPause'
+import { useGamePause } from '@/composables/useGamePause'
 import { useHaptics } from '@/composables/useHaptics'
 import { useScoreFloats } from '@/composables/useScoreFloats'
 import GameLayout from '@/components/GameLayout.vue'
@@ -91,10 +91,8 @@ const gameOver = ref(false)
 const showLeaderboard = ref(false)
 const lastScore = ref(0)
 const victory = ref(false)
-const paused = ref(false)
-
-useAutoPause(() => {
-  if (!gameOver.value && !victory.value) paused.value = true
+const { paused, toggle } = useGamePause({
+  canPause: () => !gameOver.value && !victory.value
 })
 
 const CANVAS_W = 600
@@ -159,10 +157,7 @@ useGameKeyboard({
     },
     {
       key: ['p', 'P'],
-      handler: () => {
-        paused.value = !paused.value
-        if (paused.value) sound.pause(); else sound.resume()
-      }
+      handler: () => toggle()
     }
   ]
 })

@@ -107,7 +107,7 @@ import { useSound } from '@/composables/useSound'
 import { useGameSave } from '@/composables/useGameSave'
 import { useAutoSave } from '@/composables/useAutoSave'
 import { useHaptics } from '@/composables/useHaptics'
-import { usePause } from '@/composables/usePause'
+import { useGamePause } from '@/composables/useGamePause'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
@@ -158,10 +158,9 @@ const { scheduleSave, clearSave } = useAutoSave('tic-tac-toe', () => ({
 }), { beforeSave: () => !gameOver.value })
 let botTimer: ReturnType<typeof setTimeout> | null = null
 
-// 暂停/恢复：回合制游戏仅在非结束状态且轮到玩家时可暂停
-const { paused, pause: pauseGame, resume: resumeGame } = usePause({
-  isPlaying: () => !gameOver.value && result.value === null,
-  isGameOver: () => gameOver.value,
+// 暂停/恢复：回合制游戏仅在非结束状态时可暂停（统一 composable）
+const { paused, resume: resumeGame } = useGamePause({
+  canPause: () => !gameOver.value && result.value === null,
   onPause: () => { if (botTimer) { clearTimeout(botTimer); botTimer = null } },
   onResume: () => { if (!isPlayerTurn.value && !gameOver.value) botTimer = setTimeout(makeBotMove, 380) }
 })
@@ -399,7 +398,7 @@ onMounted(() => {
           losses: s.losses || 0
         }
       }
-      pauseGame()
+      paused.value = true
       return
     }
   }

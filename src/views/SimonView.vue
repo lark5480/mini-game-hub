@@ -38,7 +38,7 @@
       </div>
     </template>
 
-    <PauseOverlay :visible="paused" @resume="resume" />
+    <PauseOverlay :visible="paused" @resume="resumeGame" />
     <GameDialog
       v-model:visible="gameOverDialog"
       accentColor="#00CFFF"
@@ -60,12 +60,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useSound } from '@/composables/useSound'
 import { useHaptics } from '@/composables/useHaptics'
-import { useAutoPause } from '@/composables/useAutoPause'
+import { useGamePause } from '@/composables/useGamePause'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
@@ -87,7 +87,9 @@ const pads: Pad[] = [
 
 type Phase = 'idle' | 'showing' | 'input' | 'over'
 const phase = ref<Phase>('idle')
-const paused = ref(false)
+const { paused, resume: resumeGame } = useGamePause({
+  canPause: () => phase.value === 'input' && !gameOverDialog.value
+})
 const activePad = ref(-1)
 const sequence = ref<number[]>([])
 const playerIndex = ref(0)
@@ -207,39 +209,14 @@ function onCenterClick() {
   if (phase.value === 'idle') startGame()
 }
 
-function resume() {
-  paused.value = false
-}
-
 function clearPending() {
   pendingTimeouts.forEach((id) => clearTimeout(id))
   pendingTimeouts.clear()
 }
 
-// 失焦自动暂停
-useAutoPause(() => {
-  if (phase.value === 'input' && !gameOverDialog.value) paused.value = true
-})
-
-function onKeydown(e: KeyboardEvent) {
-  if (
-    (e.key === 'p' || e.key === 'P' || e.key === 'Escape') &&
-    phase.value === 'input' &&
-    !gameOverDialog.value
-  ) {
-    e.preventDefault()
-    paused.value = !paused.value
-  }
-}
-
-onMounted(() => {
-  window.addEventListener('keydown', onKeydown)
-})
-
 onUnmounted(() => {
   playToken++
   clearPending()
-  window.removeEventListener('keydown', onKeydown)
 })
 </script>
 

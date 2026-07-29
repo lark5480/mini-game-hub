@@ -70,7 +70,7 @@
       @update:visible="showLeaderboard = $event"
       @replay="restartGame"
     />
-    <ResumePrompt :visible="showResume" @continue="continueGame" @new-game="newGame" />
+    <ResumePrompt :visible="paused" @continue="continueGame" @new-game="newGame" />
   </GameLayout>
 </template>
 
@@ -85,7 +85,7 @@ import { useToast } from '@/composables/useToast'
 import { useGameSave } from '@/composables/useGameSave'
 import { useAutoSave } from '@/composables/useAutoSave'
 import { useHaptics } from '@/composables/useHaptics'
-import { useAutoPause } from '@/composables/useAutoPause'
+import { useGamePause } from '@/composables/useGamePause'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
@@ -99,11 +99,16 @@ const sound = useSound()
 const achievements = useAchievements()
 const toast = useToast()
 const haptics = useHaptics()
-const showResume = ref(false)
 
 const showLeaderboard = ref(false)
 const lastScore = ref(0)
-const gameActive = computed(() => !winDialog.value && !gameComplete.value && !showResume.value)
+const gameActive = computed(() => !winDialog.value && !gameComplete.value && !paused.value)
+
+// 暂停 / 恢复：回合制游戏统一 composable（失焦自动暂停 + P/Esc + 音效）
+const { paused } = useGamePause({
+  canPause: () => gameActive.value,
+  autoPause: true
+})
 
 // 编码：0=空地, 1=玩家, 2=箱子, 3=目标点, 4=箱子在目标上, 5=墙壁
 const levels = [
@@ -239,7 +244,7 @@ watch([levelIndex, steps, totalScore, board], scheduleSave, { deep: true })
 onMounted(() => {
   const data = save.loadGame()
   if (data && Array.isArray(data.board) && typeof data.levelIndex === 'number') {
-    showResume.value = true
+    paused.value = true
     levelIndex.value = data.levelIndex
     steps.value = typeof data.steps === 'number' ? data.steps : 0
     totalScore.value = typeof data.totalScore === 'number' ? data.totalScore : 0
@@ -254,45 +259,33 @@ useGameKeyboard({
   bindings: [
     {
       key: ['ArrowUp', 'w', 'W'],
-      handler: () => { if (!winDialog.value && !showResume.value) move(0, -1) }
+      handler: () => { if (!winDialog.value && !paused.value) move(0, -1) }
     },
     {
       key: ['ArrowDown', 's', 'S'],
-      handler: () => { if (!winDialog.value && !showResume.value) move(0, 1) }
+      handler: () => { if (!winDialog.value && !paused.value) move(0, 1) }
     },
     {
       key: ['ArrowLeft', 'a', 'A'],
-      handler: () => { if (!winDialog.value && !showResume.value) move(-1, 0) }
+      handler: () => { if (!winDialog.value && !paused.value) move(-1, 0) }
     },
     {
       key: ['ArrowRight', 'd', 'D'],
-      handler: () => { if (!winDialog.value && !showResume.value) move(1, 0) }
+      handler: () => { if (!winDialog.value && !paused.value) move(1, 0) }
     },
     {
       key: ['r', 'R'],
-      handler: () => { if (!winDialog.value && !showResume.value) resetLevel() }
-    },
-    {
-      key: ['p', 'P', 'Escape'],
-      handler: () => {
-        if (winDialog.value || gameComplete.value) return
-        if (gameActive.value) showResume.value = true
-      }
+      handler: () => { if (!winDialog.value && !paused.value) resetLevel() }
     }
   ]
 })
 
-// 失焦自动暂停
-useAutoPause(() => {
-  if (gameActive.value && !showResume.value) showResume.value = true
-})
-
 function continueGame() {
-  showResume.value = false
+  paused.value = false
 }
 
 function newGame() {
-  showResume.value = false
+  paused.value = false
   restartGame()
 }
 

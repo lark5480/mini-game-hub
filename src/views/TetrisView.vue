@@ -67,8 +67,8 @@
             <button @click="drop" class="hard-drop-btn">硬降</button>
             <button v-if="!isPlaying" @click="startGame" class="start-btn">开始</button>
             <template v-else>
-              <button v-if="!paused && !showResume" @click="togglePause" class="extra-btn">暂停</button>
-              <button v-else-if="paused && !showResume" @click="togglePause" class="extra-btn">继续</button>
+            <button v-if="!paused && !showResume" @click="toggle" class="extra-btn">暂停</button>
+            <button v-else-if="paused && !showResume" @click="toggle" class="extra-btn">继续</button>
               <button @click="startGame" class="extra-btn">重新开始</button>
             </template>
           </template>
@@ -93,7 +93,7 @@
       @update:visible="showLeaderboard = $event"
       @replay="startGame"
     />
-    <PauseOverlay :visible="paused" @resume="togglePause" />
+    <PauseOverlay :visible="paused" @resume="toggle" />
     <ResumePrompt :visible="showResume" @continue="continueGame" @new-game="newGame" />
   </GameLayout>
 </template>
@@ -109,7 +109,7 @@ import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
 import { useGameSave } from '@/composables/useGameSave'
 import { useAutoSave } from '@/composables/useAutoSave'
-import { useAutoPause } from '@/composables/useAutoPause'
+import { useGamePause } from '@/composables/useGamePause'
 import { useHaptics } from '@/composables/useHaptics'
 import { useScoreFloats } from '@/composables/useScoreFloats'
 import GameLayout from '@/components/GameLayout.vue'
@@ -219,13 +219,11 @@ const gameLoop = useGameLoop({
   intervalMs: 400,
   onUpdate: () => step()
 })
-const paused = gameLoop.paused
-
-function togglePause() {
-  if (showResume.value || gameOver.value || !isPlaying.value) return
-  if (paused.value) { gameLoop.resume(); sound.resume() }
-  else { gameLoop.pause(); sound.pause() }
-}
+const { paused, toggle } = useGamePause({
+  canPause: () => isPlaying.value && !gameOver.value && !showResume.value,
+  onPause: gameLoop.pause,
+  onResume: gameLoop.resume
+})
 
 function continueGame() {
   showResume.value = false
@@ -236,10 +234,6 @@ function newGame() {
   showResume.value = false
   startGame()
 }
-
-useAutoPause(() => {
-  if (isPlaying.value && !gameOver.value && !showResume.value) gameLoop.pause()
-})
 
 const boardEl = ref<HTMLElement | null>(null)
 
@@ -276,7 +270,7 @@ useGameKeyboard({
     },
     {
       key: ['p', 'P', 'Escape'],
-      handler: () => togglePause()
+      handler: () => toggle()
     }
   ]
 })
