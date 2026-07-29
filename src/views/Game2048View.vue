@@ -53,7 +53,7 @@
     />
     <GameDialog
       v-model:visible="gameOverDialog"
-      accentColor="#FF006E"
+      accentColor="#FFD700"
       icon="fail"
       title="游戏结束"
       :message="'最终得分: ' + score"
