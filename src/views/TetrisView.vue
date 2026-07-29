@@ -1,7 +1,7 @@
 <template>
   <GameLayout
     title="俄罗斯方块"
-    accentColor="#00FFFF"
+    accentColor="#2D7DFF"
     entrance="tetris"
     gradientEnd="#FF006E"
     :hints="['Enter 开始', '方向键移动 上旋转 下软降 空格硬降']"
@@ -77,7 +77,7 @@
     </template>
     <GameDialog
       :visible="gameOver"
-      accentColor="#00FFFF"
+      accentColor="#2D7DFF"
       icon="fail"
       title="游戏结束"
       :message="'得分: ' + score"
@@ -135,7 +135,7 @@ type Cell = { color: string | null }
 type Tetromino = { shape: number[][], color: string }
 
 const TETROS: Tetromino[] = [
-  { shape: [[1,1,1,1]], color: '#00FFFF' },
+  { shape: [[1,1,1,1]], color: '#2D7DFF' },
   { shape: [[1,1],[1,1]], color: '#FFFF00' },
   { shape: [[0,1,0],[1,1,1]], color: '#A000FF' },
   { shape: [[0,1,1],[1,1,0]], color: '#00FF00' },
@@ -608,7 +608,7 @@ initGrid()
   padding: 10px 35px;
   font-size: 1.2em;
   font-weight: 600;
-  background: linear-gradient(135deg, #00FFFF, #818CF8);
+  background: linear-gradient(135deg, #2D7DFF, #818CF8);
   color: #0D0D1A;
   border: none;
   border-radius: 25px;

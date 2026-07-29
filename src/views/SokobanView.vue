@@ -1,7 +1,7 @@
 <template>
   <GameLayout
     title="推箱子"
-    accentColor="#00FFFF"
+    accentColor="#7CFF3D"
     entrance="sokoban"
     gradientEnd="#FF006E"
     :hints="['方向键/WASD 移动', 'R 重置当前关', '重玩从第1关开始']"
@@ -55,7 +55,7 @@
     </template>
     <GameDialog
       v-model:visible="winDialog"
-      accentColor="#00FFFF"
+      accentColor="#7CFF3D"
       icon="success"
       :title="gameComplete ? '全部通关！' : '恭喜过关！'"
       :message="gameComplete ? '总分: ' + totalScore : '用了 ' + steps + ' 步'"
@@ -465,7 +465,7 @@ function restartGame() {
   justify-content: center;
 }
 
-.player svg { color: #00FFFF; filter: drop-shadow(0 0 8px #00FFFF); }
+.player svg { color: #7CFF3D; filter: drop-shadow(0 0 8px #7CFF3D); }
 .box svg { color: #FF006E; }
 .target svg { color: #B967FF; }
 .box-done svg { color: #05FFA1; filter: drop-shadow(0 0 8px #05FFA1); }

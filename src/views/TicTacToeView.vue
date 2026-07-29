@@ -1,7 +1,7 @@
 <template>
   <GameLayout
     title="井字棋"
-    accentColor="#FF006E"
+    accentColor="#FF4DFF"
     entrance="ttt"
     gradientEnd="#00CFFF"
     :hints="['点击空位落子', 'X 先手，AI 为 O']"
@@ -26,7 +26,7 @@
           @click="handleCellClick(i)"
         >
           <svg v-if="cell === 'X'" viewBox="0 0 24 24" class="mark x-mark">
-            <path d="M6 6l12 12M18 6L6 18" stroke="#FF006E" stroke-width="3" fill="none" stroke-linecap="round"/>
+            <path d="M6 6l12 12M18 6L6 18" stroke="#FF4DFF" stroke-width="3" fill="none" stroke-linecap="round"/>
           </svg>
           <svg v-else-if="cell === 'O'" viewBox="0 0 24 24" class="mark o-mark">
             <circle cx="12" cy="12" r="8" stroke="#00CFFF" stroke-width="3" fill="none"/>
@@ -75,7 +75,7 @@
 
     <GameDialog
       v-model:visible="gameOverDialog"
-      accentColor="#FF006E"
+      accentColor="#FF4DFF"
       :icon="resultIcon"
       :title="resultTitle"
       :message="resultMessage"
@@ -441,8 +441,8 @@ onUnmounted(() => {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #FF006E;
-  box-shadow: 0 0 12px #FF006E;
+  background: #FF4DFF;
+  box-shadow: 0 0 12px #FF4DFF;
   transition: all 0.3s ease;
 }
 
@@ -544,7 +544,7 @@ onUnmounted(() => {
 }
 
 .diff-btn.active {
-  background: linear-gradient(135deg, #FF006E, #00CFFF);
+  background: linear-gradient(135deg, #FF4DFF, #00CFFF);
   border-color: transparent;
   box-shadow: 0 4px 15px rgba(255, 0, 110, 0.3);
 }
@@ -586,7 +586,7 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: linear-gradient(135deg, #FF006E, #00CFFF);
+  background: linear-gradient(135deg, #FF4DFF, #00CFFF);
   color: #fff;
   border: none;
   padding: 12px 28px;

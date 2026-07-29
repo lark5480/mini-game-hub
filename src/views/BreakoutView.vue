@@ -1,7 +1,7 @@
 <template>
   <GameLayout
     title="弹球打砖块"
-    accentColor="#FF6B6B"
+    accentColor="#FF5A36"
     entrance="breakout"
     gradientEnd="#00FFFF"
     :hints="['← → 或 A D 移动挡板', 'Enter 开始/发球', 'P 暂停']"
@@ -28,7 +28,7 @@
     </template>
     <GameDialog
       v-model:visible="gameOver"
-      accentColor="#FF6B6B"
+      accentColor="#FF5A36"
       icon="fail"
       title="游戏结束"
       :message="'得分 ' + score"
@@ -122,7 +122,7 @@ let launched = false
 let leftPressed = false
 let rightPressed = false
 
-const brickColors = ['#FF006E', '#FF6B6B', '#FFE66D', '#4ECDC4', '#00FFFF']
+const brickColors = ['#FF006E', '#FF5A36', '#FFE66D', '#4ECDC4', '#00FFFF']
 
 const gameLoop = useGameLoop({
   mode: 'raf',

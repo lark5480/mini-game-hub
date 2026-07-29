@@ -1,7 +1,7 @@
 <template>
   <GameLayout
     title="打地鼠"
-    accentColor="#FF6B6B"
+    accentColor="#FF7A3D"
     entrance="whackmole"
     gradientEnd="#FFD700"
     :hints="['点击地鼠得分', '别打空！']"
@@ -84,7 +84,7 @@
     <PauseOverlay :visible="paused" @resume="resumeGame" />
     <GameDialog
       v-model:visible="gameOverDialog"
-      accentColor="#FF6B6B"
+      accentColor="#FF7A3D"
       icon="success"
       title="游戏结束！"
       :message="'最终得分: ' + score"
@@ -479,7 +479,7 @@ onUnmounted(() => {
 
 .time-fill {
   height: 100%;
-  background: linear-gradient(90deg, #05FFA1, #FFD700, #FF6B6B);
+  background: linear-gradient(90deg, #05FFA1, #FFD700, #FF7A3D);
   transition: width 1s linear;
   border-radius: 4px;
 }
@@ -512,15 +512,15 @@ onUnmounted(() => {
 
 .diff-btn.active {
   background: rgba(255,107,107,0.3);
-  border-color: #FF6B6B;
-  color: #FF6B6B;
+  border-color: #FF7A3D;
+  color: #FF7A3D;
 }
 
 .start-btn, .restart-btn {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: linear-gradient(135deg, #FF6B6B, #FF8E8E);
+  background: linear-gradient(135deg, #FF7A3D, #FF8E8E);
   border: none;
   color: #fff;
   padding: 14px 35px;
