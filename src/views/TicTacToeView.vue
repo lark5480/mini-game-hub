@@ -1,107 +1,128 @@
 <template>
   <GameLayout
-    title="井字棋"
-    accentColor="#FF4DFF"
-    entrance="ttt"
-    gradientEnd="#00CFFF"
-    :hints="['点击空位落子', 'X 先手，AI 为 O']"
-    :infoItems="[{ label: '状态', value: statusLabel }]"
-    tutorial="在3×3棋盘上先连成三子即获胜。你执X先手，AI执O。"
+    :title="layoutTitle"
+    :accentColor="layoutAccent"
+    :gradientEnd="layoutGradient"
+    :entrance="layoutEntrance"
+    :hints="layoutHints"
+    :infoItems="layoutInfoItems"
+    :tutorial="layoutTutorial"
     @back="goHome"
-    @restart="() => resetGame(false)"
+    @restart="onRestart"
   >
-    <div class="game-container">
-      <div class="turn-indicator" :class="{ 'bot-turn': !isPlayerTurn }">
-        <span class="turn-dot" :class="{ player: isPlayerTurn, bot: !isPlayerTurn }"></span>
-        {{ statusLabel }}
+    <!-- 模式选择屏 -->
+    <div v-if="mode === null" class="mode-panel">
+      <h2 class="mode-title">井字棋</h2>
+      <p class="mode-sub">选择对战模式</p>
+      <div class="mode-buttons">
+        <button class="mode-card" @click="startClassic">
+          <span class="mode-name">单人挑战 AI</span>
+          <span class="mode-desc">你执 X，AI 执 O</span>
+        </button>
+        <button class="mode-card" @click="startOnline">
+          <span class="mode-name">双人对战（联机）</span>
+          <span class="mode-desc">分享房间号实时对战</span>
+        </button>
       </div>
+      <p class="mode-tip">联机需配置 Supabase（见 .env.example）；未配置会提示。</p>
+    </div>
 
-      <div class="board">
-        <button
-          v-for="(cell, i) in board"
-          :key="i"
-          class="cell"
-          :class="{ x: cell === 'X', o: cell === 'O', 'win-cell': winningLine.includes(i), disabled: !!cell || !isPlayerTurn || gameOver }"
-          :disabled="!!cell || !isPlayerTurn || gameOver"
-          @click="handleCellClick(i)"
-        >
-          <svg v-if="cell === 'X'" viewBox="0 0 24 24" class="mark x-mark">
-            <path d="M6 6l12 12M18 6L6 18" stroke="#FF4DFF" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <template v-else-if="mode === 'classic'">
+      <div class="game-container">
+        <div class="turn-indicator" :class="{ 'bot-turn': !isPlayerTurn }">
+          <span class="turn-dot" :class="{ player: isPlayerTurn, bot: !isPlayerTurn }"></span>
+          {{ statusLabel }}
+        </div>
+
+        <div class="board">
+          <button
+            v-for="(cell, i) in board"
+            :key="i"
+            class="cell"
+            :class="{ x: cell === 'X', o: cell === 'O', 'win-cell': winningLine.includes(i), disabled: !!cell || !isPlayerTurn || gameOver }"
+            :disabled="!!cell || !isPlayerTurn || gameOver"
+            @click="handleCellClick(i)"
+          >
+            <svg v-if="cell === 'X'" viewBox="0 0 24 24" class="mark x-mark">
+              <path d="M6 6l12 12M18 6L6 18" stroke="#FF4DFF" stroke-width="3" fill="none" stroke-linecap="round"/>
+            </svg>
+            <svg v-else-if="cell === 'O'" viewBox="0 0 24 24" class="mark o-mark">
+              <circle cx="12" cy="12" r="8" stroke="#00CFFF" stroke-width="3" fill="none"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="difficulty-row">
+          <span class="diff-label">难度</span>
+          <button class="diff-btn" :class="{ active: difficulty === 'easy' }" @click="setDifficulty('easy')">简单</button>
+          <button class="diff-btn" :class="{ active: difficulty === 'hard' }" @click="setDifficulty('hard')">困难</button>
+          <span class="diff-tip">{{ difficulty === 'hard' ? 'AI 不失误 · 最多逼平' : 'AI 会失误 · 可取胜' }}</span>
+        </div>
+
+        <div class="score-row">
+          <div class="score-box">
+            <span class="score-label">胜利</span>
+            <span class="score-value wins">{{ stats.wins }}</span>
+          </div>
+          <div class="score-box">
+            <span class="score-label">平局</span>
+            <span class="score-value draws">{{ stats.draws }}</span>
+          </div>
+          <div class="score-box">
+            <span class="score-label">失败</span>
+            <span class="score-value losses">{{ stats.losses }}</span>
+          </div>
+        </div>
+
+        <button class="reset-btn" @click="resetGame(false)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+            <path d="M21 3v5h-5"/>
+            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+            <path d="M8 16H3v5"/>
           </svg>
-          <svg v-else-if="cell === 'O'" viewBox="0 0 24 24" class="mark o-mark">
-            <circle cx="12" cy="12" r="8" stroke="#00CFFF" stroke-width="3" fill="none"/>
-          </svg>
+          重新开始
         </button>
       </div>
 
-      <div class="difficulty-row">
-        <span class="diff-label">难度</span>
-        <button class="diff-btn" :class="{ active: difficulty === 'easy' }" @click="setDifficulty('easy')">简单</button>
-        <button class="diff-btn" :class="{ active: difficulty === 'hard' }" @click="setDifficulty('hard')">困难</button>
-        <span class="diff-tip">{{ difficulty === 'hard' ? 'AI 不失误 · 最多逼平' : 'AI 会失误 · 可取胜' }}</span>
-      </div>
+      <LeaderboardStrip game="tic-tac-toe" />
 
-      <div class="score-row">
-        <div class="score-box">
-          <span class="score-label">胜利</span>
-          <span class="score-value wins">{{ stats.wins }}</span>
-        </div>
-        <div class="score-box">
-          <span class="score-label">平局</span>
-          <span class="score-value draws">{{ stats.draws }}</span>
-        </div>
-        <div class="score-box">
-          <span class="score-label">失败</span>
-          <span class="score-value losses">{{ stats.losses }}</span>
-        </div>
-      </div>
+      <GameDialog
+        v-model:visible="gameOverDialog"
+        accentColor="#FF4DFF"
+        :icon="resultIcon"
+        :title="resultTitle"
+        :message="resultMessage"
+        :actionText="lastScore > 0 ? '提交分数' : undefined"
+        @action="openLeaderboardFromDialog"
+      >
+        <template v-if="lastScore === 0" #action>
+          <button class="dialog-btn" @click="resetGame(false)">再来一局</button>
+        </template>
+      </GameDialog>
 
-      <button class="reset-btn" @click="resetGame(false)">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-          <path d="M21 3v5h-5"/>
-          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-          <path d="M8 16H3v5"/>
-        </svg>
-        重新开始
-      </button>
-    </div>
-
-    <LeaderboardStrip game="tic-tac-toe" />
-
-    <template #controls>
-      <button class="submit-score-btn" @click="openLeaderboard">查看排行榜</button>
+      <LeaderboardOverlay
+        :visible="showLeaderboard"
+        game="tic-tac-toe"
+        gameName="井字棋"
+        :score="lastScore"
+        @update:visible="showLeaderboard = $event"
+        @replay="resetGame(false)"
+      />
+      <ResumePrompt :visible="paused" @continue="continueGame" @new-game="newGame" />
     </template>
 
-    <GameDialog
-      v-model:visible="gameOverDialog"
-      accentColor="#FF4DFF"
-      :icon="resultIcon"
-      :title="resultTitle"
-      :message="resultMessage"
-      :actionText="lastScore > 0 ? '提交分数' : undefined"
-      @action="openLeaderboardFromDialog"
-    >
-      <template v-if="lastScore === 0" #action>
-        <button class="dialog-btn" @click="resetGame(false)">再来一局</button>
-      </template>
-    </GameDialog>
+    <TicTacToeOnlineView v-else ref="onlineRef" />
 
-    <LeaderboardOverlay
-      :visible="showLeaderboard"
-      game="tic-tac-toe"
-      gameName="井字棋"
-      :score="lastScore"
-      @update:visible="showLeaderboard = $event"
-      @replay="resetGame(false)"
-    />
-    <ResumePrompt :visible="paused" @continue="continueGame" @new-game="newGame" />
+    <template #controls>
+      <button v-if="mode === 'classic'" class="submit-score-btn" @click="openLeaderboard">查看排行榜</button>
+    </template>
   </GameLayout>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useSound } from '@/composables/useSound'
 import { useGameSave } from '@/composables/useGameSave'
@@ -113,10 +134,12 @@ import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
 import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 import ResumePrompt from '@/components/ResumePrompt.vue'
+import TicTacToeOnlineView from '@/views/TicTacToeOnlineView.vue'
 
 type Cell = 'X' | 'O' | null
 type Board = Cell[]
 type Result = 'win' | 'lose' | 'draw' | null
+type Mode = 'classic' | 'online'
 
 const PLAYER: Cell = 'X'
 const BOT: Cell = 'O'
@@ -127,6 +150,16 @@ const WIN_LINES = [
 ]
 
 const router = useRouter()
+const route = useRoute()
+
+// 模式：null=选择屏；classic=单人AI；online=联机。
+// 若 URL 带 ?room=XXXX（好友分享进来的），直接进联机模式。
+const ROOM_RE = /^[A-Z0-9]{4}$/
+const mode = ref<Mode | null>(
+  (typeof route.query.room === 'string' && ROOM_RE.test(route.query.room)) ? 'online' : null
+)
+const onlineRef = ref<InstanceType<typeof TicTacToeOnlineView> | null>(null)
+
 const gameStore = useGameStore()
 const sound = useSound()
 const haptics = useHaptics()
@@ -158,12 +191,33 @@ const { scheduleSave, clearSave } = useAutoSave('tic-tac-toe', () => ({
 }), { beforeSave: () => !gameOver.value })
 let botTimer: ReturnType<typeof setTimeout> | null = null
 
-// 暂停/恢复：回合制游戏仅在非结束状态时可暂停（统一 composable）
+// 暂停/恢复：回合制游戏仅在非结束状态且非联机模式时可暂停（统一 composable）
 const { paused, resume: resumeGame } = useGamePause({
-  canPause: () => !gameOver.value && result.value === null,
+  canPause: () => mode.value !== 'online' && !gameOver.value && result.value === null,
   onPause: () => { if (botTimer) { clearTimeout(botTimer); botTimer = null } },
   onResume: () => { if (!isPlayerTurn.value && !gameOver.value) botTimer = setTimeout(makeBotMove, 380) }
 })
+
+// ---- 模式相关 UI 绑定（随 mode 变化） ----
+const layoutTitle = computed(() => mode.value === 'online' ? '井字棋·双人' : '井字棋')
+const layoutAccent = computed(() => mode.value === 'online' ? '#FF9E00' : '#FF4DFF')
+const layoutGradient = computed(() => mode.value === 'online' ? '#B967FF' : '#00CFFF')
+const layoutEntrance = computed(() => mode.value === 'online' ? 'ttt2p' : 'ttt')
+const layoutHints = computed(() => {
+  if (mode.value === 'classic') return ['点击空位落子', 'X 先手，AI 为 O']
+  if (mode.value === 'online') return ['分享房间号给好友', '实时同步对战']
+  return ['选择对战模式开始']
+})
+const layoutInfoItems = computed(() => {
+  if (mode.value === 'classic') return [{ label: '状态', value: statusLabel.value }]
+  if (mode.value === 'online') return [{ label: '模式', value: '联机对战' }]
+  return [{ label: '模式', value: '选择中' }]
+})
+const layoutTutorial = computed(() =>
+  mode.value === 'online'
+    ? '和好友实时对战：分享房间号，两人各执 X / O，先连成三子者获胜。'
+    : '在3×3棋盘上先连成三子即获胜。你执X先手，AI执O。'
+)
 
 const statusLabel = computed(() => {
   if (gameOver.value) {
@@ -298,6 +352,20 @@ function goHome() {
   router.push('/')
 }
 
+// ---- 模式切换 ----
+function startClassic() {
+  mode.value = 'classic'
+  resetGame(false)
+}
+function startOnline() {
+  // 若 URL 带 ?room= 子组件会直接加入；否则子组件自动生成房间并写回 URL
+  mode.value = 'online'
+}
+function onRestart() {
+  if (mode.value === 'classic') resetGame(false)
+  else if (mode.value === 'online') onlineRef.value?.resetBoard(true)
+}
+
 // ---- 游戏逻辑 ----
 
 function findWinningLine(b: Board): number[] | null {
@@ -382,10 +450,13 @@ function bestMove(b: Board, hard: boolean): number {
 }
 
 onMounted(() => {
+  // 联机模式由子组件自行处理（含 ?room 加入），这里不干预
+  if (mode.value === 'online') return
   const data = save.loadGame()
   if (data && Array.isArray(data.board) && data.board.length === 9 && data.gameOver === false) {
     const savedResult = data.result as Result | undefined
     if (savedResult === null || savedResult === undefined) {
+      mode.value = 'classic'
       board.value = data.board as Board
       isPlayerTurn.value = data.isPlayerTurn === undefined ? true : !!data.isPlayerTurn
       gameOver.value = false
@@ -402,7 +473,7 @@ onMounted(() => {
       return
     }
   }
-  resetGame(true)
+  // 无存档 → 显示模式选择屏（mode 保持 null）
 })
 
 onUnmounted(() => {
@@ -622,6 +693,64 @@ onUnmounted(() => {
 .dialog-btn:hover {
   transform: scale(1.05);
   box-shadow: 0 0 20px color-mix(in srgb, var(--game-accent, #00FFFF) 40%, transparent);
+}
+
+/* 模式选择屏 */
+.mode-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 40px 20px;
+}
+.mode-title {
+  font-size: 2em;
+  color: #fff;
+  margin: 0;
+}
+.mode-sub {
+  color: var(--game-text-muted);
+  margin: 0;
+}
+.mode-buttons {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 8px;
+}
+.mode-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  min-width: 180px;
+  padding: 22px 28px;
+  background: var(--game-btn-bg);
+  border: 1px solid var(--game-btn-border);
+  border-radius: 18px;
+  cursor: pointer;
+  color: var(--game-text);
+  transition: all 0.2s ease;
+}
+.mode-card:hover {
+  border-color: var(--game-accent);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--game-accent) 30%, transparent);
+  transform: translateY(-2px);
+}
+.mode-name {
+  font-size: 1.1em;
+  font-weight: 600;
+}
+.mode-desc {
+  font-size: 0.82em;
+  color: var(--game-text-muted);
+}
+.mode-tip {
+  font-size: 0.8em;
+  color: var(--game-text-muted);
+  text-align: center;
+  margin-top: 8px;
 }
 
 @media (max-width: 640px) {

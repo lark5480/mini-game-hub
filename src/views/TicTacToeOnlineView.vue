@@ -1,16 +1,5 @@
 <template>
-  <GameLayout
-    title="井字棋·双人"
-    accentColor="#FF9E00"
-    entrance="ttt2p"
-    gradientEnd="#B967FF"
-    :hints="hints"
-    :infoItems="[{ label: '房间', value: roomCode }, { label: '状态', value: statusText }]"
-    tutorial="和好友实时对战：把房间号发给对方，两人各执 X / O，先连成三子者获胜。"
-    @back="goHome"
-    @restart="() => resetBoard(true)"
-  >
-    <div class="game-container">
+  <div class="game-container">
       <!-- 未配置 Supabase：优雅降级，不崩溃 -->
       <div v-if="room.status.value === 'no-supabase'" class="notice">
         <div class="notice-icon">🔌</div>
@@ -101,7 +90,6 @@
         <button class="dialog-btn" @click="resetBoard(true)">再来一局</button>
       </template>
     </GameDialog>
-  </GameLayout>
 </template>
 
 <script setup lang="ts">
@@ -110,7 +98,6 @@ import { useRouter, useRoute } from 'vue-router'
 import { useSound } from '@/composables/useSound'
 import { useHaptics } from '@/composables/useHaptics'
 import { useRealtimeRoom } from '@/composables/useRealtimeRoom'
-import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 
 type Cell = 'X' | 'O' | null
@@ -163,25 +150,6 @@ const opponentLeft = computed(() => !opponentPresent.value && boardHasMoves())
 const myTurn = computed(
   () => myRole.value !== null && !gameOver.value && turn.value === myRole.value && opponentPresent.value,
 )
-const hints = computed(() => {
-  if (amSpectator.value) return ['房间已满', '请换房间或刷新等待空位']
-  if (myRole.value)
-    return ['分享房间号给好友', `你执 ${myRole.value}（${myRole.value === 'X' ? '先手' : '后手'}）`]
-  return ['连接中…']
-})
-
-const statusText = computed(() => {
-  switch (room.status.value) {
-    case 'no-supabase': return '未配置 Supabase'
-    case 'connecting': return '连接中…'
-    case 'error': return '连接异常'
-    case 'connected':
-    if (amSpectator.value) return '房间已满'
-    return opponentPresent.value ? '已连接' : '等待对手…'
-    default: return ''
-  }
-})
-
 const turnLabel = computed(() => {
   if (amSpectator.value) return '房间已满，无法加入'
   if (room.status.value !== 'connected') return '连接中…'
@@ -386,10 +354,6 @@ async function copyRoom() {
   if (ok) setTimeout(() => (copied.value = false), 1500)
 }
 
-function goHome() {
-  router.push('/')
-}
-
 // ---- 游戏逻辑 ----
 function findWinningLine(b: Board): number[] | null {
   for (const line of WIN_LINES) {
@@ -407,6 +371,9 @@ onMounted(() => {
     router.replace({ query: { ...route.query, room: roomCode.value } })
   }
 })
+
+// 作为 TicTacToeView 的联机子组件时，由父组件的重启按钮触发
+defineExpose({ resetBoard })
 </script>
 
 <style scoped>

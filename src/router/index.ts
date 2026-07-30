@@ -12,7 +12,6 @@ const GAME_COMPONENTS: Record<string, string> = {
   whackamole:  'WhackAMoleView',
   'tic-tac-toe': 'TicTacToeView',
   'simon':       'SimonView',
-  'tic-tac-toe-2p': 'TicTacToeOnlineView',
 }
 
 const gameRoutes = GAMES.map(g => ({
@@ -31,6 +30,11 @@ const router = createRouter({
       component: () => import('@/views/HomeView.vue')
     },
     ...gameRoutes,
+    // 旧"井字棋·双人"分享链接兼容：重定向到合并后的单入口并保留房间号 query
+    {
+      path: '/tic-tac-toe-2p',
+      redirect: to => ({ path: '/tic-tac-toe', query: to.query })
+    },
     {
       path: '/achievements',
       name: 'achievements',

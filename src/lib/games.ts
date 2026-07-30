@@ -25,9 +25,8 @@ export const GAMES: GameMeta[] = [
   { name: 'breakout',      title: '弹球打砖块', desc: '经典街机游戏',       color: '#FF5A36', path: '/breakout' },
   { name: '2048',          title: '2048',       desc: '数字合成挑战',       color: '#FFD700', path: '/2048' },
   { name: 'whackamole',    title: '打地鼠',     desc: '反应力大考验',       color: '#FF7A3D', path: '/whackamole' },
-  { name: 'tic-tac-toe',   title: '井字棋',     desc: '经典对战 AI',        color: '#FF4DFF', path: '/tic-tac-toe' },
+  { name: 'tic-tac-toe',   title: '井字棋',     desc: '单人AI · 双人在线', color: '#FF4DFF', path: '/tic-tac-toe' },
   { name: 'simon',         title: '西蒙记忆灯', desc: '看灯序挑战记忆',     color: '#00CFFF', path: '/simon' },
-  { name: 'tic-tac-toe-2p', title: '井字棋·双人', desc: '在线实时对战', color: '#FF9E00', path: '/tic-tac-toe-2p' },
 ]
 
 /** 默认空分数字段（store 初始化） */
