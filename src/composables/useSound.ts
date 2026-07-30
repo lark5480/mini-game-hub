@@ -123,9 +123,10 @@ function loseLife() {
 }
 
 function merge(level: number) {
-  const freq = 300 + Math.floor(Math.log2(Math.max(level, 2))) * 50
-  tone(freq, 0.1, 'sine', 0.1)
-  tone(freq * 1.5, 0.08, 'sine', 0.08, 0.05)
+  // 音高随合成方块值上升（2→低，2048→高），用上扬扫频让合并更有"爬升感"
+  const step = Math.max(0, Math.log2(Math.max(level, 2)))
+  const freq = 300 + step * 55
+  sweep(freq, freq * 1.6, 0.12, 'sine', 0.1)
 }
 
 function hit() {
