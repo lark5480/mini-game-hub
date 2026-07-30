@@ -11,7 +11,7 @@
     @back="router.push('/')"
     @restart="initGame"
   >
-    <div class="game-board" ref="boardEl">
+    <div class="game-board" :class="{ 'board-wide': config.cols >= 12 }" ref="boardEl">
       <template v-if="started">
         <div v-if="timeLimitActive" class="timer-bar">
           <div class="timer-fill" :style="{ width: timerPct + '%' }"></div>
@@ -815,5 +815,32 @@ function selectCell(x: number, y: number) {
 .reset-btn:hover {
   background: rgba(255, 0, 110, 0.15);
   border-color: #FF006E;
+}
+
+/* 移动端大网格（困难 10×12 等 12 列宽网格）适配：
+   窄屏下固定舒适格宽 + 横向滚动，避免格子被压到过小难以点按；
+   桌面/平板（>480px）仍走流体布局（约 37px/格）。 */
+@media (max-width: 480px) {
+  .game-board {
+    padding: 8px;
+    max-width: 100%;
+  }
+  .game-row {
+    gap: 3px;
+    margin-bottom: 3px;
+  }
+  .game-cell svg {
+    width: 70%;
+    height: 70%;
+  }
+  .board-wide {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .board-wide .game-cell {
+    flex: 0 0 32px;
+    width: 32px;
+    min-width: 32px;
+  }
 }
 </style>
