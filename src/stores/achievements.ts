@@ -15,6 +15,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'breakout_master', name: '砖块终结者', icon: '🧱', desc: '弹球打砖块通关' },
   { id: 'number_master', name: '数字大师', icon: '🔢', desc: '2048 达到 4096' },
   { id: 'link_master', name: '连连看达人', icon: '🔗', desc: '连连看单局得分 >= 200' },
+  { id: 'link_campaign_clear', name: '闯关连连看', icon: '🏁', desc: '连连看关卡模式通关第 3 关' },
   { id: 'sokoban_master', name: '搬运工', icon: '📦', desc: '推箱子通过第 5 关' },
   { id: 'tetris_master', name: '建筑大师', icon: '🎯', desc: '俄罗斯方块消除 50 行' },
   { id: 'whack_master', name: '神速', icon: '🔨', desc: '打地鼠 30 秒得分 >= 300' },
