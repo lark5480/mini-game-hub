@@ -123,7 +123,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useGameStore } from '@/stores/game'
 import { useSound } from '@/composables/useSound'
 import { useGameSave } from '@/composables/useGameSave'
 import { useAutoSave } from '@/composables/useAutoSave'
@@ -131,6 +130,7 @@ import { useHaptics } from '@/composables/useHaptics'
 import { useGamePause } from '@/composables/useGamePause'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
+import { useGameOver } from '@/composables/useGameOver'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
 import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 import ResumePrompt from '@/components/ResumePrompt.vue'
@@ -160,7 +160,6 @@ const mode = ref<Mode | null>(
 )
 const onlineRef = ref<InstanceType<typeof TicTacToeOnlineView> | null>(null)
 
-const gameStore = useGameStore()
 const sound = useSound()
 const haptics = useHaptics()
 const board = ref<Board>(Array(9).fill(null))
@@ -170,6 +169,9 @@ const result = ref<Result>(null)
 const winningLine = ref<number[]>([])
 
 const gameOverDialog = ref(false)
+const { checkGameOver } = useGameOver()
+const newRecord = ref(false)
+const achievementHint = ref<string | null>(null)
 const showLeaderboard = ref(false)
 const lastScore = ref(0)
 const stats = ref({ wins: 0, draws: 0, losses: 0 })
@@ -229,6 +231,7 @@ const statusLabel = computed(() => {
 })
 
 const resultTitle = computed(() => {
+  if (newRecord.value) return '新纪录！'
   if (result.value === 'win') return '恭喜你获胜！'
   if (result.value === 'lose') return '再接再厉'
   return '势均力敌'
@@ -241,6 +244,7 @@ const resultMessage = computed(() => {
 })
 
 const resultIcon = computed<'success' | 'fail' | 'info'>(() => {
+  if (newRecord.value) return 'success'
   if (result.value === 'win') return 'success'
   if (result.value === 'lose') return 'fail'
   return 'info'
@@ -299,7 +303,6 @@ function endGame(res: Exclude<Result, null>, line: number[]) {
   if (res === 'win') {
     stats.value.wins++
     score = 100
-    sound.win()
     haptics.win()
   } else if (res === 'draw') {
     stats.value.draws++
@@ -307,11 +310,12 @@ function endGame(res: Exclude<Result, null>, line: number[]) {
     haptics.tap()
   } else {
     stats.value.losses++
-    sound.gameOver()
     haptics.error()
   }
   lastScore.value = score
-  gameStore.addScore('tic-tac-toe', score)
+  const { isNewRecord: isNewRecordResult, achievementHint: hint } = checkGameOver('tic-tac-toe', score)
+  newRecord.value = isNewRecordResult
+  achievementHint.value = hint
   clearSave()
   gameOverDialog.value = true
 }

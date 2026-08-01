@@ -42,10 +42,12 @@
     <GameDialog
       v-model:visible="gameOverDialog"
       accentColor="#00CFFF"
-      icon="fail"
-      title="游戏结束"
+      :icon="newRecord ? 'success' : 'fail'"
+      :title="newRecord ? '新纪录！' : '游戏结束'"
       :message="'你记到了第 ' + score + ' 关'"
-      actionText="提交分数"
+      :actionText="newRecord ? '提交新纪录' : '提交分数'"
+      :newRecord="newRecord"
+      :achievementHint="achievementHint"
       @action="openLeaderboard"
     />
     <LeaderboardOverlay
@@ -97,6 +99,8 @@ const score = ref(0)
 const level = ref(0)
 const statusText = ref('点击中心开始')
 const gameOverDialog = ref(false)
+const newRecord = ref(false)
+const achievementHint = ref<string | null>(null)
 const showLeaderboard = ref(false)
 
 const flashDur = 460

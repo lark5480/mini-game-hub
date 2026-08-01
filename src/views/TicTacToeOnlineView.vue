@@ -19,6 +19,7 @@
         </div>
 
         <div v-if="room.status.value === 'connecting'" class="banner">连接中…</div>
+        <div v-else-if="room.status.value === 'reconnecting'" class="banner banner-warn">网络不稳定，正在重新连接…</div>
         <div v-else-if="room.status.value === 'error'" class="banner banner-warn">连接异常，请刷新重试</div>
         <div v-else-if="amSpectator" class="banner banner-warn">房间已满（已有两人），请换房间或刷新等待空位</div>
         <div v-else-if="!opponentPresent" class="banner banner-wait">

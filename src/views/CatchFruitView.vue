@@ -47,10 +47,12 @@
     <GameDialog
       v-model:visible="gameOver"
       accentColor="#05FFA1"
-      icon="fail"
-      title="游戏结束"
+      :icon="newRecord ? 'success' : 'fail'"
+      :title="newRecord ? '新纪录！' : '游戏结束'"
       :message="'得分: ' + score"
-      actionText="提交分数"
+      :actionText="newRecord ? '提交新纪录' : '提交分数'"
+      :newRecord="newRecord"
+      :achievementHint="achievementHint"
       @action="openLeaderboard"
     />
     <LeaderboardOverlay
@@ -73,8 +75,8 @@ import { useGameLoop } from '@/composables/useGameLoop'
 import { useSound } from '@/composables/useSound'
 import { useGamePause } from '@/composables/useGamePause'
 import { useHaptics } from '@/composables/useHaptics'
-import { useGameStore } from '@/stores/game'
 import { useScoreFloats } from '@/composables/useScoreFloats'
+import { useGameOver } from '@/composables/useGameOver'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
@@ -87,13 +89,15 @@ const router = useRouter()
 const sound = useSound()
 const haptics = useHaptics()
 const { popups, pop } = useScoreFloats()
-const gameStore = useGameStore()
+const { checkGameOver } = useGameOver()
 
 const boardWidth = 400, boardHeight = 500, basketWidth = 80, basketSpeed = 30
 const basketX = ref(boardWidth / 2 - basketWidth / 2)
 const fruits = ref<{ id: number; x: number; y: number; emoji: string }[]>([])
 const score = ref(0), lives = ref(3), isPlaying = ref(false), gameOver = ref(false), fruitId = ref(0)
 const showLeaderboard = ref(false)
+const newRecord = ref(false)
+const achievementHint = ref<string | null>(null)
 const lastScore = ref(0)
 
 const fruitEmojis = ['🍎','🍊','🍋','🍇','🍓','🍉','🍑','🍒']
@@ -191,14 +195,15 @@ function startGame() {
 function endGame() {
   isPlaying.value = false; gameOver.value = true
   gameLoop.stop()
-  sound.gameOver()
   lastScore.value = score.value
+  const { isNewRecord: isNewRecordResult, achievementHint: hint } = checkGameOver('catch-fruit', score.value)
+  newRecord.value = isNewRecordResult
+  achievementHint.value = hint
 }
 
 function openLeaderboard() {
   gameOver.value = false
   lastScore.value = score.value
-  gameStore.addScore('catch-fruit', score.value)
   showLeaderboard.value = true
 }
 

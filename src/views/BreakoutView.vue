@@ -29,19 +29,23 @@
     <GameDialog
       v-model:visible="gameOver"
       accentColor="#FF5A36"
-      icon="fail"
-      title="游戏结束"
+      :icon="newRecord ? 'success' : 'fail'"
+      :title="newRecord ? '新纪录！' : '游戏结束'"
       :message="'得分 ' + score"
-      actionText="提交分数"
+      :actionText="newRecord ? '提交新纪录' : '提交分数'"
+      :newRecord="newRecord"
+      :achievementHint="achievementHint"
       @action="openLeaderboard"
     />
     <GameDialog
       v-model:visible="victory"
       accentColor="#00FFFF"
       icon="success"
-      title="恭喜通关！"
+      :title="newRecord ? '新纪录！' : '恭喜通关！'"
       :message="'得分 ' + score"
-      actionText="提交分数"
+      :actionText="newRecord ? '提交新纪录' : '提交分数'"
+      :newRecord="newRecord"
+      :achievementHint="achievementHint"
       @action="openLeaderboard"
     />
     <LeaderboardOverlay
@@ -68,6 +72,7 @@ import { useToast } from '@/composables/useToast'
 import { useGamePause } from '@/composables/useGamePause'
 import { useHaptics } from '@/composables/useHaptics'
 import { useScoreFloats } from '@/composables/useScoreFloats'
+import { useGameOver } from '@/composables/useGameOver'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
@@ -84,6 +89,7 @@ const achievements = useAchievements()
 const toast = useToast()
 const haptics = useHaptics()
 const { popups, pop } = useScoreFloats()
+const { checkGameOver } = useGameOver()
 
 const score = ref(0)
 const lives = ref(3)
@@ -91,6 +97,8 @@ const gameOver = ref(false)
 const showLeaderboard = ref(false)
 const lastScore = ref(0)
 const victory = ref(false)
+const newRecord = ref(false)
+const achievementHint = ref<string | null>(null)
 const { paused, toggle } = useGamePause({
   canPause: () => !gameOver.value && !victory.value
 })
@@ -285,10 +293,11 @@ function gameUpdate(dt: number) {
     if (lives.value <= 0) {
       gameOver.value = true
       launched = false
-      sound.gameOver()
       haptics.error()
       lastScore.value = score.value
-      gameStore.addScore('breakout', score.value)
+      const result = checkGameOver('breakout', score.value)
+      newRecord.value = result.isNewRecord
+      achievementHint.value = result.achievementHint
     } else {
       ballX = paddleX + PADDLE_WIDTH / 2
       ballY = CANVAS_H - 50

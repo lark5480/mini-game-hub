@@ -196,6 +196,13 @@
   100% { opacity: 1; transform: rotate(0) scale(1); }
 }
 
+/* ---------- GameDialog：新记录徽章弹跳 ---------- */
+@keyframes badge-pop {
+  0% { transform: translateX(-50%) scale(0.5); opacity: 0; }
+  60% { transform: translateX(-50%) scale(1.1); }
+  100% { transform: translateX(-50%) scale(1); opacity: 1; }
+}
+
 /* ---------- 可访问性：prefers-reduced-motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   *,

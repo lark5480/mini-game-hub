@@ -67,10 +67,12 @@
       v-model:visible="winDialog"
       accentColor="#FF006E"
       icon="success"
-      title="全部消除！"
+      :title="newRecord ? '新纪录！' : '全部消除！'"
       :message="'得分: ' + score"
       actionText="提交分数"
       @action="submitScore"
+      :newRecord="newRecord"
+      :achievementHint="achievementHintNew"
     />
     <GameDialog
       v-model:visible="levelClearDialog"
@@ -119,6 +121,7 @@ import { useGameSave } from '@/composables/useGameSave'
 import { useAutoSave } from '@/composables/useAutoSave'
 import { useHaptics } from '@/composables/useHaptics'
 import { useScoreFloats } from '@/composables/useScoreFloats'
+import { useGameOver } from '@/composables/useGameOver'
 import { useGamePause } from '@/composables/useGamePause'
 import { useGameLoop } from '@/composables/useGameLoop'
 import { DIFFS, DIFF_LABELS, levelToDifficulty, type DiffKey, type LinkMode } from '@/lib/linkGame'
@@ -136,6 +139,7 @@ const toast = useToast()
 const haptics = useHaptics()
 const gameStore = useGameStore()
 const { popups, pop } = useScoreFloats()
+const { checkGameOver } = useGameOver()
 
 // 暂停 / 恢复：回合制游戏统一 composable（失焦自动暂停 + P/Esc + 音效）
 const { paused } = useGamePause({
@@ -166,6 +170,8 @@ const winDialog = ref(false)
 const levelClearDialog = ref(false)
 const campaignClearDialog = ref(false)
 const showLeaderboard = ref(false)
+const newRecord = ref(false)
+const achievementHintNew = ref<string | null>(null)
 const lastScore = ref(0)
 const timeLeft = ref(0)
 
@@ -389,7 +395,8 @@ function newGame() {
 function submitScore() {
   if (mode.value === 'campaign') { submitCampaign(); return }
   lastScore.value = score.value
-  gameStore.addScore('link', score.value)
+  const { achievementHint } = checkGameOver('link', score.value)
+  achievementHintNew.value = achievementHint
   winDialog.value = false
   showLeaderboard.value = true
   clearSave()
@@ -408,7 +415,7 @@ function submitCampaign() {
 function onTimeUp() {
   gameLoop.stop()
   lastScore.value = score.value
-  gameStore.addScore('link-campaign', score.value)
+  checkGameOver('link-campaign', score.value)
   showLeaderboard.value = true
   clearSave()
 }

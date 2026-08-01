@@ -43,10 +43,12 @@
     <GameDialog
       v-model:visible="gameOver"
       accentColor="#B967FF"
-      icon="fail"
-      title="游戏结束"
+      :icon="newRecord ? 'success' : 'fail'"
+      :title="newRecord ? '新纪录！' : '游戏结束'"
       :message="'得分: ' + score"
-      actionText="提交分数"
+      :actionText="newRecord ? '提交新纪录' : '提交分数'"
+      :newRecord="newRecord"
+      :achievementHint="achievementHint"
       @action="openLeaderboard"
     />
     <LeaderboardOverlay
@@ -65,18 +67,17 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useGameLoop } from '@/composables/useGameLoop'
 import { useSound } from '@/composables/useSound'
 import { useAchievements } from '@/stores/achievements'
-import { useToast } from '@/composables/useToast'
 import { useGameSave } from '@/composables/useGameSave'
 import { useAutoSave } from '@/composables/useAutoSave'
 import { useSwipe } from '@/composables/useSwipe'
 import { useGamePause } from '@/composables/useGamePause'
 import { useHaptics } from '@/composables/useHaptics'
 import { useScoreFloats } from '@/composables/useScoreFloats'
+import { useGameOver } from '@/composables/useGameOver'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
@@ -87,14 +88,15 @@ import ResumePrompt from '@/components/ResumePrompt.vue'
 import ScoreFloat from '@/components/ScoreFloat.vue'
 
 const router = useRouter()
-const gameStore = useGameStore()
 const sound = useSound()
 const achievements = useAchievements()
-const toast = useToast()
 const haptics = useHaptics()
 const { popups, pop } = useScoreFloats()
+const { checkGameOver } = useGameOver()
 
 const showLeaderboard = ref(false)
+const newRecord = ref(false)
+const achievementHint = ref<string | null>(null)
 
 const GRID_WIDTH = 20, GRID_HEIGHT = 15
 const grid = ref<number[][]>([])
@@ -305,13 +307,12 @@ function startGame() {
 function endGame() {
   isPlaying.value = false; gameOver.value = true
   gameLoop.stop()
-  sound.gameOver()
   lastScore.value = score.value
-  gameStore.addScore('snake', score.value)
-  if (score.value >= 200) {
-    if (achievements.unlock('snake_king')) {
-      toast.show('成就解锁：蛇王', '🐍')
-    }
+  const { isNewRecord: isNewRecordResult, achievementHint: hint } = checkGameOver('snake', score.value)
+  newRecord.value = isNewRecordResult
+  achievementHint.value = hint
+  if (achievements.isUnlocked('snake_king')) {
+    // 已解锁则无需提示
   }
 }
 

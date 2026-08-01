@@ -31,7 +31,25 @@
           <p class="status error">{{ error }}</p>
           <button class="retry-btn" @click="fetch">重试</button>
         </template>
-        <p v-else-if="entries.length === 0" class="status">还没有人上榜，快来抢第一！</p>
+        <p v-else-if="entries.length === 0 && nearbyEntries.length === 0" class="status">还没有人上榜，快来抢第一！</p>
+
+        <!-- 邻位排名：提交后展示玩家前后各几名 -->
+        <template v-else-if="nearbyEntries.length > 0">
+          <p class="nearby-title">你的排名 第 {{ nearbyRank }} 名</p>
+          <ul class="rank-list">
+            <li
+              v-for="(entry, idx) in nearbyEntries"
+              :key="entry.id"
+              :class="['rank-item', { top: entry.id === nearbyMyEntryId, isMe: entry.id === nearbyMyEntryId }]"
+            >
+              <span class="rank-num">{{ nearbyStartRank + idx }}</span>
+              <span class="rank-name">{{ entry.nickname }}</span>
+              <span class="rank-score">{{ entry.score }}</span>
+            </li>
+          </ul>
+        </template>
+
+        <!-- 默认：展示 Top N -->
         <ul v-else class="rank-list">
           <li
             v-for="(entry, idx) in entries"
@@ -51,7 +69,7 @@
         <p class="status error">排行榜未配置（成绩仍可分享）</p>
       </div>
 
-      <!-- 分享成绩：只要有分数就常驻，不依赖 Supabase -->
+      <!-- 分享成绩：只要有分数就常设，不依赖 Supabase -->
       <button
         v-if="props.score > 0"
         class="share-btn"
@@ -69,6 +87,15 @@
       >
         再来一局
       </button>
+
+      <!-- 试试别的：推荐未玩过的游戏 -->
+      <button
+        v-if="props.score > 0 && mode !== 'submit' && suggestedGame"
+        class="try-other-btn"
+        @click="goToSuggestedGame"
+      >
+        试试「{{ suggestedGame.title }}」
+      </button>
     </div>
   </div>
   </Transition>
@@ -76,9 +103,11 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 import { useLeaderboard, useLeaderboardAutoRefresh } from '@/composables/useLeaderboard'
 import { rankLabel } from '@/lib/rank'
+import { GAMES } from '@/lib/games'
 
 type Mode = 'submit' | 'view' | 'viewing-after-submit'
 
@@ -96,12 +125,19 @@ const emit = defineEmits<{
   replay: []
 }>()
 
-const { entries, loading, error, fetch, submit } = useLeaderboard(props.game)
+const router = useRouter()
+const { entries, loading, error, fetch, fetchNearby, submit } = useLeaderboard(props.game)
 useLeaderboardAutoRefresh(fetch)
 
 const nickname = ref('')
 const submitting = ref(false)
 const lastInsertedId = ref<number | null>(null)
+
+// 邻位排名状态
+const nearbyEntries = ref<Awaited<ReturnType<typeof fetchNearby>>['entries']>([])
+const nearbyMyEntryId = ref<number | null>(null)
+const nearbyRank = ref<number | null>(null)
+const nearbyStartRank = ref<number>(1)
 
 const mode = ref<Mode>('view')
 
@@ -122,13 +158,48 @@ async function handleSubmit() {
   if (ok) {
     await fetch()
     lastInsertedId.value = entries.value[0]?.id ?? null
+    // 获取邻位排名
+    if (supabaseConfigured.value) {
+      const result = await fetchNearby(props.score, nickname.value)
+      nearbyEntries.value = result.entries
+      nearbyMyEntryId.value = result.myEntryId
+      nearbyRank.value = result.myRank
+      // 窗口首条排名 = 全局排名 - 玩家在窗口内的偏移
+      const myIndexInNearby = nearbyEntries.value.findIndex(e => e.id === result.myEntryId)
+      nearbyStartRank.value = Math.max(1, (result.myRank ?? 1) - (myIndexInNearby >= 0 ? myIndexInNearby : 0))
+    }
     mode.value = 'viewing-after-submit'
   }
 }
 
 function switchToView() {
   mode.value = 'view'
+  nearbyEntries.value = []
   fetch()
+}
+
+// 推荐未玩过的游戏
+const suggestedGame = computed(() => {
+  // 从 localStorage 获取已提交过分数的游戏
+  let submittedGames: Set<string> = new Set()
+  try {
+    const data = localStorage.getItem('game-submitted-games')
+    if (data) submittedGames = new Set(JSON.parse(data))
+  } catch { /* ignore */ }
+  // 排除当前游戏
+  submittedGames.add(props.game)
+  // 找未玩过的游戏
+  const unplayed = GAMES.filter(g => !submittedGames.has(g.name))
+  if (unplayed.length === 0) return null
+  // 随机推荐一个
+  return unplayed[Math.floor(Math.random() * unplayed.length)]
+})
+
+function goToSuggestedGame() {
+  if (suggestedGame.value) {
+    emit('update:visible', false)
+    router.push(suggestedGame.value.path)
+  }
 }
 
 // 一键分享成绩：移动端走原生系统分享面板；桌面端直接复制到剪贴板（更稳，避免系统分享面板卡死）
@@ -147,53 +218,35 @@ const shareLabel = computed(() => {
 })
 
 async function shareScore() {
-  const url = `${location.origin}/#/${props.game}`
-  const text = `我在「${props.gameName}」拿了 ${props.score} 分！来小游戏合集挑战我：${url}`
-  // 桌面端 navigator.share 常打开系统分享面板后卡死（无可用目标/缺 url），直接复制最稳；
-  // 仅移动端走原生分享（可分享到微信等）。
-  if (navigator.share && isTouchDevice.value) {
+  const text = `我在「${props.gameName}」中获得了 ${props.score} 分，来挑战我吧！`
+  if (isTouchDevice.value && navigator.share) {
     try {
-      await navigator.share({ title: '小游戏合集', text, url })
-      markShared('shared')
+      await navigator.share({ title: '小游戏合集', text })
+      shareState.value = 'shared'
+    } catch {
+      // 用户取消分享，不做任何事
       return
-    } catch (err) {
-      // 用户主动取消（AbortError）则保持原状；其它失败（无分享目标等）降级复制
-      if ((err as Error)?.name === 'AbortError') return
+    }
+  } else {
+    // 桌面端或不支持 share API：复制到剪贴板
+    try {
+      await navigator.clipboard.writeText(text)
+      shareState.value = 'copied'
+    } catch {
+      // 降级方案
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+      shareState.value = 'copied'
     }
   }
-  try {
-    await copyText(text)
-    markShared('copied')
-  } catch {
-    // 复制也失败：保持原状
-  }
-}
-
-async function copyText(text: string) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text)
-  } else {
-    fallbackCopy(text)
-  }
-}
-
-function markShared(state: 'shared' | 'copied') {
-  shareState.value = state
   clearTimeout(shareTimer)
-  shareTimer = window.setTimeout(() => (shareState.value = 'idle'), 2000)
-}
-
-function fallbackCopy(text: string) {
-  const ta = document.createElement('textarea')
-  ta.value = text
-  ta.style.position = 'fixed'
-  ta.style.top = '-9999px'
-  ta.style.opacity = '0'
-  document.body.appendChild(ta)
-  ta.focus()
-  ta.select()
-  try { document.execCommand('copy') } catch { /* ignore */ }
-  document.body.removeChild(ta)
+  shareTimer = setTimeout(() => { shareState.value = 'idle' }, 2000)
 }
 
 onUnmounted(() => clearTimeout(shareTimer))
@@ -332,6 +385,14 @@ h3 {
 
 .status.error { color: #FF6B6B; }
 
+.nearby-title {
+  text-align: center;
+  color: #FFD700;
+  font-size: 0.95em;
+  margin-bottom: 15px;
+  font-weight: 600;
+}
+
 .retry-btn {
   display: block;
   margin: 12px auto 0;
@@ -414,7 +475,27 @@ h3 {
   box-shadow: 0 0 20px color-mix(in srgb, var(--game-accent, #818CF8) 40%, transparent);
 }
 
-/* 分享成绩（次级按钮，区别于主按钮"再来一局"） */
+.try-other-btn {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  background: rgba(255, 0, 110, 0.1);
+  border: 1px solid rgba(255, 0, 110, 0.4);
+  color: #FF6B9D;
+  padding: 12px;
+  font-size: 1em;
+  font-weight: 600;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.try-other-btn:hover {
+  background: rgba(255, 0, 110, 0.2);
+  box-shadow: 0 0 16px rgba(255, 0, 110, 0.3);
+}
+
+/* 分享成绩（次级按钮，区别于主按钮"再来局"） */
 .share-btn {
   display: block;
   width: 100%;

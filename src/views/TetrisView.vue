@@ -78,10 +78,12 @@
     <GameDialog
       :visible="gameOver"
       accentColor="#2D7DFF"
-      icon="fail"
-      title="游戏结束"
+      :icon="newRecord ? 'success' : 'fail'"
+      :title="newRecord ? '新纪录！' : '游戏结束'"
       :message="'得分: ' + score"
-      actionText="提交分数"
+      :actionText="newRecord ? '提交新纪录' : '提交分数'"
+      :newRecord="newRecord"
+      :achievementHint="achievementHint"
       @action="openLeaderboard"
       @update:visible="onDialogClose"
     />
@@ -101,7 +103,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useGameLoop } from '@/composables/useGameLoop'
 import { useSound } from '@/composables/useSound'
@@ -112,6 +113,7 @@ import { useAutoSave } from '@/composables/useAutoSave'
 import { useGamePause } from '@/composables/useGamePause'
 import { useHaptics } from '@/composables/useHaptics'
 import { useScoreFloats } from '@/composables/useScoreFloats'
+import { useGameOver } from '@/composables/useGameOver'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
@@ -122,12 +124,12 @@ import ResumePrompt from '@/components/ResumePrompt.vue'
 import ScoreFloat from '@/components/ScoreFloat.vue'
 
 const router = useRouter()
-const gameStore = useGameStore()
 const sound = useSound()
 const achievements = useAchievements()
 const toast = useToast()
 const haptics = useHaptics()
 const { popups, pop } = useScoreFloats()
+const { checkGameOver } = useGameOver()
 const showResume = ref(false)
 
 const GRID_W = 10, GRID_H = 20
@@ -150,6 +152,8 @@ const nextPiece = ref<Tetromino | null>(null)
 const score = ref(0), lines = ref(0), isPlaying = ref(false), gameOver = ref(false)
 const nextGrid = ref<string[][]>([])
 const showLeaderboard = ref(false)
+const newRecord = ref(false)
+const achievementHint = ref<string | null>(null)
 const lastScore = ref(0)
 
 // 存档
@@ -431,9 +435,10 @@ function startGame() {
 function endGame() {
   isPlaying.value = false; gameOver.value = true
   gameLoop.stop()
-  sound.gameOver()
   lastScore.value = score.value
-  gameStore.addScore('tetris', score.value)
+  const { isNewRecord: isNewRecordResult, achievementHint: hint } = checkGameOver('tetris', score.value)
+  newRecord.value = isNewRecordResult
+  achievementHint.value = hint
 }
 
 function openLeaderboard() {

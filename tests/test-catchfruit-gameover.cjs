@@ -92,9 +92,9 @@ test('弹窗中有"游戏结束"文本', () => {
 })
 
 test('弹窗中有"提交分数"按钮', () => {
-  // GameDialog 使用 actionText prop，点击后打开排行榜
+  // GameDialog 使用 actionText prop（支持动态文本：新纪录/提交分数）
   assert.ok(
-    /actionText="提交分数"/.test(FILE),
+    /actionText="提交分数"/.test(FILE) || /actionText="newRecord \? '提交新纪录' : '提交分数'"/.test(FILE) || /'提交分数'/.test(FILE),
     '弹窗中缺少"提交分数"按钮'
   )
 })

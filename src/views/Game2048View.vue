@@ -61,18 +61,22 @@
       v-model:visible="winDialog"
       accentColor="#FFD700"
       icon="success"
-      title="恭喜通关！"
+      :title="newRecord ? '新纪录！' : '恭喜通关！'"
       :message="'达到 2048！得分: ' + score"
       actionText="继续挑战"
       @action="winDialog = false"
+      :newRecord="newRecord"
+      :achievementHint="achievementHint"
     />
     <GameDialog
       v-model:visible="gameOverDialog"
       accentColor="#FFD700"
-      icon="fail"
-      title="游戏结束"
+      :icon="newRecord ? 'success' : 'fail'"
+      :title="newRecord ? '新纪录！' : '游戏结束'"
       :message="'最终得分: ' + score"
-      actionText="提交分数"
+      :actionText="newRecord ? '提交新纪录' : '提交分数'"
+      :newRecord="newRecord"
+      :achievementHint="achievementHint"
       @action="openLeaderboard"
     />
     <LeaderboardOverlay
@@ -101,6 +105,7 @@ import { useAutoSave } from '@/composables/useAutoSave'
 import { useHaptics } from '@/composables/useHaptics'
 import { useGamePause } from '@/composables/useGamePause'
 import { useScoreFloats } from '@/composables/useScoreFloats'
+import { useGameOver } from '@/composables/useGameOver'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
@@ -129,6 +134,7 @@ const achievements = useAchievements()
 const toast = useToast()
 const haptics = useHaptics()
 const { popups, pop } = useScoreFloats()
+const { checkGameOver } = useGameOver()
 
 let tileId = 1
 function createTile(x: number, y: number, value: number, isNew = false): Tile {
@@ -140,6 +146,8 @@ const score = ref(0)
 const moves = ref(0)
 const bestScore = computed(() => gameStore.getTopScore('2048'))
 const winDialog = ref(false)
+const newRecord = ref(false)
+const achievementHint = ref<string | null>(null)
 const gameOverDialog = ref(false)
 const showLeaderboard = ref(false)
 const lastScore = ref(0)
@@ -383,8 +391,10 @@ function handleMove(dir: Direction, silent = false) {
   if (!won.value && largestTile.value >= 2048) {
     won.value = true
     winDialog.value = true
-    sound.win()
-    gameStore.addScore('2048', score.value)
+    lastScore.value = score.value
+    const { isNewRecord: isNewRecordResult, achievementHint: hint } = checkGameOver('2048', score.value)
+    newRecord.value = isNewRecordResult
+    achievementHint.value = hint
     return
   }
 
@@ -394,8 +404,9 @@ function handleMove(dir: Direction, silent = false) {
 
   if (!canMove(grid.value)) {
     lastScore.value = score.value
-    gameStore.addScore('2048', score.value)
-    sound.gameOver()
+    const { isNewRecord: isNewRecordResult, achievementHint: hint } = checkGameOver('2048', score.value)
+    newRecord.value = isNewRecordResult
+    achievementHint.value = hint
     gameOverDialog.value = true
   }
 }

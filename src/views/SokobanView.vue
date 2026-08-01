@@ -59,8 +59,10 @@
       icon="success"
       :title="gameComplete ? '全部通关！' : '恭喜过关！'"
       :message="gameComplete ? '总分: ' + totalScore : '用了 ' + steps + ' 步'"
-      :actionText="gameComplete ? '提交分数' : '下一关'"
+      :actionText="gameComplete ? (newRecord ? '提交新纪录' : '提交分数') : '下一关'"
       @action="handleDialogAction"
+      :newRecord="newRecord"
+      :achievementHint="achievementHint"
     />
     <LeaderboardOverlay
       :visible="showLeaderboard"
@@ -230,6 +232,8 @@ const board = ref<number[][]>([])
 const winDialog = ref(false)
 const totalScore = ref(0)
 const gameComplete = ref(false)
+const newRecord = ref(false)
+const achievementHint = ref<string | null>(null)
 
 // 存档
 const save = useGameSave('sokoban')
