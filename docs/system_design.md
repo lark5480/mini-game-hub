@@ -27,12 +27,12 @@ App.vue（全局样式 + scanlines 特效）
 | 组件 | 职责 |
 |------|------|
 | `GameLayout` | 游戏外层框架：标题栏（含静音/重启按钮）、键盘提示、游戏主区域、控制区插槽。通过 `accentColor` prop 注入 CSS 变量 `--game-accent` |
-| `GameDialog` | 弹窗（成功/失败/信息），`v-model:visible` 控制显隐，`@action` 处理按钮点击，自带淡入动画 + safe-area |
+| `GameDialog` | 弹窗（成功/失败/信息），`v-model:visible` 控制显隐，`@action` 处理按钮点击，自带淡入动画 + safe-area；`newRecord` prop 显示金色新记录徽章（badge-pop 弹跳动画），`achievementHint` prop 显示成就接近提示 |
 | `DirectionPad` | 触屏方向键，`cross` / `horizontal` 两种布局，`repeat` 长按连发 |
 | `PauseOverlay` | 暂停遮罩，`@resume` 触发继续，自带淡入动画 + safe-area |
 | `ResumePrompt` | 继续上局 / 重新开始 选择弹窗，失焦/按 P 暂停时弹出，自带淡入动画 + safe-area |
 | `ScoreFloat` | 浮动分数动画（`+10 / +20` 等），0.8s 上浮消失 |
-| `LeaderboardOverlay` | 提交分数 → 排行榜 → 再来一局，5s 超时 + 重试按钮 + 友好中文错误 + safe-area |
+| `LeaderboardOverlay` | 提交分数 → 排行榜（Top N + 邻位排名）→ 再来一局，5s 超时 + 重试按钮 + 友好中文错误 + safe-area；提交后展示玩家前后各 range 名的邻位排名 + 推荐未玩过的游戏 |
 | `LeaderboardStrip` | 嵌入各游戏底部和首页卡片，自动监听 `leaderboardVersion` 刷新 |
 | `GameToast` | 顶部成就解锁 Toast，2s 自动消失 + 淡入动画 + safe-area |
 
@@ -48,9 +48,19 @@ App.vue（全局样式 + scanlines 特效）
 | `useHaptics` | 移动端震动反馈（`light / tap / select / pulse / success / error / win`），无振动环境静默 |
 | `useScoreFloats` | 浮动分数堆叠管理，`pop(text, x, y)` 触发新浮动 */
 | `useGameSave` | 存档/读档/继续游戏（localStorage），每 300ms 节流自动保存 |
-| `useLeaderboard` | 排行榜 CRUD：`submit()` 含 5s 超时 + 错误友好化映射；全局 `leaderboardVersion` 广播刷新信号 |
+| `useLeaderboard` | 排行榜 CRUD：`submit()` 含 5s 超时 + 错误友好化映射；全局 `leaderboardVersion` 广播刷新信号；`fetchNearby(score, nickname, range)` 用 COUNT 定全局排名 + range 拉邻位窗口 |
+| `useGameOver` | 游戏结束统一处理：检测新记录 + 写入分数 + 播放音效 + 成就接近提示（分数达 75% 阈值时提示"还差 N 分"，达成时自动解锁成就） |
 | `useToast` | 顶部 Toast 通知（成就解锁用） |
 | `useSwipe` | 移动端滑动手势（2048/贪吃蛇等用） |
+
+## PWA（渐进式 Web 应用）
+
+- **插件**：`vite-plugin-pwa`，`registerType: 'autoUpdate'`（自动更新 service worker）
+- **注册**：`App.vue` 在 `onMounted` 中动态 `import('virtual:pwa-register')`，仅生产环境注册
+- **Manifest**：`vite.config.ts` 中配置名称、图标（192/512 + maskable）、主题色 `#0D0D1A`、standalone 显示
+- **离线缓存**：Workbox `globPatterns` 预缓存静态资源；Supabase API 走 `NetworkFirst`（24h 过期、最多 50 条）
+- **安全假设**：当前 Supabase 查询均为 anon 公共数据，缓存无跨用户泄露风险；未来引入认证需按用户隔离缓存
+- **错误兜底**：`main.ts` 全局 `errorHandler` + `unhandledrejection` 监听，防止 Vue 渲染异常白屏
 
 ## 游戏注册表（单源）
 
@@ -70,8 +80,12 @@ App.vue（全局样式 + scanlines 特效）
   → 游戏视图更新状态
   → useGameLoop 驱动渲染（interval 或 rAF）
   → 游戏事件触发音效（useSound）+ 震动（useHaptics）+ 浮动分数（useScoreFloats）
-  → 游戏结束 → useGameStore.addScore() → localStorage 持久化
+  → 游戏结束 → useGameOver.checkGameOver()
+      → useGameStore.addScore() → localStorage 持久化
+      → 新记录徽章 + 胜利音效
+      → 成就接近提示 / 自动解锁
   → 打开 LeaderboardOverlay → useLeaderboard.submit() → Supabase + 全局广播
+           → fetchNearby() 展示邻位排名
   → 成就达成 → achievements.unlock() → sound.unlock() + haptics.success() + toast.show()
 ```
 

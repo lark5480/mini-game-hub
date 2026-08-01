@@ -72,7 +72,7 @@ npm run preview
 
 ## ✨ 体验特性
 
-弹窗动画 / 触屏拖拽 / 键盘连发 / 音效反馈（23+ 预设）/ 震动反馈 / 失焦暂停 / 可访问性（focus-visible + reduced-motion）/ 排行榜容错（5s 超时 + 重试）
+弹窗动画 / 触屏拖拽 / 键盘连发 / 音效反馈（23+ 预设）/ 震动反馈 / 失焦暂停 / 可访问性（focus-visible + reduced-motion）/ PWA（可安装 + 离线缓存）/ 新记录徽章 / 成就接近提示 / 邻位排名 / 排行榜容错（5s 超时 + 重试）
 
 详细机制见 [docs/system_design.md](./docs/system_design.md)。
 
@@ -86,6 +86,8 @@ npm run preview
 - **路由**: [Vue Router](https://router.vuejs.org/) - Vue.js 官方路由
 - **状态管理**: [Pinia](https://pinia.vuejs.org/) - Vue 的现代状态管理库
 - **样式**: 原生 CSS + CSS 变量
+- **PWA**: [vite-plugin-pwa](https://vite-pwa-org.netlify.app/) - 离线缓存 + 自动更新
+- **实时通信**: Supabase Realtime - 井字棋在线对战
 
 ---
 
