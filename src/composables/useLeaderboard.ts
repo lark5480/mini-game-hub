@@ -26,6 +26,13 @@ export interface LeaderboardEntry {
   created_at: string
 }
 
+/** 邻位排名：玩家前后各若干名 + 标识哪个是玩家自己 */
+export interface NearbyResult {
+  entries: LeaderboardEntry[]
+  myEntryId: number | null
+  myRank: number | null  // 1-based
+}
+
 // 全局刷新信号：每次成功提交后递增，所有 LeaderboardStrip 自动重新拉取
 export const leaderboardVersion = ref(0)
 
@@ -86,6 +93,47 @@ export function useLeaderboard(game: string, limit = 10) {
     return p
   }
 
+  /**
+   * 获取玩家附近的排名：先 COUNT 定全局排名，再按排名窗口拉邻位条目。
+   * 返回有序列表 + 玩家条目 id 和全局名次（1-based）。
+   */
+  async function fetchNearby(score: number, nickname: string, range = 3): Promise<NearbyResult> {
+    if (!supabase) return { entries: [], myEntryId: null, myRank: null }
+    try {
+      // 1. 全局排名 = 严格更高分的条目数 + 1（同分同名次）
+      const { count: higherCount } = await withTimeout(
+        supabase
+          .from('leaderboard')
+          .select('id', { count: 'exact', head: true })
+          .eq('game', game)
+          .gt('score', score)
+      )
+      const myRank = (higherCount ?? 0) + 1
+
+      // 2. 按排名窗口拉取邻位条目（玩家始终在窗口内）
+      const startIndex = Math.max(0, myRank - 1 - range)
+      const endIndex = myRank - 1 + range
+      const { data: nearby } = await withTimeout(
+        supabase
+          .from('leaderboard')
+          .select('*')
+          .eq('game', game)
+          .order('score', { ascending: false })
+          .range(startIndex, endIndex)
+      )
+
+      const list = nearby ?? []
+
+      // 3. 标识玩家自己的条目（按昵称匹配）
+      const myEntry = list.find(e => e.nickname === (nickname.trim() || '匿名玩家')) ?? null
+      const myEntryId = myEntry?.id ?? null
+
+      return { entries: list, myEntryId, myRank }
+    } catch (e) {
+      return { entries: [], myEntryId: null, myRank: null }
+    }
+  }
+
   async function submit(nickname: string, score: number): Promise<boolean> {
     if (!supabase) return false
     const name = nickname.trim() || '匿名玩家'
@@ -134,7 +182,7 @@ export function useLeaderboard(game: string, limit = 10) {
     return true
   }
 
-  return { entries, loading, error, fetch, submit }
+  return { entries, loading, error, fetch, fetchNearby, submit }
 }
 
 // 供 LeaderboardStrip 调用：监听全局版本号变化自动刷新

@@ -342,6 +342,12 @@ function dismissTutorial() {
 .game-container.entrance-ttt {
   animation: entrance-ttt 0.5s ease-out both;
 }
+.game-container.entrance-simon {
+  animation: entrance-simon 0.55s ease-out both;
+}
+.game-container.entrance-ttt2p {
+  animation: entrance-ttt2p 0.5s ease-out both;
+}
 
 /* 游戏区背后的主题色光晕：进不同游戏光色不同，形成记忆点 */
 .game-container::before {

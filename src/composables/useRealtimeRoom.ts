@@ -8,7 +8,7 @@
 import { ref, onUnmounted, type Ref } from 'vue'
 import { supabase } from '@/lib/supabase'
 
-export type RoomStatus = 'idle' | 'connecting' | 'connected' | 'no-supabase' | 'error'
+export type RoomStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'no-supabase' | 'error'
 
 export interface RoomApi {
   status: Ref<RoomStatus>
@@ -91,12 +91,14 @@ export function useRealtimeRoom(roomCode: string, meta: Record<string, unknown> 
       status.value = 'connected'
       await channel.track({ id: myId, ...meta })
     } else if (s === 'CHANNEL_ERROR' || s === 'TIMED_OUT') {
-      status.value = 'error'
+      // Supabase Realtime 底层会自动重连，重连成功后再次触发 SUBSCRIBED。
+      // 此处标记为 reconnecting（可恢复），而非 error（不可恢复），避免误导用户刷新页面。
+      status.value = 'reconnecting'
     }
   })
 
   function send(type: string, data: unknown) {
-    channel.send({ type: 'broadcast', event: 'msg', payload: { type, from: myId, data } })
+    channel.send({ type: 'broadcast', event: 'msg', payload: { type, from: myId, data }})
   }
 
   function on(type: string, handler: (data: any) => void) {

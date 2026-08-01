@@ -1,7 +1,7 @@
 <template>
   <GameLayout
     title="打地鼠"
-    accentColor="#FF6B6B"
+    accentColor="#FF7A3D"
     entrance="whackmole"
     gradientEnd="#FFD700"
     :hints="['点击地鼠得分', '别打空！']"
@@ -81,15 +81,16 @@
       </div>
     </template>
 
-    <PauseOverlay :visible="wasActiveBeforePause" @resume="resumeAfterPause" />
-    <ResumePrompt :visible="showResume" @continue="continueGame" @new-game="newGame" />
+    <PauseOverlay :visible="paused" @resume="resumeGame" />
     <GameDialog
       v-model:visible="gameOverDialog"
-      accentColor="#FF6B6B"
-      icon="success"
-      title="游戏结束！"
+      accentColor="#FF7A3D"
+      :icon="newRecord ? 'success' : 'fail'"
+      :title="newRecord ? '新纪录！' : '游戏结束'"
       :message="'最终得分: ' + score"
-      actionText="提交分数"
+      :actionText="newRecord ? '提交新纪录' : '提交分数'"
+      :newRecord="newRecord"
+      :achievementHint="achievementHint"
       @action="openLeaderboard"
     />
     <LeaderboardOverlay
@@ -110,13 +111,12 @@ import { useGameStore } from '@/stores/game'
 import { useSound } from '@/composables/useSound'
 import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
-import { useAutoPause } from '@/composables/useAutoPause'
+import { useGamePause } from '@/composables/useGamePause'
 import { useHaptics } from '@/composables/useHaptics'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
 import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
-import ResumePrompt from '@/components/ResumePrompt.vue'
 
 interface Hole {
   active: boolean
@@ -129,7 +129,6 @@ const sound = useSound()
 const achievements = useAchievements()
 const toast = useToast()
 const haptics = useHaptics()
-let wasActiveBeforePause = false
 
 const difficulties = [
   { name: 'easy', label: '简单', gridCols: 3, gridRows: 3, interval: 1200, duration: 1000 },
@@ -143,8 +142,9 @@ const timeLeft = ref(30)
 const combo = ref(0)
 const gameStarted = ref(false)
 const gameOverDialog = ref(false)
+const newRecord = ref(false)
+const achievementHint = ref<string | null>(null)
 const showLeaderboard = ref(false)
-const showResume = ref(false)
 const lastScore = ref(0)
 
 const gridCols = ref(3)
@@ -182,19 +182,7 @@ function startGame() {
 
 function restartGame() {
   stopAllTimers()
-  wasActiveBeforePause = false
   startGame()
-}
-
-function continueGame() {
-  showResume.value = false
-  resumeAfterPause()
-}
-
-function newGame() {
-  showResume.value = false
-  wasActiveBeforePause = false
-  restartGame()
 }
 
 function setDifficulty(name: string) {
@@ -306,44 +294,20 @@ function stopAllTimers() {
   pendingTimeouts.clear()
 }
 
-// 失焦自动暂停
-useAutoPause(() => {
-  if (gameStarted.value && !gameOverDialog.value) {
-    wasActiveBeforePause = true
-    stopAllTimers()
-  }
+// 暂停 / 恢复：统一 composable（失焦自动暂停 + P/Esc + 音效 + 停/启计时器）
+const { paused, resume: resumeGame } = useGamePause({
+  canPause: () => gameStarted.value && !gameOverDialog.value,
+  onPause: stopAllTimers,
+  onResume: () => { countdown(); spawnMoles() }
 })
-
-// 暂停键 P / Esc
-function onKeydown(e: KeyboardEvent) {
-  if ((e.key === 'p' || e.key === 'P' || e.key === 'Escape') && gameStarted.value && !gameOverDialog.value) {
-    e.preventDefault()
-    if (wasActiveBeforePause) {
-      // 已在暂停状态 → 恢复
-      resumeAfterPause()
-    } else {
-      wasActiveBeforePause = true
-      stopAllTimers()
-    }
-  }
-}
-
-function resumeAfterPause() {
-  if (!wasActiveBeforePause) return
-  wasActiveBeforePause = false
-  countdown()
-  spawnMoles()
-}
 
 onMounted(() => {
   updateDifficultySettings()
   initHoles()
-  window.addEventListener('keydown', onKeydown)
 })
 
 onUnmounted(() => {
   stopAllTimers()
-  window.removeEventListener('keydown', onKeydown)
 })
 </script>
 
@@ -519,7 +483,7 @@ onUnmounted(() => {
 
 .time-fill {
   height: 100%;
-  background: linear-gradient(90deg, #05FFA1, #FFD700, #FF6B6B);
+  background: linear-gradient(90deg, #05FFA1, #FFD700, #FF7A3D);
   transition: width 1s linear;
   border-radius: 4px;
 }
@@ -552,15 +516,15 @@ onUnmounted(() => {
 
 .diff-btn.active {
   background: rgba(255,107,107,0.3);
-  border-color: #FF6B6B;
-  color: #FF6B6B;
+  border-color: #FF7A3D;
+  color: #FF7A3D;
 }
 
 .start-btn, .restart-btn {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: linear-gradient(135deg, #FF6B6B, #FF8E8E);
+  background: linear-gradient(135deg, #FF7A3D, #FF8E8E);
   border: none;
   color: #fff;
   padding: 14px 35px;

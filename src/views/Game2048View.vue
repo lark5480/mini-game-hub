@@ -12,28 +12,42 @@
     @restart="restart"
   >
     <div class="game-board" ref="boardEl">
-      <div v-for="(row, y) in grid" :key="y" class="board-row">
+      <div class="grid-bg">
+        <div class="grid-cell" v-for="n in 16" :key="n" />
+      </div>
+      <div class="tile-layer">
         <div
-          v-for="(cell, x) in row"
-          :key="x"
-          class="board-cell"
-          :class="{ [`tile-${Math.min(cell, 131072)}`]: true }"
+          v-for="t in renderTiles"
+          :key="t.id"
+          class="tile"
+          :class="{ 'tile-source': t.kind === 'source' }"
+          :style="tileStyle(t)"
         >
-          <span v-if="cell > 0" class="tile-value" :class="{ 'tile-pop': isAnimating(x, y) }">
-            {{ cell }}
-          </span>
+          <div :class="tileClass(t)">{{ t.value }}</div>
         </div>
       </div>
       <ScoreFloat :popups="popups" />
     </div>
+
+    <div class="progress">
+      <div class="progress-bar">
+        <div class="progress-fill" :style="{ width: progressPct + '%' }" />
+      </div>
+      <div class="progress-label">
+        最大 <b>{{ largestTile }}</b> / 目标 2048
+        <span v-if="largestTile >= 2048" class="progress-next">· 继续挑战 {{ largestTile * 2 }}!</span>
+      </div>
+    </div>
+
     <LeaderboardStrip game="2048" />
+
     <template #controls>
       <DirectionPad
-        :repeat="false"
-        @up="move('up')"
-        @down="move('down')"
-        @left="move('left')"
-        @right="move('right')"
+        :repeat="true"
+        @up="(rep) => move('up', rep)"
+        @down="(rep) => move('down', rep)"
+        @left="(rep) => move('left', rep)"
+        @right="(rep) => move('right', rep)"
       >
         <template #extra>
           <button @click="undo" class="extra-btn" :disabled="history.length === 0">撤销</button>
@@ -42,22 +56,27 @@
         </template>
       </DirectionPad>
     </template>
+
     <GameDialog
       v-model:visible="winDialog"
       accentColor="#FFD700"
       icon="success"
-      title="恭喜通关！"
+      :title="newRecord ? '新纪录！' : '恭喜通关！'"
       :message="'达到 2048！得分: ' + score"
       actionText="继续挑战"
       @action="winDialog = false"
+      :newRecord="newRecord"
+      :achievementHint="achievementHint"
     />
     <GameDialog
       v-model:visible="gameOverDialog"
-      accentColor="#FF006E"
-      icon="fail"
-      title="游戏结束"
+      accentColor="#FFD700"
+      :icon="newRecord ? 'success' : 'fail'"
+      :title="newRecord ? '新纪录！' : '游戏结束'"
       :message="'最终得分: ' + score"
-      actionText="提交分数"
+      :actionText="newRecord ? '提交新纪录' : '提交分数'"
+      :newRecord="newRecord"
+      :achievementHint="achievementHint"
       @action="openLeaderboard"
     />
     <LeaderboardOverlay
@@ -68,7 +87,7 @@
       @update:visible="showLeaderboard = $event"
       @replay="restart"
     />
-    <ResumePrompt :visible="showResume" @continue="continueGame" @new-game="newGame" />
+    <ResumePrompt :visible="paused" @continue="continueGame" @new-game="newGame" />
   </GameLayout>
 </template>
 
@@ -84,8 +103,9 @@ import { useToast } from '@/composables/useToast'
 import { useGameSave } from '@/composables/useGameSave'
 import { useAutoSave } from '@/composables/useAutoSave'
 import { useHaptics } from '@/composables/useHaptics'
-import { useAutoPause } from '@/composables/useAutoPause'
+import { useGamePause } from '@/composables/useGamePause'
 import { useScoreFloats } from '@/composables/useScoreFloats'
+import { useGameOver } from '@/composables/useGameOver'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
@@ -95,8 +115,16 @@ import ResumePrompt from '@/components/ResumePrompt.vue'
 import ScoreFloat from '@/components/ScoreFloat.vue'
 
 type Direction = 'up' | 'down' | 'left' | 'right'
-type Grid = number[][]
-type History = { grid: Grid; score: number }
+type Grid = (Tile | null)[][]
+interface Tile {
+  id: number
+  value: number
+  x: number
+  y: number
+  mergedFrom: [Tile, Tile] | null
+  isNew: boolean
+}
+type History = { grid: number[][]; score: number }
 
 const SIZE = 4
 const router = useRouter()
@@ -106,68 +134,129 @@ const achievements = useAchievements()
 const toast = useToast()
 const haptics = useHaptics()
 const { popups, pop } = useScoreFloats()
-const showResume = ref(false)
+const { checkGameOver } = useGameOver()
+
+let tileId = 1
+function createTile(x: number, y: number, value: number, isNew = false): Tile {
+  return { id: tileId++, value, x, y, mergedFrom: null, isNew }
+}
 
 const grid = ref<Grid>(createEmptyGrid())
 const score = ref(0)
+const moves = ref(0)
 const bestScore = computed(() => gameStore.getTopScore('2048'))
 const winDialog = ref(false)
+const newRecord = ref(false)
+const achievementHint = ref<string | null>(null)
 const gameOverDialog = ref(false)
 const showLeaderboard = ref(false)
 const lastScore = ref(0)
 const won = ref(false)
 const history = ref<History[]>([])
-const newTiles = ref<{ x: number; y: number }[]>([])
+
+const largestTile = computed(() => {
+  let m = 0
+  for (const row of grid.value) for (const t of row) if (t && t.value > m) m = t.value
+  return m
+})
+
+const progressPct = computed(() => {
+  const m = largestTile.value
+  if (m <= 2) return 0
+  return Math.min(100, (Math.log2(m) / Math.log2(2048)) * 100)
+})
 
 const infoItems = computed(() => [
   { label: '分数', value: score.value },
-  { label: '最高', value: bestScore.value }
+  { label: '最高', value: bestScore.value },
+  { label: '步数', value: moves.value }
 ])
 
-// 存档
+// 渲染列表：普通方块 + 合并结果 + 合并来源（用于滑动动画）
+interface RenderTile { id: number; value: number; x: number; y: number; kind: 'normal' | 'merged' | 'source'; isNew: boolean }
+const renderTiles = computed<RenderTile[]>(() => {
+  const list: RenderTile[] = []
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const t = grid.value[y][x]
+      if (!t) continue
+      if (t.mergedFrom) {
+        for (const src of t.mergedFrom) {
+          list.push({ id: src.id, value: src.value, x: t.x, y: t.y, kind: 'source', isNew: false })
+        }
+      }
+      list.push({ id: t.id, value: t.value, x: t.x, y: t.y, kind: t.mergedFrom ? 'merged' : 'normal', isNew: t.isNew })
+    }
+  }
+  return list
+})
+
+function tileStyle(t: RenderTile) {
+  return {
+    transform: `translate(calc(${t.x} * (100% + var(--gap))), calc(${t.y} * (100% + var(--gap))))`,
+    zIndex: t.kind === 'source' ? 1 : 2
+  }
+}
+
+function tileClass(t: RenderTile) {
+  return [
+    'tile-inner',
+    `tile-${Math.min(t.value, 131072)}`,
+    { 'tile-new': t.isNew && t.kind !== 'merged' },
+    { 'tile-merged': t.kind === 'merged' }
+  ]
+}
+
+// 存档：以数值矩阵为单一数据源，读档时重建方块身份
+function gridToValues(g: Grid): number[][] {
+  return g.map(row => row.map(t => (t ? t.value : 0)))
+}
+function valuesToGrid(vals: number[][]): Grid {
+  return vals.map((row, y) => row.map((v, x) => (v ? createTile(x, y, v, false) : null)))
+}
+
 const save = useGameSave('2048')
 const { scheduleSave, clearSave } = useAutoSave('2048', () => ({
-  grid: grid.value,
+  grid: gridToValues(grid.value),
   score: score.value,
+  moves: moves.value,
   won: won.value,
   history: history.value
 }), { beforeSave: () => !gameOverDialog.value })
 
-watch([grid, score, won, history], scheduleSave, { deep: true })
+watch([grid, score, moves, won, history], scheduleSave, { deep: true })
 onMounted(() => {
   const data = save.loadGame()
-  if (data && Array.isArray(data.grid) && Array.isArray(data.history)) {
-    showResume.value = true
-    grid.value = data.grid as Grid
+  if (data && Array.isArray(data.grid)) {
+    paused.value = true
+    grid.value = valuesToGrid(data.grid as number[][])
     score.value = typeof data.score === 'number' ? data.score : 0
+    moves.value = typeof data.moves === 'number' ? data.moves : 0
     won.value = !!data.won
-    history.value = data.history as History[]
-    newTiles.value = []
+    history.value = Array.isArray(data.history) ? (data.history as History[]) : []
   } else {
     restart({ restoring: true })
   }
 })
 
-const gameActive = () => !gameOverDialog.value && !winDialog.value && !showResume.value
+const gameActive = () => !gameOverDialog.value && !winDialog.value && !paused.value
+
+const { paused } = useGamePause({
+  canPause: () => gameActive(),
+  autoPause: true
+})
 
 useGameKeyboard({
   bindings: [
-    { key: ['ArrowUp', 'w', 'W'], handler: () => handleMove('up') },
-    { key: ['ArrowDown', 's', 'S'], handler: () => handleMove('down') },
-    { key: ['ArrowLeft', 'a', 'A'], handler: () => handleMove('left') },
-    { key: ['ArrowRight', 'd', 'D'], handler: () => handleMove('right') },
-    { key: ['z', 'Z'], handler: () => undo() },
-    { key: ['r', 'R'], handler: () => restart() },
-    { key: ['p', 'P', 'Escape'], handler: () => { if (gameActive()) showResume.value = true } }
+    { key: ['ArrowUp', 'w', 'W'], handler: (e) => { if (e && e.repeat) return; handleMove('up') } },
+    { key: ['ArrowDown', 's', 'S'], handler: (e) => { if (e && e.repeat) return; handleMove('down') } },
+    { key: ['ArrowLeft', 'a', 'A'], handler: (e) => { if (e && e.repeat) return; handleMove('left') } },
+    { key: ['ArrowRight', 'd', 'D'], handler: (e) => { if (e && e.repeat) return; handleMove('right') } },
+    { key: ['z', 'Z'], handler: (e) => { if (e && e.repeat) return; undo() } },
+    { key: ['r', 'R'], handler: (e) => { if (e && e.repeat) return; restart() } }
   ]
 })
 
-// 失焦自动暂停：弹出 ResumePrompt 让用户选择继续还是重开
-useAutoPause(() => {
-  if (gameActive()) showResume.value = true
-})
-
-// 移动端滑动手势：直接在棋盘上滑动即可移动方块
 const boardEl = ref<HTMLElement | null>(null)
 useSwipe({
   el: () => boardEl.value,
@@ -176,18 +265,14 @@ useSwipe({
 })
 
 function createEmptyGrid(): Grid {
-  return Array.from({ length: SIZE }, () => Array(SIZE).fill(0))
-}
-
-function cloneGrid(g: Grid): Grid {
-  return g.map(row => [...row])
+  return Array.from({ length: SIZE }, () => Array(SIZE).fill(null))
 }
 
 function getEmptyCells(g: Grid): { x: number; y: number }[] {
   const cells: { x: number; y: number }[] = []
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
-      if (g[y][x] === 0) cells.push({ x, y })
+      if (g[y][x] === null) cells.push({ x, y })
     }
   }
   return cells
@@ -197,169 +282,168 @@ function spawnTile(): boolean {
   const empty = getEmptyCells(grid.value)
   if (empty.length === 0) return false
   const cell = empty[Math.floor(Math.random() * empty.length)]
-  const maxTile = Math.max(...grid.value.flat())
+  const maxTile = largestTile.value
   const fourChance = maxTile > 2048 ? 0.5 : 0.1
-  grid.value[cell.y][cell.x] = Math.random() < (1 - fourChance) ? 2 : 4
-  newTiles.value = [{ x: cell.x, y: cell.y }]
+  grid.value[cell.y][cell.x] = createTile(cell.x, cell.y, Math.random() < (1 - fourChance) ? 2 : 4, true)
   return true
 }
 
-function extractLine(g: Grid, dir: Direction, index: number): number[] {
-  const line: number[] = []
-  for (let i = 0; i < SIZE; i++) {
-    switch (dir) {
-      case 'left': line.push(g[index][i]); break
-      case 'right': line.push(g[index][SIZE - 1 - i]); break
-      case 'up': line.push(g[i][index]); break
-      case 'down': line.push(g[SIZE - 1 - i][index]); break
-    }
-  }
-  return line
-}
-
-function placeLine(g: Grid, dir: Direction, index: number, line: number[]) {
-  for (let i = 0; i < SIZE; i++) {
-    switch (dir) {
-      case 'left': g[index][i] = line[i]; break
-      case 'right': g[index][SIZE - 1 - i] = line[i]; break
-      case 'up': g[i][index] = line[i]; break
-      case 'down': g[SIZE - 1 - i][index] = line[i]; break
-    }
+// ---- 移动算法（带方块身份，支持滑动 + 合并动画） ----
+function getVector(dir: Direction) {
+  switch (dir) {
+    case 'up': return { x: 0, y: -1 }
+    case 'down': return { x: 0, y: 1 }
+    case 'left': return { x: -1, y: 0 }
+    case 'right': return { x: 1, y: 0 }
   }
 }
 
-function slideAndMerge(line: number[]): { line: number[]; merged: number } {
-  // 移除空格
-  const filtered = line.filter(v => v !== 0)
-  const result: number[] = []
-  let merged = 0
-  let i = 0
-
-  while (i < filtered.length) {
-    if (i + 1 < filtered.length && filtered[i] === filtered[i + 1]) {
-      const val = filtered[i] * 2
-      result.push(val)
-      merged += val
-      i += 2
-    } else {
-      result.push(filtered[i])
-      i++
-    }
-  }
-
-  // 填充空格
-  while (result.length < SIZE) {
-    result.push(0)
-  }
-
-  return { line: result, merged }
+function buildTraversals(vector: { x: number; y: number }) {
+  const x = [0, 1, 2, 3]
+  const y = [0, 1, 2, 3]
+  if (vector.x === 1) x.reverse()
+  if (vector.y === 1) y.reverse()
+  return { x, y }
 }
 
-function gridsEqual(a: Grid, b: Grid): boolean {
+function withinBounds(p: { x: number; y: number }) {
+  return p.x >= 0 && p.x < SIZE && p.y >= 0 && p.y < SIZE
+}
+
+function findFarthest(cell: { x: number; y: number }, vector: { x: number; y: number }) {
+  let prev = cell
+  let cur = { x: cell.x + vector.x, y: cell.y + vector.y }
+  while (withinBounds(cur) && grid.value[cur.y][cur.x] === null) {
+    prev = cur
+    cur = { x: cur.x + vector.x, y: cur.y + vector.y }
+  }
+  return { farthest: prev, next: cur }
+}
+
+function prepareTiles() {
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
-      if (a[y][x] !== b[y][x]) return false
+      const t = grid.value[y][x]
+      if (t) t.mergedFrom = null
     }
   }
-  return true
 }
 
-function canMove(g: Grid): boolean {
-  for (let y = 0; y < SIZE; y++) {
-    for (let x = 0; x < SIZE; x++) {
-      if (g[y][x] === 0) return true
-      if (x + 1 < SIZE && g[y][x] === g[y][x + 1]) return true
-      if (y + 1 < SIZE && g[y][x] === g[y + 1][x]) return true
-    }
-  }
-  return false
-}
+function handleMove(dir: Direction, silent = false) {
+  if (winDialog.value || gameOverDialog.value || paused.value) return
 
-function handleMove(dir: Direction) {
-  if (winDialog.value || gameOverDialog.value || showResume.value) return
-
-  const prevGrid = cloneGrid(grid.value)
+  const prevValues = gridToValues(grid.value)
   const prevScore = score.value
-  let totalMerged = 0
 
-  for (let i = 0; i < SIZE; i++) {
-    const line = extractLine(grid.value, dir, i)
-    const { line: newLine, merged } = slideAndMerge(line)
-    placeLine(grid.value, dir, i, newLine)
-    totalMerged += merged
+  const vector = getVector(dir)
+  const trav = buildTraversals(vector)
+  let moved = false
+  let totalMerged = 0
+  let maxMerged = 0
+
+  prepareTiles()
+
+  trav.x.forEach(x => {
+    trav.y.forEach(y => {
+      const tile = grid.value[y][x]
+      if (!tile) return
+      const { farthest, next } = findFarthest({ x, y }, vector)
+      const nextTile = withinBounds(next) ? grid.value[next.y][next.x] : null
+      if (nextTile && nextTile.value === tile.value && !nextTile.mergedFrom) {
+        // 合并：新结果方块弹出，两个来源方块滑入该格
+        const merged = createTile(next.x, next.y, tile.value * 2)
+        merged.mergedFrom = [tile, nextTile]
+        grid.value[next.y][next.x] = merged
+        grid.value[y][x] = null
+        tile.x = next.x
+        tile.y = next.y
+        totalMerged += merged.value
+        maxMerged = Math.max(maxMerged, merged.value)
+        moved = true
+      } else if (farthest.x !== x || farthest.y !== y) {
+        grid.value[y][x] = null
+        grid.value[farthest.y][farthest.x] = tile
+        tile.x = farthest.x
+        tile.y = farthest.y
+        moved = true
+      }
+    })
+  })
+
+  if (!moved) {
+    // 连发（按住）时无效移动不反馈，避免狂震
+    if (!silent) haptics.light()
+    return
   }
 
-  if (gridsEqual(prevGrid, grid.value)) return
-
-  // 保存撤销历史
-  history.value.push({ grid: prevGrid, score: prevScore })
+  history.value.push({ grid: prevValues, score: prevScore })
   if (history.value.length > 20) history.value.shift()
-
+  moves.value++
   score.value += totalMerged
   if (totalMerged > 0) {
-    sound.merge(totalMerged)
+    // 音高跟随本次合成出的最大方块值
+    sound.merge(maxMerged)
     haptics.pulse()
     popScoreAt(totalMerged)
   }
   spawnTile()
 
-  // 检查是否达到 2048
-  if (!won.value) {
-    for (let y = 0; y < SIZE; y++) {
-      for (let x = 0; x < SIZE; x++) {
-        if (grid.value[y][x] === 2048) {
-          won.value = true
-          winDialog.value = true
-          sound.win()
-          gameStore.addScore('2048', score.value)
-          return
-        }
-      }
-    }
+  if (!won.value && largestTile.value >= 2048) {
+    won.value = true
+    winDialog.value = true
+    lastScore.value = score.value
+    const { isNewRecord: isNewRecordResult, achievementHint: hint } = checkGameOver('2048', score.value)
+    newRecord.value = isNewRecordResult
+    achievementHint.value = hint
+    return
   }
 
-  // 检查是否达到 4096
-  for (let y = 0; y < SIZE; y++) {
-    for (let x = 0; x < SIZE; x++) {
-      if (grid.value[y][x] >= 4096) {
-        if (achievements.unlock('number_master')) {
-          toast.show('成就解锁：数字大师', '🔢')
-        }
-        break
-      }
-    }
+  if (largestTile.value >= 4096 && achievements.unlock('number_master')) {
+    toast.show('成就解锁：数字大师', '🔢')
   }
 
-  // 检查游戏结束
   if (!canMove(grid.value)) {
     lastScore.value = score.value
-    gameStore.addScore('2048', score.value)
-    sound.gameOver()
+    const { isNewRecord: isNewRecordResult, achievementHint: hint } = checkGameOver('2048', score.value)
+    newRecord.value = isNewRecordResult
+    achievementHint.value = hint
     gameOverDialog.value = true
   }
 }
 
-function move(dir: Direction) {
-  handleMove(dir)
+function move(dir: Direction, silent = false) {
+  handleMove(dir, silent)
+}
+
+function canMove(g: Grid): boolean {
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      if (g[y][x] === null) return true
+      const v = g[y][x]!.value
+      if (x + 1 < SIZE && g[y][x + 1] && g[y][x + 1]!.value === v) return true
+      if (y + 1 < SIZE && g[y + 1][x] && g[y + 1][x]!.value === v) return true
+    }
+  }
+  return false
 }
 
 function undo() {
   if (history.value.length === 0 || winDialog.value || gameOverDialog.value) return
   const prev = history.value.pop()!
-  grid.value = prev.grid
+  grid.value = valuesToGrid(prev.grid)
   score.value = prev.score
-  newTiles.value = []
+  moves.value = Math.max(0, moves.value - 1)
 }
 
 function restart(opts: { restoring?: boolean } = {}) {
   showLeaderboard.value = false
   grid.value = createEmptyGrid()
   score.value = 0
+  moves.value = 0
   won.value = false
   winDialog.value = false
   gameOverDialog.value = false
   history.value = []
-  newTiles.value = []
   spawnTile()
   spawnTile()
   if (!opts.restoring) clearSave()
@@ -380,11 +464,11 @@ function submitScore() {
 }
 
 function continueGame() {
-  showResume.value = false
+  paused.value = false
 }
 
 function newGame() {
-  showResume.value = false
+  paused.value = false
   restart({ restoring: false })
 }
 
@@ -395,116 +479,146 @@ function popScoreAt(amount: number) {
   pop('+' + amount, rect.width / 2, rect.height / 2)
 }
 
-function isAnimating(x: number, y: number): boolean {
-  return newTiles.value.some(t => t.x === x && t.y === y)
-}
-
 </script>
 
 <style scoped>
 .game-board {
+  --gap: 8px;
+  --pad: 10px;
   position: relative;
+  width: 100%;
+  max-width: 380px;
+  margin: 0 auto;
+  padding: var(--pad);
+  box-sizing: border-box;
   background: rgba(0, 0, 0, 0.5);
   border: 1px solid rgba(255, 215, 0, 0.2);
   border-radius: 12px;
-  padding: 10px;
-  display: inline-block;
   box-shadow: 0 0 30px rgba(255, 215, 0, 0.08);
-  width: 100%;
-  max-width: 380px;
-  box-sizing: border-box;
   touch-action: none;
 }
 
-.board-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
+.grid-bg {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(4, 1fr);
+  gap: var(--gap);
 }
 
-.board-row:last-child {
-  margin-bottom: 0;
-}
-
-.board-cell {
-  flex: 1;
+.grid-cell {
   aspect-ratio: 1;
   background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+}
+
+.tile-layer {
+  position: absolute;
+  top: var(--pad);
+  left: var(--pad);
+  right: var(--pad);
+  bottom: var(--pad);
+}
+
+/* 外层只负责位移滑动（transform 过渡） */
+.tile {
+  position: absolute;
+  width: calc(25% - 3 * var(--gap) / 4);
+  height: calc(25% - 3 * var(--gap) / 4);
+  transition: transform 0.12s ease-in-out;
+  z-index: 2;
+}
+
+.tile-source {
+  z-index: 1;
+}
+
+/* 内层负责配色 + 弹跳（与位移解耦，互不干扰） */
+.tile-inner {
+  width: 100%;
+  height: 100%;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
   font-size: 1.5em;
-  transition: background 0.15s, box-shadow 0.15s, transform 0.15s;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.tile-inner.tile-new {
+  animation: appear 0.18s ease-out;
+}
+
+.tile-inner.tile-merged {
+  animation: tile-merge 0.18s ease-out;
 }
 
 /* 方块颜色 — 赛博朋克霓虹渐变 */
-.board-cell.tile-2 {
+.tile-inner.tile-2 {
   background: rgba(0, 255, 255, 0.12);
   color: #00FFFF;
   box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.1);
 }
 
-.board-cell.tile-4 {
+.tile-inner.tile-4 {
   background: rgba(0, 255, 255, 0.2);
   color: #00FFFF;
   box-shadow: inset 0 0 15px rgba(0, 255, 255, 0.15);
 }
 
-.board-cell.tile-8 {
+.tile-inner.tile-8 {
   background: rgba(5, 255, 161, 0.15);
   color: #05FFA1;
   box-shadow: inset 0 0 15px rgba(5, 255, 161, 0.15);
 }
 
-.board-cell.tile-16 {
+.tile-inner.tile-16 {
   background: rgba(5, 255, 161, 0.25);
   color: #05FFA1;
   box-shadow: 0 0 10px rgba(5, 255, 161, 0.2);
 }
 
-.board-cell.tile-32 {
+.tile-inner.tile-32 {
   background: rgba(255, 215, 0, 0.15);
   color: #FFD700;
   box-shadow: inset 0 0 15px rgba(255, 215, 0, 0.1);
 }
 
-.board-cell.tile-64 {
+.tile-inner.tile-64 {
   background: rgba(255, 215, 0, 0.25);
   color: #FFD700;
   box-shadow: 0 0 15px rgba(255, 215, 0, 0.25);
 }
 
-.board-cell.tile-128 {
+.tile-inner.tile-128 {
   background: rgba(255, 0, 110, 0.15);
   color: #FF006E;
   box-shadow: inset 0 0 15px rgba(255, 0, 110, 0.15);
   font-size: 1.3em;
 }
 
-.board-cell.tile-256 {
+.tile-inner.tile-256 {
   background: rgba(255, 0, 110, 0.25);
   color: #FF006E;
   box-shadow: 0 0 15px rgba(255, 0, 110, 0.25);
   font-size: 1.3em;
 }
 
-.board-cell.tile-512 {
+.tile-inner.tile-512 {
   background: rgba(185, 103, 255, 0.2);
   color: #B967FF;
   box-shadow: 0 0 20px rgba(185, 103, 255, 0.2);
   font-size: 1.3em;
 }
 
-.board-cell.tile-1024 {
+.tile-inner.tile-1024 {
   background: rgba(185, 103, 255, 0.3);
   color: #B967FF;
   box-shadow: 0 0 25px rgba(185, 103, 255, 0.3);
   font-size: 1.1em;
 }
 
-.board-cell.tile-2048 {
+.tile-inner.tile-2048 {
   background: linear-gradient(135deg, rgba(255, 215, 0, 0.4), rgba(255, 0, 110, 0.3));
   color: #FFD700;
   box-shadow: 0 0 40px rgba(255, 215, 0, 0.4), 0 0 20px rgba(255, 0, 110, 0.2);
@@ -512,23 +626,51 @@ function isAnimating(x: number, y: number): boolean {
   animation: pulse-glow 1.5s ease-in-out infinite;
 }
 
-.board-cell.tile-4096,
-.board-cell.tile-8192,
-.board-cell.tile-16384,
-.board-cell.tile-32768,
-.board-cell.tile-65536,
-.board-cell.tile-131072 {
+.tile-inner.tile-4096,
+.tile-inner.tile-8192,
+.tile-inner.tile-16384,
+.tile-inner.tile-32768,
+.tile-inner.tile-65536,
+.tile-inner.tile-131072 {
   background: linear-gradient(135deg, rgba(255, 0, 110, 0.35), rgba(185, 103, 255, 0.35));
   color: #fff;
   box-shadow: 0 0 30px rgba(255, 0, 110, 0.3);
   font-size: 1em;
 }
 
-/* 新生成方块动画 */
-.tile-pop {
-  animation: pop 0.15s ease-out;
+/* 进度条 */
+.progress {
+  width: 100%;
+  max-width: 380px;
+  margin: 14px auto 0;
+  padding: 0 2px;
+  box-sizing: border-box;
 }
 
+.progress-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #00FFFF, #FFD700, #FF006E);
+  transition: width 0.25s ease-out;
+}
+
+.progress-label {
+  margin-top: 6px;
+  font-size: 0.82em;
+  color: var(--game-text, #fff);
+  opacity: 0.8;
+}
+
+.progress-next {
+  color: #FFD700;
+}
 
 .extra-btn {
   background: var(--game-btn-bg);
@@ -554,33 +696,28 @@ function isAnimating(x: number, y: number): boolean {
 
 @media (max-width: 400px) {
   .game-board {
-    padding: 6px;
+    --gap: 5px;
+    --pad: 6px;
   }
 
-  .board-row {
-    gap: 5px;
-    margin-bottom: 5px;
-  }
-
-  .board-cell {
-    font-size: 1.1em;
+  .tile-inner {
     border-radius: 6px;
   }
 
-  .board-cell.tile-128,
-  .board-cell.tile-256,
-  .board-cell.tile-512 {
+  .tile-inner.tile-128,
+  .tile-inner.tile-256,
+  .tile-inner.tile-512 {
     font-size: 1em;
   }
 
-  .board-cell.tile-1024,
-  .board-cell.tile-2048,
-  .board-cell.tile-4096,
-  .board-cell.tile-8192,
-  .board-cell.tile-16384,
-  .board-cell.tile-32768,
-  .board-cell.tile-65536,
-  .board-cell.tile-131072 {
+  .tile-inner.tile-1024,
+  .tile-inner.tile-2048,
+  .tile-inner.tile-4096,
+  .tile-inner.tile-8192,
+  .tile-inner.tile-16384,
+  .tile-inner.tile-32768,
+  .tile-inner.tile-65536,
+  .tile-inner.tile-131072 {
     font-size: 0.85em;
   }
 }

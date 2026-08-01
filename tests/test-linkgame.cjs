@@ -366,6 +366,52 @@ console.log('\n=== Suite 7: Dead-lock shuffle logic ===')
 }
 
 // ============================================================
+// Suite 8: levelToDifficulty() 映射（镜像 src/lib/linkGame.ts）
+// ============================================================
+console.log('\n=== Suite 8: levelToDifficulty() ===')
+{
+  function levelToDifficulty(level) {
+    const DIFFS = {
+      easy: { rows: 6, cols: 8, types: 12 },
+      normal: { rows: 8, cols: 10, types: 10 },
+      hard: { rows: 10, cols: 12, types: 12 },
+    }
+    if (level <= 1) return { diff: 'easy', ...DIFFS.easy }
+    if (level === 2) return { diff: 'normal', ...DIFFS.normal }
+    if (level === 3) return { diff: 'hard', ...DIFFS.hard }
+    return { diff: 'hard', ...DIFFS.hard, timeLimit: Math.max(60, 150 - (level - 3) * 15) }
+  }
+  assertEq(levelToDifficulty(1).diff, 'easy', 'L1 → easy')
+  assertEq(levelToDifficulty(0).diff, 'easy', 'L0(防御) → easy')
+  assertEq(levelToDifficulty(2).diff, 'normal', 'L2 → normal')
+  assertEq(levelToDifficulty(3).diff, 'hard', 'L3 → hard')
+  assert(levelToDifficulty(3).timeLimit === undefined, 'L3 无限时')
+  assertEq(levelToDifficulty(4).diff, 'hard', 'L4 → hard')
+  assertEq(levelToDifficulty(4).timeLimit, 135, 'L4 限时 = 150-15 = 135')
+  assertEq(levelToDifficulty(5).diff, 'hard', 'L5 → hard')
+  assertEq(levelToDifficulty(5).timeLimit, 120, 'L5 限时 = 150-30 = 120')
+  assertEq(levelToDifficulty(10).timeLimit, 60, 'L10 限时触底 = 60')
+  assertEq(levelToDifficulty(100).timeLimit, 60, '极端关限时封底 = 60')
+}
+
+// ============================================================
+// Suite 9: 难度/关卡重构源码不变量
+// ============================================================
+console.log('\n=== Suite 9: 源码不变量 ===')
+{
+  const fs = require('fs')
+  const src = fs.readFileSync(__dirname + '/../src/views/LinkGameView.vue', 'utf-8')
+  const lib = fs.readFileSync(__dirname + '/../src/lib/linkGame.ts', 'utf-8')
+  assert(src.includes('hasValidPair()'), '组件保留 hasValidPair()')
+  assert(src.includes('!hasValidPair()'), '组件保留死局检测 !hasValidPair()')
+  assert(src.includes('shuffle()'), '组件保留 shuffle()')
+  assert(lib.includes('levelToDifficulty'), 'linkGame.ts 导出 levelToDifficulty')
+  assert(src.includes('levelToDifficulty'), '组件使用 levelToDifficulty')
+  assert(src.includes("'link-campaign'"), 'campaign 使用独立榜 link-campaign')
+  assert(src.includes("mode.value === 'campaign'"), '组件区分 classic/campaign 模式')
+}
+
+// ============================================================
 // Summary
 // ============================================================
 console.log('\n' + '='.repeat(50))

@@ -1,7 +1,7 @@
 <template>
   <GameLayout
     title="弹球打砖块"
-    accentColor="#FF6B6B"
+    accentColor="#FF5A36"
     entrance="breakout"
     gradientEnd="#00FFFF"
     :hints="['← → 或 A D 移动挡板', 'Enter 开始/发球', 'P 暂停']"
@@ -20,28 +20,32 @@
       <DirectionPad layout="horizontal" :showUp="false" :showDown="false" @left="moveLeft" @right="moveRight">
         <template #extra>
           <button @click="launchBall" class="launch-btn">发球</button>
-          <button v-if="!paused" @click="paused = true" class="extra-btn">暂停</button>
-          <button v-else @click="paused = false" class="extra-btn">继续</button>
+          <button v-if="!paused" @click="toggle" class="extra-btn">暂停</button>
+          <button v-else @click="toggle" class="extra-btn">继续</button>
           <button @click="restart" class="extra-btn">重新开始</button>
         </template>
       </DirectionPad>
     </template>
     <GameDialog
       v-model:visible="gameOver"
-      accentColor="#FF6B6B"
-      icon="fail"
-      title="游戏结束"
+      accentColor="#FF5A36"
+      :icon="newRecord ? 'success' : 'fail'"
+      :title="newRecord ? '新纪录！' : '游戏结束'"
       :message="'得分 ' + score"
-      actionText="提交分数"
+      :actionText="newRecord ? '提交新纪录' : '提交分数'"
+      :newRecord="newRecord"
+      :achievementHint="achievementHint"
       @action="openLeaderboard"
     />
     <GameDialog
       v-model:visible="victory"
       accentColor="#00FFFF"
       icon="success"
-      title="恭喜通关！"
+      :title="newRecord ? '新纪录！' : '恭喜通关！'"
       :message="'得分 ' + score"
-      actionText="提交分数"
+      :actionText="newRecord ? '提交新纪录' : '提交分数'"
+      :newRecord="newRecord"
+      :achievementHint="achievementHint"
       @action="openLeaderboard"
     />
     <LeaderboardOverlay
@@ -52,7 +56,7 @@
       @update:visible="showLeaderboard = $event"
       @replay="restart"
     />
-    <PauseOverlay :visible="paused" @resume="paused = false" />
+    <PauseOverlay :visible="paused" @resume="toggle" />
   </GameLayout>
 </template>
 
@@ -65,9 +69,10 @@ import { useGameLoop } from '@/composables/useGameLoop'
 import { useSound } from '@/composables/useSound'
 import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
-import { useAutoPause } from '@/composables/useAutoPause'
+import { useGamePause } from '@/composables/useGamePause'
 import { useHaptics } from '@/composables/useHaptics'
 import { useScoreFloats } from '@/composables/useScoreFloats'
+import { useGameOver } from '@/composables/useGameOver'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
@@ -84,6 +89,7 @@ const achievements = useAchievements()
 const toast = useToast()
 const haptics = useHaptics()
 const { popups, pop } = useScoreFloats()
+const { checkGameOver } = useGameOver()
 
 const score = ref(0)
 const lives = ref(3)
@@ -91,10 +97,10 @@ const gameOver = ref(false)
 const showLeaderboard = ref(false)
 const lastScore = ref(0)
 const victory = ref(false)
-const paused = ref(false)
-
-useAutoPause(() => {
-  if (!gameOver.value && !victory.value) paused.value = true
+const newRecord = ref(false)
+const achievementHint = ref<string | null>(null)
+const { paused, toggle } = useGamePause({
+  canPause: () => !gameOver.value && !victory.value
 })
 
 const CANVAS_W = 600
@@ -124,7 +130,7 @@ let launched = false
 let leftPressed = false
 let rightPressed = false
 
-const brickColors = ['#FF006E', '#FF6B6B', '#FFE66D', '#4ECDC4', '#00FFFF']
+const brickColors = ['#FF006E', '#FF5A36', '#FFE66D', '#4ECDC4', '#00FFFF']
 
 const gameLoop = useGameLoop({
   mode: 'raf',
@@ -159,10 +165,7 @@ useGameKeyboard({
     },
     {
       key: ['p', 'P'],
-      handler: () => {
-        paused.value = !paused.value
-        if (paused.value) sound.pause(); else sound.resume()
-      }
+      handler: () => toggle()
     }
   ]
 })
@@ -290,10 +293,11 @@ function gameUpdate(dt: number) {
     if (lives.value <= 0) {
       gameOver.value = true
       launched = false
-      sound.gameOver()
       haptics.error()
       lastScore.value = score.value
-      gameStore.addScore('breakout', score.value)
+      const result = checkGameOver('breakout', score.value)
+      newRecord.value = result.isNewRecord
+      achievementHint.value = result.achievementHint
     } else {
       ballX = paddleX + PADDLE_WIDTH / 2
       ballY = CANVAS_H - 50

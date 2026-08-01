@@ -11,8 +11,21 @@
 </template>
 
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import GameToast from '@/components/GameToast.vue'
 import '@/styles/animations.css'
+
+// PWA 注册：autoUpdate 模式下提示用户刷新到最新版
+onMounted(async () => {
+  if (import.meta.env.PROD) {
+    try {
+      const { registerSW } = await import('virtual:pwa-register')
+      registerSW({ immediate: true })
+    } catch {
+      // PWA 注册失败静默降级（非关键路径）
+    }
+  }
+})
 </script>
 
 <style>

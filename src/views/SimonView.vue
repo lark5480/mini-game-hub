@@ -38,14 +38,16 @@
       </div>
     </template>
 
-    <PauseOverlay :visible="paused" @resume="resume" />
+    <PauseOverlay :visible="paused" @resume="resumeGame" />
     <GameDialog
       v-model:visible="gameOverDialog"
       accentColor="#00CFFF"
-      icon="fail"
-      title="游戏结束"
+      :icon="newRecord ? 'success' : 'fail'"
+      :title="newRecord ? '新纪录！' : '游戏结束'"
       :message="'你记到了第 ' + score + ' 关'"
-      actionText="提交分数"
+      :actionText="newRecord ? '提交新纪录' : '提交分数'"
+      :newRecord="newRecord"
+      :achievementHint="achievementHint"
       @action="openLeaderboard"
     />
     <LeaderboardOverlay
@@ -60,12 +62,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useSound } from '@/composables/useSound'
 import { useHaptics } from '@/composables/useHaptics'
-import { useAutoPause } from '@/composables/useAutoPause'
+import { useGamePause } from '@/composables/useGamePause'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
@@ -87,7 +89,9 @@ const pads: Pad[] = [
 
 type Phase = 'idle' | 'showing' | 'input' | 'over'
 const phase = ref<Phase>('idle')
-const paused = ref(false)
+const { paused, resume: resumeGame } = useGamePause({
+  canPause: () => phase.value === 'input' && !gameOverDialog.value
+})
 const activePad = ref(-1)
 const sequence = ref<number[]>([])
 const playerIndex = ref(0)
@@ -95,6 +99,8 @@ const score = ref(0)
 const level = ref(0)
 const statusText = ref('点击中心开始')
 const gameOverDialog = ref(false)
+const newRecord = ref(false)
+const achievementHint = ref<string | null>(null)
 const showLeaderboard = ref(false)
 
 const flashDur = 460
@@ -207,39 +213,14 @@ function onCenterClick() {
   if (phase.value === 'idle') startGame()
 }
 
-function resume() {
-  paused.value = false
-}
-
 function clearPending() {
   pendingTimeouts.forEach((id) => clearTimeout(id))
   pendingTimeouts.clear()
 }
 
-// 失焦自动暂停
-useAutoPause(() => {
-  if (phase.value === 'input' && !gameOverDialog.value) paused.value = true
-})
-
-function onKeydown(e: KeyboardEvent) {
-  if (
-    (e.key === 'p' || e.key === 'P' || e.key === 'Escape') &&
-    phase.value === 'input' &&
-    !gameOverDialog.value
-  ) {
-    e.preventDefault()
-    paused.value = !paused.value
-  }
-}
-
-onMounted(() => {
-  window.addEventListener('keydown', onKeydown)
-})
-
 onUnmounted(() => {
   playToken++
   clearPending()
-  window.removeEventListener('keydown', onKeydown)
 })
 </script>
 

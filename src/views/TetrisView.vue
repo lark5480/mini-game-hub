@@ -1,7 +1,7 @@
 <template>
   <GameLayout
     title="俄罗斯方块"
-    accentColor="#00FFFF"
+    accentColor="#2D7DFF"
     entrance="tetris"
     gradientEnd="#FF006E"
     :hints="['Enter 开始', '方向键移动 上旋转 下软降 空格硬降']"
@@ -67,8 +67,8 @@
             <button @click="drop" class="hard-drop-btn">硬降</button>
             <button v-if="!isPlaying" @click="startGame" class="start-btn">开始</button>
             <template v-else>
-              <button v-if="!paused && !showResume" @click="togglePause" class="extra-btn">暂停</button>
-              <button v-else-if="paused && !showResume" @click="togglePause" class="extra-btn">继续</button>
+            <button v-if="!paused && !showResume" @click="toggle" class="extra-btn">暂停</button>
+            <button v-else-if="paused && !showResume" @click="toggle" class="extra-btn">继续</button>
               <button @click="startGame" class="extra-btn">重新开始</button>
             </template>
           </template>
@@ -77,11 +77,13 @@
     </template>
     <GameDialog
       :visible="gameOver"
-      accentColor="#00FFFF"
-      icon="fail"
-      title="游戏结束"
+      accentColor="#2D7DFF"
+      :icon="newRecord ? 'success' : 'fail'"
+      :title="newRecord ? '新纪录！' : '游戏结束'"
       :message="'得分: ' + score"
-      actionText="提交分数"
+      :actionText="newRecord ? '提交新纪录' : '提交分数'"
+      :newRecord="newRecord"
+      :achievementHint="achievementHint"
       @action="openLeaderboard"
       @update:visible="onDialogClose"
     />
@@ -93,7 +95,7 @@
       @update:visible="showLeaderboard = $event"
       @replay="startGame"
     />
-    <PauseOverlay :visible="paused" @resume="togglePause" />
+    <PauseOverlay :visible="paused" @resume="toggle" />
     <ResumePrompt :visible="showResume" @continue="continueGame" @new-game="newGame" />
   </GameLayout>
 </template>
@@ -101,7 +103,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useGameLoop } from '@/composables/useGameLoop'
 import { useSound } from '@/composables/useSound'
@@ -109,9 +110,10 @@ import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
 import { useGameSave } from '@/composables/useGameSave'
 import { useAutoSave } from '@/composables/useAutoSave'
-import { useAutoPause } from '@/composables/useAutoPause'
+import { useGamePause } from '@/composables/useGamePause'
 import { useHaptics } from '@/composables/useHaptics'
 import { useScoreFloats } from '@/composables/useScoreFloats'
+import { useGameOver } from '@/composables/useGameOver'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
@@ -122,12 +124,12 @@ import ResumePrompt from '@/components/ResumePrompt.vue'
 import ScoreFloat from '@/components/ScoreFloat.vue'
 
 const router = useRouter()
-const gameStore = useGameStore()
 const sound = useSound()
 const achievements = useAchievements()
 const toast = useToast()
 const haptics = useHaptics()
 const { popups, pop } = useScoreFloats()
+const { checkGameOver } = useGameOver()
 const showResume = ref(false)
 
 const GRID_W = 10, GRID_H = 20
@@ -135,7 +137,7 @@ type Cell = { color: string | null }
 type Tetromino = { shape: number[][], color: string }
 
 const TETROS: Tetromino[] = [
-  { shape: [[1,1,1,1]], color: '#00FFFF' },
+  { shape: [[1,1,1,1]], color: '#2D7DFF' },
   { shape: [[1,1],[1,1]], color: '#FFFF00' },
   { shape: [[0,1,0],[1,1,1]], color: '#A000FF' },
   { shape: [[0,1,1],[1,1,0]], color: '#00FF00' },
@@ -150,6 +152,8 @@ const nextPiece = ref<Tetromino | null>(null)
 const score = ref(0), lines = ref(0), isPlaying = ref(false), gameOver = ref(false)
 const nextGrid = ref<string[][]>([])
 const showLeaderboard = ref(false)
+const newRecord = ref(false)
+const achievementHint = ref<string | null>(null)
 const lastScore = ref(0)
 
 // 存档
@@ -219,13 +223,11 @@ const gameLoop = useGameLoop({
   intervalMs: 400,
   onUpdate: () => step()
 })
-const paused = gameLoop.paused
-
-function togglePause() {
-  if (showResume.value || gameOver.value || !isPlaying.value) return
-  if (paused.value) { gameLoop.resume(); sound.resume() }
-  else { gameLoop.pause(); sound.pause() }
-}
+const { paused, toggle } = useGamePause({
+  canPause: () => isPlaying.value && !gameOver.value && !showResume.value,
+  onPause: gameLoop.pause,
+  onResume: gameLoop.resume
+})
 
 function continueGame() {
   showResume.value = false
@@ -236,10 +238,6 @@ function newGame() {
   showResume.value = false
   startGame()
 }
-
-useAutoPause(() => {
-  if (isPlaying.value && !gameOver.value && !showResume.value) gameLoop.pause()
-})
 
 const boardEl = ref<HTMLElement | null>(null)
 
@@ -276,7 +274,7 @@ useGameKeyboard({
     },
     {
       key: ['p', 'P', 'Escape'],
-      handler: () => togglePause()
+      handler: () => toggle()
     }
   ]
 })
@@ -437,9 +435,10 @@ function startGame() {
 function endGame() {
   isPlaying.value = false; gameOver.value = true
   gameLoop.stop()
-  sound.gameOver()
   lastScore.value = score.value
-  gameStore.addScore('tetris', score.value)
+  const { isNewRecord: isNewRecordResult, achievementHint: hint } = checkGameOver('tetris', score.value)
+  newRecord.value = isNewRecordResult
+  achievementHint.value = hint
 }
 
 function openLeaderboard() {
@@ -614,7 +613,7 @@ initGrid()
   padding: 10px 35px;
   font-size: 1.2em;
   font-weight: 600;
-  background: linear-gradient(135deg, #00FFFF, #818CF8);
+  background: linear-gradient(135deg, #2D7DFF, #818CF8);
   color: #0D0D1A;
   border: none;
   border-radius: 25px;

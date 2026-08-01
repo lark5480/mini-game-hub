@@ -2,6 +2,9 @@
   <Transition name="dialog">
     <div v-if="visible" class="dialog-overlay" @click.self="$emit('update:visible', false)">
       <div class="dialog">
+        <!-- 新记录徽章 -->
+        <div v-if="newRecord" class="new-record-badge">🎉 新记录！</div>
+
         <div class="dialog-icon">
           <slot name="icon">
             <!-- 预设图标 -->
@@ -20,6 +23,10 @@
           <h3>{{ title }}</h3>
           <p v-if="message">{{ message }}</p>
         </slot>
+
+        <!-- 成就接近提示 -->
+        <p v-if="achievementHint" class="achievement-hint">{{ achievementHint }}</p>
+
         <slot name="action">
           <button v-if="actionText" @click="$emit('action')">{{ actionText }}</button>
         </slot>
@@ -36,6 +43,10 @@ defineProps<{
   title?: string
   message?: string
   actionText?: string
+  /** 是否打破个人最佳：显示金色"新记录"徽章 */
+  newRecord?: boolean
+  /** 成就接近提示文案（如"还差 50 分解锁蛇王"） */
+  achievementHint?: string | null
 }>()
 
 defineEmits<{
@@ -79,6 +90,23 @@ defineEmits<{
   border-radius: 20px;
   text-align: center;
   box-shadow: 0 0 50px color-mix(in srgb, var(--game-accent, #00FFFF) 20%, transparent);
+  position: relative;
+}
+
+.new-record-badge {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, #FFD700, #FFA500);
+  color: #0D0D1A;
+  font-size: 0.85em;
+  font-weight: 700;
+  padding: 4px 16px;
+  border-radius: 20px;
+  box-shadow: 0 2px 12px rgba(255, 215, 0, 0.4);
+  white-space: nowrap;
+  animation: badge-pop 0.3s ease-out;
 }
 
 .dialog-icon {
@@ -94,6 +122,14 @@ defineEmits<{
 .dialog p {
   color: var(--game-text-info);
   margin-bottom: 25px;
+}
+
+.achievement-hint {
+  color: #FFD700 !important;
+  font-size: 0.9em;
+  margin-top: -15px;
+  margin-bottom: 20px;
+  opacity: 0.9;
 }
 
 .dialog button {
