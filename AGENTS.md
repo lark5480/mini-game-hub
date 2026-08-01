@@ -46,12 +46,12 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 | 组件 | 职责 | 要点 |
 |------|------|------|
 | `GameLayout` | 游戏外层框架 | 标题栏含静音/重启按钮（44px 触摸区）、`accentColor` 注入主题 |
-| `GameDialog` | 弹窗 | `v-model:visible`，`actionText` 按钮触发 `@action`，自动淡入动画 |
+| `GameDialog` | 弹窗 | `v-model:visible`，`actionText` 按钮触发 `@action`，自动淡入动画；`newRecord` prop 显示金色新记录徽章（badge-pop 弹跳），`achievementHint` prop 显示成就接近提示 |
 | `DirectionPad` | 触屏方向键 | `cross` / `horizontal` 两种布局，`repeat` 控制是否长按连发 |
 | `PauseOverlay` | 暂停遮罩 | `v-if` 控制，自带 safe-area 内边距 + 淡入动画 |
 | `ResumePrompt` | 继续/重开选择 | 失焦点回前台 / 按 P 暂停时弹出；"继续上局" 或 "重新开始" |
 | `ScoreFloat` | 浮动分数动画 | `pop(text, x, y)` 触发，0.8s 上浮消失 |
-| `LeaderboardOverlay` | 提交分数→排行榜→再来一局 | 5s 超时 + 友好中文错误 + 重试按钮 + safe-area |
+| `LeaderboardOverlay` | 提交分数→排行榜（Top N + 邻位排名）→再来一局 | 5s 超时 + 友好中文错误 + 重试按钮 + safe-area；提交后展示玩家前后各 range 名邻位排名 |
 | `LeaderboardStrip` | 嵌入排行榜条 Top 5 | —— |
 | `GameToast` | 顶部成就解锁通知 | 2s 自动消失 + 淡入动画 + safe-area 偏移 |
 
@@ -66,7 +66,8 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 | `useScoreFloats` | 浮动分数 | `pop(text, x, y)` → `popups` ref |
 | `useGameSave` | 存档/读档 | `saveGame(data)` / `loadGame()` / `clearGame()` |
 | `usePause` | 统一暂停/恢复（骨架） | P/Esc + 失焦 + ResumePrompt 封装 |
-| `useLeaderboard` | 排行榜 CRUD | `submit(nickname, score)` / `fetch()` |
+| `useLeaderboard` | 排行榜 CRUD | `submit(nickname, score)` / `fetch()` / `fetchNearby(score, nickname, range)` 邻位排名 |
+| `useGameOver` | 游戏结束统一处理 | `checkGameOver(gameName, score)` → `{ isNewRecord, achievementHint }`；新记录检测 + 分数写入 + 音效 + 成就接近提示/解锁 |
 | `useLeaderboardAutoRefresh` | 监听版本号自动刷新 | `useLeaderboardAutoRefresh(fetch)` |
 | `useToast` | Toast 通知 | `toast.show(message, icon)` |
 | `useSwipe` | 移动端滑动手势 | `useSwipe({ el, active, onSwipe })` |

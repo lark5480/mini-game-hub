@@ -13,7 +13,7 @@
   <GameLayout title="..." accentColor="#XXX" :hints="[...]" :infoItems="[...]" @back="router.push('/')">
     <!-- 游戏画面区 -->
     <template #controls><DirectionPad ... /></template>
-    <GameDialog v-model:visible="gameOver" ... />
+    <GameDialog v-model:visible="gameOver" :new-record="newRecord" :achievement-hint="achievementHint" ... />
     <LeaderboardStrip :game="'xxx'" />
   </GameLayout>
   <PauseOverlay :visible="paused" @resume="togglePause" />
@@ -28,9 +28,12 @@ import { useSound } from '@/composables/useSound'
 import { useAutoPause } from '@/composables/useAutoPause'
 import { useHaptics } from '@/composables/useHaptics'
 import { useScoreFloats } from '@/composables/useScoreFloats'
+import { useGameOver } from '@/composables/useGameOver'
 import { useGameStore } from '@/stores/game'
 </script>
 ```
+
+> 游戏结束统一用 `const { isNewRecord, achievementHint } = checkGameOver(gameName, score)` 检测新记录 + 成就接近，结果传给 GameDialog。
 
 **关键约束：**
 - 框架统一用 `GameLayout` + `GameDialog` + `DirectionPad`，暂停/恢复统一用 `useAutoPause` + `PauseOverlay` + `ResumePrompt` + P/Esc 键
@@ -44,6 +47,9 @@ import { useGameStore } from '@/stores/game'
 
 ## 注意事项
 
+- **PWA**：`vite-plugin-pwa` autoUpdate；`App.vue` 生产环境注册 SW；静态资源 + Supabase API 离线缓存
+- **全局错误兜底**：`main.ts` 设 `app.config.errorHandler` + `unhandledrejection` 监听，防 Vue 渲染白屏
+- **游戏结束流程**：统一走 `useGameOver().checkGameOver()` → 返回 `{ isNewRecord, achievementHint }` → 传给 `GameDialog`
 - Canvas 游戏 `onUnmounted` 中清理 requestAnimationFrame
 - TS 启用了 `noUnusedLocals` / `noUnusedParameters`，未使用变量会导致 `npm run build` 失败
 - 测试在 `tests/` 下，`node test-xxx.cjs` 直接跑，无测试框架依赖
