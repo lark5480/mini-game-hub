@@ -108,11 +108,11 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useGameStore } from '@/stores/game'
 import { useSound } from '@/composables/useSound'
 import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
 import { useGamePause } from '@/composables/useGamePause'
+import { useGameOver } from '@/composables/useGameOver'
 import { useHaptics } from '@/composables/useHaptics'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
@@ -127,13 +127,13 @@ interface Hole {
 }
 
 const router = useRouter()
-const gameStore = useGameStore()
 const sound = useSound()
 const achievements = useAchievements()
 const toast = useToast()
 const haptics = useHaptics()
 
 const { popups, pop } = useScoreFloats()
+const { checkGameOver } = useGameOver()
 const boardEl = ref<HTMLElement | null>(null)
 
 const difficulties = [
@@ -287,9 +287,10 @@ function gameOver() {
   stopAllTimers()
   gameStarted.value = false
   gameOverDialog.value = true
-  sound.gameOver()
   lastScore.value = score.value
-  gameStore.addScore('whackamole', score.value)
+  const { isNewRecord: isNewRecordResult, achievementHint: hint } = checkGameOver('whackamole', score.value)
+  newRecord.value = isNewRecordResult
+  achievementHint.value = hint
   if (score.value >= 300) {
     if (achievements.unlock('whack_master')) {
       toast.show('成就解锁：神速', '🔨')
