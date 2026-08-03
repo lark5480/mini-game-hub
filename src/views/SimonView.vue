@@ -13,7 +13,7 @@
   >
     <div class="simon-wrap">
       <div class="status">{{ statusText }}</div>
-      <div class="simon-board" :class="{ locked: phase !== 'input' || paused }">
+      <div ref="boardEl" class="simon-board" :class="{ locked: phase !== 'input' || paused }">
         <button
           v-for="(pad, i) in pads"
           :key="i"
@@ -27,6 +27,7 @@
           <template v-if="phase === 'idle'">开始</template>
           <template v-else>{{ level }}</template>
         </div>
+        <ScoreFloat :popups="popups" />
       </div>
       <button class="start-btn" v-if="phase === 'idle'" @click="startGame">开始游戏</button>
     </div>
@@ -64,18 +65,19 @@
 <script setup lang="ts">
 import { ref, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useGameStore } from '@/stores/game'
 import { useSound } from '@/composables/useSound'
 import { useHaptics } from '@/composables/useHaptics'
 import { useGamePause } from '@/composables/useGamePause'
+import { useScoreFloats } from '@/composables/useScoreFloats'
+import { useGameOver } from '@/composables/useGameOver'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
 import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 import PauseOverlay from '@/components/PauseOverlay.vue'
+import ScoreFloat from '@/components/ScoreFloat.vue'
 
 const router = useRouter()
-const gameStore = useGameStore()
 const sound = useSound()
 const haptics = useHaptics()
 
@@ -102,6 +104,10 @@ const gameOverDialog = ref(false)
 const newRecord = ref(false)
 const achievementHint = ref<string | null>(null)
 const showLeaderboard = ref(false)
+
+const { popups, pop } = useScoreFloats()
+const { checkGameOver } = useGameOver()
+const boardEl = ref<HTMLElement | null>(null)
 
 const flashDur = 460
 const gapDur = 260
@@ -185,6 +191,11 @@ function onPadClick(i: number) {
       score.value = level.value
       statusText.value = '漂亮！进入下一关'
       phase.value = 'showing'
+      const el = boardEl.value
+      if (el) {
+        const rect = el.getBoundingClientRect()
+        pop(`+${level.value}`, rect.width / 2, rect.height / 2)
+      }
       const id = window.setTimeout(() => {
         pendingTimeouts.delete(id)
         nextRound()
@@ -199,8 +210,9 @@ function onPadClick(i: number) {
 function gameOver() {
   phase.value = 'over'
   statusText.value = '记错啦，游戏结束'
-  sound.gameOver()
-  gameStore.addScore('simon', score.value)
+  const { isNewRecord, achievementHint: hint } = checkGameOver('simon', score.value)
+  newRecord.value = isNewRecord
+  achievementHint.value = hint
   gameOverDialog.value = true
 }
 
