@@ -79,7 +79,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useGameStore } from '@/stores/game'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useSound } from '@/composables/useSound'
 import { useAchievements } from '@/stores/achievements'
@@ -88,6 +87,7 @@ import { useGameSave } from '@/composables/useGameSave'
 import { useAutoSave } from '@/composables/useAutoSave'
 import { useHaptics } from '@/composables/useHaptics'
 import { useGamePause } from '@/composables/useGamePause'
+import { useGameOver } from '@/composables/useGameOver'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
@@ -96,7 +96,6 @@ import DirectionPad from '@/components/DirectionPad.vue'
 import ResumePrompt from '@/components/ResumePrompt.vue'
 
 const router = useRouter()
-const gameStore = useGameStore()
 const sound = useSound()
 const achievements = useAchievements()
 const toast = useToast()
@@ -111,6 +110,8 @@ const { paused } = useGamePause({
   canPause: () => gameActive.value,
   autoPause: true
 })
+
+const { checkGameOver } = useGameOver()
 
 // 编码：0=空地, 1=玩家, 2=箱子, 3=目标点, 4=箱子在目标上, 5=墙壁
 const levels = [
@@ -234,6 +235,7 @@ const totalScore = ref(0)
 const gameComplete = ref(false)
 const newRecord = ref(false)
 const achievementHint = ref<string | null>(null)
+const hasCheckedThisRun = ref(false)
 
 // 存档
 const save = useGameSave('sokoban')
@@ -380,9 +382,14 @@ function checkWin() {
   const levelScore = Math.max(0, 100 - steps.value)
   lastScore.value = levelScore
   totalScore.value += levelScore
-  gameStore.addScore('sokoban', totalScore.value)
   // levelIndex 从 0 开始，通过第5关时 levelIndex === 4
   if (levelIndex.value >= 4) {
+    if (!hasCheckedThisRun.value) {
+      const { isNewRecord, achievementHint: hint } = checkGameOver('sokoban', totalScore.value)
+      newRecord.value = isNewRecord
+      achievementHint.value = hint
+      hasCheckedThisRun.value = true
+    }
     if (achievements.unlock('sokoban_master')) {
       toast.show('成就解锁：搬运工', '📦')
     }
@@ -408,6 +415,12 @@ function submitScore() {
   gameComplete.value = false
   showLeaderboard.value = true
   clearSave()
+  if (!hasCheckedThisRun.value) {
+    const { isNewRecord, achievementHint: hint } = checkGameOver('sokoban', totalScore.value)
+    newRecord.value = isNewRecord
+    achievementHint.value = hint
+    hasCheckedThisRun.value = true
+  }
 }
 
 function handleDialogAction() {
@@ -423,6 +436,7 @@ function restartGame() {
   totalScore.value = 0
   gameComplete.value = false
   showLeaderboard.value = false
+  hasCheckedThisRun.value = false
   initLevel()
   clearSave()
 }
