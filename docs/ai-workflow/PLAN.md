@@ -82,21 +82,21 @@
 
 ## 验收标准
 
-- [ ] 过关时 `.simon-board` 中心出现 `+N` 飘字（N = level），约 800ms 后消失
-- [ ] 飘字不拦截点击（`pointer-events: none` 已由 ScoreFloat 保证）
-- [ ] 打破个人纪录时 GameDialog 显示金色"新纪录！"徽章
-- [ ] 接近成就时 GameDialog 显示成就提示
-- [ ] `npm run build` 通过（`noUnusedLocals` 无报错）
+- [x] 过关时 `.simon-board` 中心出现 `+N` 飘字（N = level），约 800ms 后消失
+- [x] 飘字不拦截点击（`pointer-events: none` 已由 ScoreFloat 保证）
+- [x] 打破个人纪录时 GameDialog 显示金色"新纪录！"徽章
+- [x] 接近成就时 GameDialog 显示成就提示
+- [x] `npm run build` 通过（`noUnusedLocals` 无报错）
 
 ## Review Checklist（Claude review 时逐项勾）
 
-- [ ] 飘字坐标是否相对 `.simon-board`（非视口绝对坐标）
-- [ ] `<ScoreFloat>` 是否为 `.simon-board` 最后一个子元素
-- [ ] `checkGameOver` 是否**替换**了手动 `addScore`（非双重写入）
-- [ ] `newRecord` / `achievementHint` ref 是否正确赋值
-- [ ] 过关飘字文本为 `+N`（N = level），非硬编码
-- [ ] build 通过、无未使用变量
-- [ ] 飘字在 `.simon-board` 内渲染，不溢出视口
+- [x] 飘字坐标是否相对 `.simon-board`（非视口绝对坐标）
+- [x] `<ScoreFloat>` 是否为 `.simon-board` 最后一个子元素
+- [x] `checkGameOver` 是否**替换**了手动 `addScore`（非双重写入）
+- [x] `newRecord` / `achievementHint` ref 是否正确赋值
+- [x] 过关飘字文本为 `+N`（N = level），非硬编码
+- [x] build 通过、无未使用变量
+- [x] 飘字在 `.simon-board` 内渲染，不溢出视口
 
 ## 关键参考
 
@@ -175,3 +175,15 @@ function gameOver() {
 |------|--------|------|---------|
 | 1 | Claude（计划） | 计划完成，写入 PLAN.md | — |
 | 2 | Codex（执行） | 完成 ScoreFloat 飘字 + useGameOver 接通，build 通过 | — |
+| 3 | Claude（review） | **A 档：无阻塞问题** ✅ | 无 |
+
+> 终止条件已满足：P0/P1 清零 + P2/P3 无遗留 → **可提交**。
+
+### Review 结果
+
+**阻塞项（P0 / P1）**：无
+
+**非阻塞项**：
+- 🔵 P2: `sound.gameOver()` 正确移除（checkGameOver 内部已处理）
+
+**经验沉淀**：`useGameOver().checkGameOver()` 返回 `GameOverResult { isNewRecord, achievementHint }`，内部已处理 `sound.gameOver()` / `sound.win()` + `gameStore.addScore()`，调用方无需重复。
