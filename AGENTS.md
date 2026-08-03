@@ -88,14 +88,41 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 
 角色分工：Claude 负责计划与审查，Codex 负责按计划执行。循环流程：Claude 写计划 → Codex 执行 → Claude review → 出修复方案 → Codex 修复 → Claude 再 review → 通过后提交。
 
-**交接机制（硬规则）：**
+### 交接机制（硬规则）
+
 - 交接物是 git diff：Codex 每完成一个任务立即 commit，Claude review 时只看 `git diff`，不全量重读代码
 - 严格串行：同一时间只有一个 agent 改动工作区文件，禁止并行改同一文件
 - 计划必须"可执行"：写清文件路径、修改点、验收标准、review checklist（模板见 [docs/ai-workflow/PLAN.md](./docs/ai-workflow/PLAN.md)）
-- **PLAN.md 使用方式**：路径固定、每次任务由 Claude 覆盖重写（不新建 PLAN-xxx.md）；Codex 执行后更新勾选与交接记录；Claude 的 review 结果写入同一文件的交接记录表（不新建 review.md）；任务提交后清空恢复模板供复用
-- 终止条件：阻塞性问题（bug / 逻辑错误 / 违反本文件规范）清零 + 非阻塞建议（风格 / 微优化）记入 backlog 即可提交；最多 2 轮 review，第 3 轮起人工介入
+- **PLAN.md 使用方式**：路径固定、模板骨架在文件顶部注释里永久保留；每次新任务只覆盖 TASK_BODY 区（不新建 PLAN-xxx.md）；Codex 执行后更新勾选与交接记录；Claude 的 review 结果写入同一文件的交接记录表（不新建 review.md）；任务提交后清空 TASK_BODY 区恢复占位，TEMPLATE 区永远不动
 - 每轮交接时，当前 agent 必须更新 PLAN.md 的状态勾选，避免基于过时计划判断
 - 审查依据 = 本文件硬规则 + PLAN.md 验收标准，不凭感觉
+
+### 任务模式（粗细双模式）
+
+Claude 创建计划时根据任务规模选择模式，在 PLAN.md 顶部声明：
+
+| 维度 | 细模式（micro） | 粗模式（macro） |
+|------|----------------|-----------------|
+| 适用场景 | ≤ 50 行改动、bug 修复、单文件修改 | 新游戏、多文件重构、架构级变更 |
+| 文件级修改点 | 表格：文件 + 具体改动 + 完成勾选 | 文字描述：改哪些模块、不改哪些 |
+| 实现细节 | 精确到行号 + 改前/改后代码片段 | 只给约束（"必须复用 X"、"禁止新建 Y"） |
+| Review Checklist 重点 | 正确性：逻辑、空安全、build | 架构合规：分层、复用、命名 |
+| Codex 自由度 | 按指令执行，不改逻辑 | 自主决定实现细节，Claude 只验收结果 |
+
+### Review 四级分级标准
+
+Review 结果按严重度分级，Codex 根据级别决定处理方式：
+
+| 级别 | 标识 | 含义 | 处理方式 | 典型示例 |
+|------|------|------|---------|---------|
+| P0 正确性 | 🔴 | 逻辑/渲染/数据错误 | 阻塞，Codex 必须修 | 飘字坐标偏移、得分计算错误、空指针 |
+| P1 规范 | 🟡 | 违反 AGENTS.md 硬规则 | 阻塞，Codex 必须修 | 新建了本应复用的 composable、未用 GameLayout |
+| P2 打磨 | 🔵 | 风格/微优化、零风险 | 不进 backlog，Codex 顺手修 | 单双引号、冗余媒体查询、未使用变量 |
+| P3 可选 | ⚪ | 后续可做的改进 | 进 backlog | 动画曲线优化、新增触觉反馈 |
+
+### 终止条件
+
+P0 + P1 清零 + P2 已修或明确跳过 + P3 进 backlog → 可提交。最多 2 轮 review；第 3 轮仍存在 P0/P1 → 人工介入。
 
 ## 成就系统（新增成就操作）
 

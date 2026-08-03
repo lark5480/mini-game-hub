@@ -29,3 +29,9 @@ vite.config.ts.timestamp-*
 
 # Workbuddy tool internal directory
 .workbuddy/
+
+# 个人 AI 协作工作流（spec / 设计文档，与项目代码无关）
+docs/superpowers/
+
+# Claude Code 个人配置（用户级协作风格，不进入项目）
+CLAUDE.local.md
