@@ -152,6 +152,11 @@ if (el && holeEl) {
 | 2 | Codex（执行） | 完成，build 通过 | ScoreFloat 挂载位置错误 |
 | 3 | Claude（review） | **B 档：有阻塞问题** | 需修复 ScoreFloat 位置 |
 | 4 | Codex（修复） | 完成，ScoreFloat 移入 .mole-board 内部 | — |
-| 5 | Claude（二次 review） | ☐ | ☐ |
+| 5 | Claude（二次 review） | **A 档：无阻塞问题** ✅ | 非阻塞建议进 backlog |
 
-> 终止条件：阻塞性问题（bug / 逻辑错误 / 违反规范）清零 + 非阻塞建议进 backlog 即可提交；最多 2 轮 review，第 3 轮起人工介入。
+> 终止条件已满足：阻塞性问题清零 + 非阻塞建议进 backlog → **可提交**。
+
+### 非阻塞建议（backlog，后续可选处理）
+
+1. **引号风格**：`<ScoreFloat :popups='popups' />` 使用单引号，项目其他位置统一用双引号。
+2. **媒体查询冗余**：`@media (max-width: 640px) { .mole-board { position: relative; ... } }` 重复声明了 `position: relative`，基类已声明，媒体查询内可省略。
