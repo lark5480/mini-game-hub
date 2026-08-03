@@ -103,6 +103,28 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 - **新增成就**：在 `src/stores/achievements.ts` 的 `ACHIEVEMENTS` 数组加条目 → 在对应游戏触发点调用 `achievements.unlock('id')` + `toast.show(...)` → `/achievements` 自动显示
 - `unlock()` **内部自动触发 `sound.unlock()` + `haptics.success()`**，调用方只需再加 `toast.show(...)`
 
+
+## 文件编辑工作流（避免乱码/破坏）
+
+复杂字符串替换 / 多行编辑，**禁止 PowerShell 内联拼接**（`.Replace()` + `Set-Content -NoNewline` 会压坏文件；`$` / 引号 / 反引号 / `\n` 多层转义必翻车）。
+
+**正确做法：写脚本文件 → 执行：**
+
+```powershell
+# 1. 把脚本写到文件（只有 Python/Node 一层转义，无 PowerShell 干扰）
+@"
+...python/node 脚本...
+"@ | Out-File -FilePath apply.py -Encoding utf8
+
+# 2. 执行
+python apply.py
+```
+
+**注意：**
+- 项目 `package.json` 有 `"type": "module"`，Node 脚本用 `.cjs` 扩展名（CommonJS），否则 `require` 未定义
+- 文件是 CRLF 换行，`split("\n")` 后每行末尾带 `\r`，空行判断用 `.trim() === ""` 或先统一 `replace(/\r\n/g, "\n")`
+- 模板文字用 Python 三引号或 Node 字符串拼接，避免反引号冲突
+
 ## 注意事项
 - **游戏结束流程**：统一走 `useGameOver().checkGameOver(gameName, score)` → 返回 `{ isNewRecord, achievementHint }` → 传给 `GameDialog`（新记录检测 + 分数写入 + 音效 + 成就接近提示自动完成）
 - **PWA**：`vite-plugin-pwa` autoUpdate；`App.vue` 生产环境注册 SW；静态资源 + Supabase API 离线缓存
