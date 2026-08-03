@@ -64,78 +64,28 @@
 
 ---
 
-# 任务模式：粗（macro）
+# 任务模式：（未选择 — 等待新任务填入）
 
 ## 任务目标
 
-给 `src/views/SokobanView.vue`（推箱子）接通 `useGameOver`，实现新纪录检测与成就提示。推箱子是 5 关总分制，需要设计检测时机：全部通关时主检测 + 手动提交时补充检测，一局只触发一次。
+（等待新任务填入）
 
 ## 文件级修改点
 
 | 文件 | 修改内容 | 完成 |
 |------|---------|:----:|
-| `src/views/SokobanView.vue`（script） | 引入 `useGameOver`；新增 `hasCheckedThisRun` ref；`checkWin()` 内通关时调用 `checkGameOver`；`submitScore()` 内手动提交时补充检测；删除手动 `addScore`；重启时重置标志 | ✅ |
 
 ## 验收标准
 
-- [ ] 全部通关时，若破纪录则 GameDialog 显示"新纪录！"徽章
-- [ ] 手动提交分数时，若破纪录且本次游戏未检测过，也触发检测
-- [ ] 同一局内不重复检测（通关时已检测，手动提交不再检测）
-- [ ] 接近成就时 GameDialog 显示成就提示
-- [ ] `checkWin()` 内的手动 `addScore` 已删除
-- [ ] 游戏重启时检测标志重置
-- [ ] `npm run build` 通过
+- [ ] ...
 
-## Review Checklist（Claude review 时逐项勾）
+## Review Checklist
 
-- [ ] `checkGameOver` 是否在通关路径调用
-- [ ] `checkGameOver` 是否在手动提交路径调用（仅当 `!hasCheckedThisRun`）
-- [ ] `hasCheckedThisRun` 防重复是否生效
-- [ ] 手动 `addScore` 是否已删除
-- [ ] 游戏重启时 `hasCheckedThisRun` 是否重置
-- [ ] build 通过
+- [ ] ...
 
 ## 关键参考
 
-- `src/composables/useGameOver.ts` — 接口：`checkGameOver(gameName, score)` → `{ isNewRecord, achievementHint }`，内部处理 addScore + 音效
-- `src/views/SokobanView.vue` 行 370-390 — `checkWin()` 函数（通关逻辑）
-- `src/views/SokobanView.vue` 行 405+ — `submitScore()` 函数
-- `src/views/SokobanView.vue` 行 235-236 — `newRecord`/`achievementHint` ref（已声明）
-- `src/views/SimonView.vue` — 上次接通 useGameOver 的参考实现（commit `78b40a6`）
-
-## 实现指引（给 Codex）
-
-### 核心约束
-
-1. `checkGameOver` 内部已处理 `addScore` + 音效，**调用方不重复**
-2. 检测条件用 `levelIndex.value >= 4`（最后一关索引），**不是** `gameComplete.value`（它在 `nextLevel()` 内才设置为 true）
-3. 手动提交路径只在 `!hasCheckedThisRun` 时检测，防重复
-4. 游戏重启（`restartGame` / `newGame`）时重置 `hasCheckedThisRun = false`
-5. 删除 `checkWin()` 内的 `gameStore.addScore('sokoban', totalScore.value)`；如果 `useGameStore` 不再使用，删除对应 import
-
-### 检测逻辑伪码
-
-```ts
-// checkWin() 内，levelIndex.value >= 4 分支中
-if (!hasCheckedThisRun.value) {
-  const { isNewRecord, achievementHint: hint } = checkGameOver('sokoban', totalScore.value)
-  newRecord.value = isNewRecord
-  achievementHint.value = hint
-  hasCheckedThisRun.value = true
-}
-
-// submitScore() 内
-if (!hasCheckedThisRun.value) {
-  const { isNewRecord, achievementHint: hint } = checkGameOver('sokoban', totalScore.value)
-  newRecord.value = isNewRecord
-  achievementHint.value = hint
-  hasCheckedThisRun.value = true
-}
-```
-
-## 交接记录（每轮更新）
+## 交接记录
 
 | 轮次 | 执行者 | 结果 | 遗留问题 |
-|------|--------|------|---------|
-| 1 | Claude（计划） | 计划完成，写入 PLAN.md（macro 模式） | — |
-| 2 | Codex（执行） | SokobanView.vue 接通 useGameOver：双路径检测 + 去重 + 重启重置；删除手动 addScore；build 通过 | — |
+|------|--------|------:---------|
