@@ -13,15 +13,21 @@
   <GameLayout title="..." accentColor="#XXX" :hints="[...]" :infoItems="[...]" @back="router.push('/')">
     <!-- 游戏画面区 -->
     <template #controls><DirectionPad ... /></template>
-    <GameDialog v-model:visible="gameOver" ... />
+    <GameDialog v-model:visible="gameOver" :new-record="newRecord" :achievement-hint="achievementHint" ... />
     <LeaderboardStrip :game="'xxx'" />
   </GameLayout>
+  <PauseOverlay :visible="paused" @resume="togglePause" />
+  <ResumePrompt :visible="showResume" @continue="continueGame" @new-game="newGame" />
+  <LeaderboardOverlay ... />
 </template>
 
 <script setup lang="ts">
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useGameLoop } from '@/composables/useGameLoop'
 import { useSound } from '@/composables/useSound'
+import { useAutoPause } from '@/composables/useAutoPause'
+import { useHaptics } from '@/composables/useHaptics'
+import { useScoreFloats } from '@/composables/useScoreFloats'
 import { useGameStore } from '@/stores/game'
 import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 </script>
@@ -78,7 +84,29 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 
 > 2048 和连连看支持中途提交分数。
 
+## 多 Agent 协作工作流（Claude + Codex）
+
+角色分工：Claude 负责计划与审查，Codex 负责按计划执行。循环流程：Claude 写计划 → Codex 执行 → Claude review → 出修复方案 → Codex 修复 → Claude 再 review → 通过后提交。
+
+**交接机制（硬规则）：**
+- 交接物是 git diff：Codex 每完成一个任务立即 commit，Claude review 时只看 `git diff`，不全量重读代码
+- 严格串行：同一时间只有一个 agent 改动工作区文件，禁止并行改同一文件
+- 计划必须"可执行"：写清文件路径、修改点、验收标准、review checklist（模板见 [docs/ai-workflow/PLAN.md](./docs/ai-workflow/PLAN.md)）
+- **PLAN.md 使用方式**：路径固定、每次任务由 Claude 覆盖重写（不新建 PLAN-xxx.md）；Codex 执行后更新勾选与交接记录；Claude 的 review 结果写入同一文件的交接记录表（不新建 review.md）；任务提交后清空恢复模板供复用
+- 终止条件：阻塞性问题（bug / 逻辑错误 / 违反本文件规范）清零 + 非阻塞建议（风格 / 微优化）记入 backlog 即可提交；最多 2 轮 review，第 3 轮起人工介入
+- 每轮交接时，当前 agent 必须更新 PLAN.md 的状态勾选，避免基于过时计划判断
+- 审查依据 = 本文件硬规则 + PLAN.md 验收标准，不凭感觉
+
+## 成就系统（新增成就操作）
+
+- 元数据 / 已解锁集合 / 自动 perfectionist 元成就 / 架构事实见 [docs/system_design.md](./docs/system_design.md) 的 Store 段
+- **新增成就**：在 `src/stores/achievements.ts` 的 `ACHIEVEMENTS` 数组加条目 → 在对应游戏触发点调用 `achievements.unlock('id')` + `toast.show(...)` → `/achievements` 自动显示
+- `unlock()` **内部自动触发 `sound.unlock()` + `haptics.success()`**，调用方只需再加 `toast.show(...)`
+
 ## 注意事项
+- **游戏结束流程**：统一走 `useGameOver().checkGameOver(gameName, score)` → 返回 `{ isNewRecord, achievementHint }` → 传给 `GameDialog`（新记录检测 + 分数写入 + 音效 + 成就接近提示自动完成）
+- **PWA**：`vite-plugin-pwa` autoUpdate；`App.vue` 生产环境注册 SW；静态资源 + Supabase API 离线缓存
+- **全局错误兜底**：`main.ts` 设 `app.config.errorHandler` + `unhandledrejection` 监听，防 Vue 渲染白屏
 - Canvas 游戏 `onUnmounted` 中清理 requestAnimationFrame
 - TS 启用了 `noUnusedLocals` / `noUnusedParameters`，未使用变量会导致 `npm run build` 失败
 - 测试在 `tests/` 下，`node test-xxx.cjs` 直接跑，无测试框架依赖
