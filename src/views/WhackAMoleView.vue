@@ -43,8 +43,8 @@
             <div class="dirt"></div>
           </div>
         </div>
-      </div>
       <ScoreFloat :popups='popups' />
+      </div>
 
       <div class="time-bar">
         <div class="time-fill" :style="{ width: (timeLeft / 30 * 100) + '%' }"></div>

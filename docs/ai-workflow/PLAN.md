@@ -36,14 +36,14 @@
 
 ## Review Checklist（Claude review 时逐项勾）
 
-- [ ] 逻辑正确性：`points` 与 `score.value` 实际增量一致（复用 `baseScore + comboBonus` 表达式，非硬编码）
-- [ ] 坐标计算正确：用 `getBoundingClientRect()` 差值，非 `offsetX/offsetY`（后者在嵌套元素上不准）
-- [ ] 符合 AGENTS.md 硬规则：复用 `useScoreFloats` + `ScoreFloat`，不新建 composable / 组件
-- [ ] 模板结构符合统一框架：`GameLayout` + `GameDialog` 未改动，仅追加 `ScoreFloat`
-- [ ] 无未使用变量：`popups` 仅传给 `<ScoreFloat>`、`boardEl` 仅用于坐标计算，均有引用
-- [ ] 无重复 keyframes：未新增动画定义（复用 `scoreFloatUp`）
-- [ ] 移动端可用：飘字渲染在 `.mole-board` 内，不溢出视口；触摸命中仍触发 pop
-- [ ] 防御性检查：`boardEl.value` 和 `holeEl` 的 `&&` 守卫存在，空安全
+- [x] 逻辑正确性：`points = baseScore + comboBonus` 与 `score.value +=` 完全一致，非硬编码 ✅
+- [x] 坐标计算正确：`getBoundingClientRect()` 差值，与 SnakeView 一致 ✅
+- [x] 符合 AGENTS.md 硬规则：复用 `useScoreFloats` + `ScoreFloat`，未新建 composable / 组件 ✅
+- [x] 模板结构：<ScoreFloat> 已移至 .mole-board 内部最后一个子元素，与 SnakeView 一致 ✅
+- [x] 无未使用变量：`popups` 传给 `<ScoreFloat>`、`boardEl` 用于坐标计算，均有引用 ✅
+- [x] 无重复 keyframes：未新增动画定义（复用 `scoreFloatUp`）✅
+- [x] 移动端可用：飘字在 `.mole-board` 内渲染，不溢出视口；触摸命中触发 pop ✅
+- [x] 防御性检查：`el && holeEl` 守卫存在，空安全 ✅
 
 ## 关键参考
 
@@ -110,12 +110,48 @@ if (el && holeEl) {
 }
 ```
 
+## 修复方案（Codex 需处理）
+
+### 🔴 阻塞问题：`<ScoreFloat>` 挂载位置错误
+
+**现象**：diff 显示 `<ScoreFloat :popups='popups' />` 位于 `.mole-board` 闭合标签**之后**（第 48 行附近），作为兄弟元素挂载。
+
+**后果**：`ScoreFloat.vue` 的 `.score-floats` 使用 `position: absolute; inset: 0`，会寻找最近的 `position` 非 `static` 的祖先作为定位参考。当前结构下定位祖先不是 `.mole-board`，导致：
+- 飘字坐标原点偏移（JS 计算的是相对 `.mole-board` 的坐标，但渲染时参考系不同）
+- 飘字整体向下偏移一个 `.mole-board` 高度 + gap 距离
+
+**修复**：
+- **文件**：`src/views/WhackAMoleView.vue`
+- **位置**：模板第 47-48 行附近
+- **改法**：把 `<ScoreFloat :popups="popups" />` 从 `.mole-board` 外部移入内部，作为其**最后一个子元素**（`</div>` 闭合标签之前），与 SnakeView 的实现完全一致
+
+```html
+<!-- 改前（错误） -->
+<div ref="boardEl" class="mole-board" :style="...">
+  ...hole 循环...
+</div>
+<ScoreFloat :popups="popups" />
+
+<!-- 改后（正确） -->
+<div ref="boardEl" class="mole-board" :style="...">
+  ...hole 循环...
+  <ScoreFloat :popups="popups" />
+</div>
+```
+
+### ⚪ 非阻塞建议（backlog，不阻塞提交）
+
+1. **引号风格**：`<ScoreFloat :popups='popups' />` 使用单 quotes，项目其他位置统一用双 quotes。非必须，可顺手改。
+2. **媒体查询冗余**：`@media (max-width: 640px) { .mole-board { position: relative; ... } }` 重复声明了 `position: relative`，基类已声明，媒体查询内可省略。
+
 ## 交接记录（每轮更新）
 
 | 轮次 | 执行者 | 结果 | 遗留问题 |
 |------|--------|------|---------|
 | 1 | Claude（计划） | 计划完成，写入 PLAN.md | — |
-| 2 | Codex（执行） | 完成，build 通过 | — |
-| 3 | Claude（review） | ☐ | ☐ |
+| 2 | Codex（执行） | 完成，build 通过 | ScoreFloat 挂载位置错误 |
+| 3 | Claude（review） | **B 档：有阻塞问题** | 需修复 ScoreFloat 位置 |
+| 4 | Codex（修复） | 完成，ScoreFloat 移入 .mole-board 内部 | — |
+| 5 | Claude（二次 review） | ☐ | ☐ |
 
 > 终止条件：阻塞性问题（bug / 逻辑错误 / 违反规范）清零 + 非阻塞建议进 backlog 即可提交；最多 2 轮 review，第 3 轮起人工介入。
