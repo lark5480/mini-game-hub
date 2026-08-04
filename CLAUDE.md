@@ -1,70 +1,15 @@
 # CLAUDE.md
 
-小游戏合集 — Vue 3 + TypeScript + Vite + Pinia + Vue Router。原生 CSS（复古霓虹主题），无 UI 库。
+本项目的完整规范唯一事实源是 [AGENTS.md](./AGENTS.md)。**改任何代码前先读 AGENTS.md**，其中包含：游戏开发约定、完整模板、共享组件/composable 注册表、Supabase 排行榜、多 Agent 协作工作流、成就系统。
 
-> 游戏开发约定（完整模板 + 关键约束）见 [AGENTS.md](./AGENTS.md)。Supabase SQL / 环境变量 / 核心文件 / 部署指南见 [docs/system_design.md](./docs/system_design.md) 的「部署与基础设施」。
+本文件不维护重复规则（避免两份文档漂移），只列绝不变化的红线。
 
-## 硬规则（Claude Code 改任何代码都须遵守）
+## 红线（绝不变化）
 
-所有游戏视图遵循统一模式：
-
-```vue
-<template>
-  <GameLayout title="..." accentColor="#XXX" :hints="[...]" :infoItems="[...]" @back="router.push('/')">
-    <!-- 游戏画面区 -->
-    <template #controls><DirectionPad ... /></template>
-    <GameDialog v-model:visible="gameOver" :new-record="newRecord" :achievement-hint="achievementHint" ... />
-    <LeaderboardStrip :game="'xxx'" />
-  </GameLayout>
-  <PauseOverlay :visible="paused" @resume="togglePause" />
-  <ResumePrompt :visible="showResume" @continue="continueGame" @new-game="newGame" />
-  <LeaderboardOverlay ... />
-</template>
-
-<script setup lang="ts">
-import { useGameKeyboard } from '@/composables/useGameKeyboard'
-import { useGameLoop } from '@/composables/useGameLoop'
-import { useSound } from '@/composables/useSound'
-import { useAutoPause } from '@/composables/useAutoPause'
-import { useHaptics } from '@/composables/useHaptics'
-import { useScoreFloats } from '@/composables/useScoreFloats'
-import { useGameOver } from '@/composables/useGameOver'
-import { useGameStore } from '@/stores/game'
-</script>
-```
-
-> 游戏结束统一用 `const { isNewRecord, achievementHint } = checkGameOver(gameName, score)` 检测新记录 + 成就接近，结果传给 GameDialog。
-
-**关键约束：**
-- 框架统一用 `GameLayout` + `GameDialog` + `DirectionPad`，暂停/恢复统一用 `useAutoPause` + `PauseOverlay` + `ResumePrompt` + P/Esc 键
-- 动画循环用 `useGameLoop({ onUpdate, mode, fixedStep? })`；暂停时 rAF 链自动停止
-- 键盘用 `useGameKeyboard({ bindings, active })`；连发加 `{ repeat: { intervalMs: 120 } }`；加 `{ onKeyUp: true }` 分离 keyup
-- 分数用 `useGameStore().addScore(gameName, score)`
-- 音效用 `useSound()`；暂停/恢复分别调 `sound.pause()` / `sound.resume()`
-- 震动用 `useHaptics()`（pulse / success / light / win）
-- 浮动分数用 `useScoreFloats().pop('+10', x, y)`
-- **新增游戏只需改 `src/lib/games.ts` + 在 router 的 `GAME_COMPONENTS` 加一行映射**
-
-## 注意事项
-
-- **PWA**：`vite-plugin-pwa` autoUpdate；`App.vue` 生产环境注册 SW；静态资源 + Supabase API 离线缓存
-- **全局错误兜底**：`main.ts` 设 `app.config.errorHandler` + `unhandledrejection` 监听，防 Vue 渲染白屏
-- **游戏结束流程**：统一走 `useGameOver().checkGameOver()` → 返回 `{ isNewRecord, achievementHint }` → 传给 `GameDialog`
-- Canvas 游戏 `onUnmounted` 中清理 requestAnimationFrame
+- 所有游戏视图统一用 `GameLayout` + `GameDialog` + `DirectionPad` 框架，不各写一套
 - TS 启用了 `noUnusedLocals` / `noUnusedParameters`，未使用变量会导致 `npm run build` 失败
-- 测试在 `tests/` 下，`node test-xxx.cjs` 直接跑，无测试框架依赖
-- 关卡类游戏（推箱子）：每关必须保证箱子数 = 目标数
-- 所有动画 keyframes 统一放 `src/styles/animations.css`，不要各组件重复定义
-- overlay 类组件 padding 用 `max(24px, env(safe-area-inset-*) + 16px)` 适配 iPhone 刘海
 
-## 外指链（架构 / 部署 / 注册表）
+## 多 Agent 协作
 
-- **游戏开发约定完整版（注册表 + Supabase + 注意事项）**：[AGENTS.md](./AGENTS.md)
-- **Supabase SQL / 环境变量 / 核心文件 / 昵称去重 / 部署步骤 / 成就架构**：[docs/system_design.md](./docs/system_design.md) 的「部署与基础设施」
-- **项目门面（游戏列表 / 快速开始 / 目录树）**：[README.md](./README.md)
-
-## 成就系统（新增成就操作）
-
-- 元数据 / 已解锁集合 / 自动 perfectionist 元成就 / 架构事实见 [docs/system_design.md](./docs/system_design.md) 的 Store 段
-- **新增成就**：在 `src/stores/achievements.ts` 的 `ACHIEVEMENTS` 数组加条目 → 在对应游戏触发点调用 `achievements.unlock('id')` + `toast.show(...)` → `/achievements` 自动显示
-- `unlock()` **内部自动触发 `sound.unlock()` + `haptics.success()`**，调用方只需再加 `toast.show(...)`
+- 协作工作流（Claude 计划 → Codex 执行 → Claude review）与交接机制见 AGENTS.md「多 Agent 协作工作流」小节
+- 当前任务计划见 [docs/ai-workflow/PLAN.md](./docs/ai-workflow/PLAN.md)

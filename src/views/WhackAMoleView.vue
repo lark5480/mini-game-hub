@@ -20,7 +20,7 @@
         </div>
       </div>
       
-      <div class="mole-board" :style="{ '--grid-cols': gridCols, '--grid-rows': gridRows }">
+      <div ref="boardEl" class="mole-board" :style="{ '--grid-cols': gridCols, '--grid-rows': gridRows }">
         <div
           v-for="(hole, index) in holes"
           :key="index"
@@ -43,6 +43,7 @@
             <div class="dirt"></div>
           </div>
         </div>
+      <ScoreFloat :popups="popups" />
       </div>
 
       <div class="time-bar">
@@ -107,16 +108,18 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useGameStore } from '@/stores/game'
 import { useSound } from '@/composables/useSound'
 import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
 import { useGamePause } from '@/composables/useGamePause'
+import { useGameOver } from '@/composables/useGameOver'
 import { useHaptics } from '@/composables/useHaptics'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
 import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
+import { useScoreFloats } from '@/composables/useScoreFloats'
+import ScoreFloat from '@/components/ScoreFloat.vue'
 
 interface Hole {
   active: boolean
@@ -124,11 +127,14 @@ interface Hole {
 }
 
 const router = useRouter()
-const gameStore = useGameStore()
 const sound = useSound()
 const achievements = useAchievements()
 const toast = useToast()
 const haptics = useHaptics()
+
+const { popups, pop } = useScoreFloats()
+const { checkGameOver } = useGameOver()
+const boardEl = ref<HTMLElement | null>(null)
 
 const difficulties = [
   { name: 'easy', label: '简单', gridCols: 3, gridRows: 3, interval: 1200, duration: 1000 },
@@ -248,6 +254,17 @@ function whack(index: number) {
     const baseScore = 10
     const comboBonus = (combo.value - 1) * 5
     score.value += baseScore + comboBonus
+
+    // 浮动分数反馈
+    const points = baseScore + comboBonus
+    const el = boardEl.value
+    const holeEl = el?.querySelectorAll('.hole')[index] as HTMLElement | undefined
+    if (el && holeEl) {
+      const boardRect = el.getBoundingClientRect()
+      const r = holeEl.getBoundingClientRect()
+      pop(`+${points}`, r.left + r.width / 2 - boardRect.left, r.top + r.height / 2 - boardRect.top)
+    }
+
     sound.hit()
 
     const timeoutId = window.setTimeout(() => {
@@ -270,9 +287,10 @@ function gameOver() {
   stopAllTimers()
   gameStarted.value = false
   gameOverDialog.value = true
-  sound.gameOver()
   lastScore.value = score.value
-  gameStore.addScore('whackamole', score.value)
+  const { isNewRecord: isNewRecordResult, achievementHint: hint } = checkGameOver('whackamole', score.value)
+  newRecord.value = isNewRecordResult
+  achievementHint.value = hint
   if (score.value >= 300) {
     if (achievements.unlock('whack_master')) {
       toast.show('成就解锁：神速', '🔨')
@@ -352,6 +370,7 @@ onUnmounted(() => {
 }
 
 .mole-board {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(var(--grid-cols), 1fr);
   grid-template-rows: repeat(var(--grid-rows), auto);
