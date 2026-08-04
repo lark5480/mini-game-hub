@@ -92,8 +92,8 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 
 - 交接物是 git diff：Codex 执行完**不 commit**，只写文件；Claude review 时通过 `git diff` 查看未提交的改动，不全量重读代码；review 通过后由 Codex 一次性 commit。**P0/P1 未清零前禁止 commit**（commit = 验收合格，不是"我写完了"）
 - 严格串行：同一文件严格串行（Claude 和 Codex 不同时改同一文件），不同文件可并行；Claude review 时必须基于已冻结的文件集合
-- 计划必须"可执行"：写清文件路径、修改点、验收标准、review checklist（模板见 [docs/ai-workflow/PLAN.md](./docs/ai-workflow/PLAN.md)）
-- **PLAN.md 使用方式**：路径固定，模板骨架详见 [docs/ai-workflow/TEMPLATE.md](docs/ai-workflow/TEMPLATE.md)；每次新任务只覆盖 TASK_BODY 区，Codex 执行后更新勾选与交接记录，Claude review 结果写入同一文件；任务提交后清空 TASK_BODY 区恢复占位
+- 计划必须"可执行"：写清文件路径、修改点、验收标准、review checklist（模板见 [docs/ai-workflow/TEMPLATE.md](./docs/ai-workflow/TEMPLATE.md)）
+- **PLAN.md 使用方式**：路径固定，模板骨架详见 [docs/ai-workflow/TEMPLATE.md](docs/ai-workflow/TEMPLATE.md)；每次新任务只覆盖 TASK_BODY 区，Codex 执行后更新勾选与交接记录，Claude review 结果写入同一文件；任务提交后清空 TASK_BODY 区恢复占位（清空前确认执行/审查轮次已记入交接记录）
 - 每轮交接时，当前 agent 必须更新 PLAN.md 的状态勾选，避免基于过时计划判断
 - 审查依据 = 本文件硬规则 + PLAN.md 验收标准，不凭感觉
 
@@ -117,7 +117,7 @@ Review 结果按严重度分级，Codex 根据级别决定处理方式：
 |------|------|------|---------|---------|
 | P0 正确性 | 🔴 | 逻辑/渲染/数据错误 | 阻塞，Codex 必须修 | 飘字坐标偏移、得分计算错误、空指针 |
 | P1 规范 | 🟡 | 违反 AGENTS.md 硬规则 | 阻塞，Codex 必须修 | 新建了本应复用的 composable、未用 GameLayout |
-| P2 打磨 | 🔵 | 风格/微优化、零风险 | 不进 backlog，Codex 顺手修，跟主任务同一 commit（message 注明 `+ 顺手修 xxx`） | 单双引号、冗余媒体查询、未使用变量 |
+| P2 打磨 | 🔵 | 风格/微优化、零风险 | 不进 backlog，Codex 顺手修，跟主任务同一 commit（message 注明 `+ 顺手修 xxx`）；Claude review 时对 P2 清单逐项核对，每条须为「已修」或「明确跳过 + 理由」，不允许静默遗漏 | 单双引号、冗余媒体查询、未使用变量 |
 | P3 可选 | ⚪ | 后续可做的改进 | 进 backlog（`docs/ai-workflow/BACKLOG.md`，写 review 的一方负责登记） | 动画曲线优化、新增触觉反馈 |
 
 ### 自动化命令（当前未落地，保持人为传话模式）
