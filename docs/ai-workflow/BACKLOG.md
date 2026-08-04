@@ -13,5 +13,5 @@
 
 | # | 登记日期 | 来源 | 描述 | 状态 |
 |---|---------|------|------|------|
-| 1 | 2026-08-03 | WhackAMole 飘字 review（`aaa292c`） | `src/views/WhackAMoleView.vue` 中 `<ScoreFloat :popups='popups' />` 使用单引号，与项目统一双引号不一致 | 待处理 |
-| 2 | 2026-08-03 | WhackAMole 飘字 review（`aaa292c`） | `src/views/WhackAMoleView.vue` 的 `@media (max-width: 640px)` 内 `.mole-board` 重复声明 `position: relative`（基类已声明），可删 | 待处理 |
+| 1 | 2026-08-03 | WhackAMole 飘字 review（`aaa292c`） | `src/views/WhackAMoleView.vue` 中 `<ScoreFloat :popups='popups' />` 使用单引号，与项目统一双引号不一致 | 已完成(bdc008e) |
+| 2 | 2026-08-03 | WhackAMole 飘字 review（`aaa292c`） | `src/views/WhackAMoleView.vue` 的 `@media (max-width: 640px)` 内 `.mole-board` 重复声明 `position: relative`（基类已声明），可删 | 已完成(bdc008e) |
