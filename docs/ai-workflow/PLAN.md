@@ -64,97 +64,28 @@
 
 ---
 
-# 任务模式：粗（macro）
+# 任务模式：（未选择 — 等待新任务填入）
 
 ## 任务目标
 
-打地鼠双人联机竞速试点：创建/加入房间匹配后各玩各的（沿用现有 30 秒计分制），实时看到对手分数，时间到判胜负。同时沉淀通用竞速对战 composable（`useRaceRoom`），为后续接水果、连连看等竞速玩法铺路。这是「记分竞速」类多人的首个试点（结论来自联机基建评估：回合制/低频同步可靠，实时动作风险高）。
+（等待新任务填入）
 
-## 文件级修改点（粗模式：模块范围）
+## 文件级修改点
 
-**改哪些：**
-
-- 新增 `src/composables/useRaceRoom.ts` — 通用竞速对战封装，基于 `useRealtimeRoom` 包装（房间生命周期、节流分数同步、开始/倒计时同步、结算、再来一局、断线检测）
-- 新增联机对战组件（`WhackAMoleRaceView.vue`），模式参照 `TicTacToeOnlineView.vue`（可被入口视图内嵌的独立组件）
-- 改造 `src/views/WhackAMoleView.vue` — 增加模式选择（单人 / 联机竞速）、内嵌对战组件、URL `?room=` 直达、标题切换
-- **复用策略**：将现有单人游戏逻辑（棋盘 + 计时 + 得分）抽为独立组件 `WhackAMoleBoard.vue`，单人和联机都内嵌它，避免重复实现
-- `src/styles/animations.css` — 如需新动画 keyframes 统一放这里
-
-**不改哪些：**
-
-- `useRealtimeRoom.ts` 本身一律不改；发现通用性问题记入交接记录，由 Claude 决策
-- 单人模式全流程（难度选择、30 秒计时、结算、排行榜、成就）零改动、零污染
-- 不新建 WebSocket / 轮询 / HTTP 同步方案，不引入新依赖
-- 不改 `src/lib/games.ts`（同游戏内加模式，元信息不变）
-
-## 范围决策（v1 边界，已拍板，Codex 照做；有异议记入交接记录，不自作主张）
-
-1. **入口**：沿用井字棋先例——单入口模式选择屏（`TicTacToeView.vue:13-30`），URL 带 `?room=XXXX` 直达对战
-2. **难度**：创建房间时房主选难度（复用现有三档），信息随房间同步，双方强制同难度
-3. **开始**：presence 排序第一个 id 为房主，开始权归房主（确定性，避免双方同时点开始的竞态）；满 2 人后房主点「开始」→ 双端同步 3 秒倒计时 → 开局
-4. **同步**：分数节流广播（间隔 ≥ 1s，结算时立即 flush 最终分）；禁止每次击打都发消息
-5. **结算**：30 秒到点比分判胜负，平局显示平局；GameDialog 展示双方分数；**竞速结果不进单人排行榜**（不调 `checkGameOver`/`addScore`，防双开刷分）
-6. **再来一局**：房主发起，客人确认后倒计时开新局，难度沿用房间设定
-7. **断线**：对战中对方离开 → 顶部提示；本方继续打完，结算时标注「对方已离开」；不做胜负判定
-8. **满员**：第三人进房提示房间满（参照 TTT 现有机制）；观战不支持
-9. **暂停**：对战模式禁用暂停/失焦自动暂停（参照 `TicTacToeView.vue:196-198` 的 canPause 处理）
+| 文件 | 修改内容 | 完成 |
+|------|---------|:----:|
 
 ## 验收标准
 
-- [ ] 打地鼠页出现模式选择屏：单人挑战（原玩法）/ 联机竞速
-- [ ] 创建房间显示房间码（沿用 `useRealtimeRoom` 现有格式）+ 可复制分享链接；凭房间码或链接进入同一房间
-- [ ] 双方同难度开局，倒计时双端一致（±1s 内）
-- [ ] 对战中可见对手实时分数（节流同步），对手击打无需实时复现
-- [ ] 时间到自动结算：胜/负/平 + 双方分数，胜利有音效与震动
-- [ ] 再来一局流程（房主发起 → 客人确认 → 新局）走通
-- [ ] 对方中途离开、房间满员、未配置 Supabase（降级提示）三种异常均有清晰 UI 反馈
-- [ ] 单人模式回归：难度/计时/结算/排行榜/成就行为与改动前完全一致
-- [ ] `npm run build` 通过
+- [ ] ...
 
-## Review Checklist（粗模式：架构合规优先）
+## Review Checklist
 
-- [ ] 分层：视图零直连 supabase，一切联机行为走 `useRaceRoom`
-- [ ] `useRaceRoom` 是否足够通用（不含打地鼠专有逻辑），后续游戏可复用
-- [ ] 单人代码路径零联机依赖（单人分支不 import、不判断任何对战状态）
-- [ ] 节流真实有效（审查发送路径，确认无逐次击打广播）
-- [ ] 确定性：开始/再来一局/角色分配无竞态（房主权威 + presence 排序）
-- [ ] 组件复用：GameLayout / GameDialog / GameToast / PauseOverlay 体系未被绕开
-- [ ] 移动端：对手分数条不遮挡棋盘，safe-area 合规，横竖屏不破版
-- [ ] 无 console/调试残留，`noUnusedLocals` 通过
+- [ ] ...
 
 ## 关键参考
 
-- `src/composables/useRealtimeRoom.ts` — 房间抽象（`send`/`on`/`onPresenceSync`/`status`，presence 排序角色分配在头注）
-- `src/views/TicTacToeView.vue:13-30,155-160,196-198,204` — 模式选择屏 / URL 直达 / 联机禁暂停 / 标题切换先例
-- `src/views/TicTacToeOnlineView.vue` — 房间码、满员、断线恢复、no-supabase 降级先例
-- `src/views/WhackAMoleView.vue:140-147,175` — 难度表、30 秒制、startGame
-- `src/composables/useSound.ts` / `useHaptics.ts` — 结算反馈（win/error）
-
-## 测试建议（非硬性）
-
-结果判定、节流这类纯逻辑若能抽成独立函数，欢迎在 `tests/` 下加 `node` 直跑的验证脚本（参照现有 `test-*.cjs` 风格）。
-
-## 交接记录（每轮更新）
+## 交接记录
 
 | 轮次 | 执行者 | 结果 | 遗留问题 |
-|------|--------|------|---------|
-| 1 | Claude（计划） | macro 计划完成，写入 PLAN.md | — |
-| 2 | Claude（实现） | 909cfed 完成全部 4 文件，build 通过 | — |
-| 3 | Claude（主线程 review） | P0=0, P1=1, P2=2 | — |
-| 4 | Claude（修复） | 93b1290 修 P1+P2，build 通过 | P3×2 进 backlog |
-
-## Review 结果
-
-### 🔴 P0 正确性
-无。逻辑/渲染/数据流无错误，build 零警告。
-
-### 🟡 P1 规范（已修 93b1290）
-- **P1-1** `WhackAMoleRaceView.vue` 局部定义 `@keyframes countPop` → 移到 `animations.css`
-
-### 🔵 P2 打磨（已修 93b1290）
-- **P2-1** `onOpponentScore` 回调冗余（内部 handler 已写 opponentScore）→ 删除回调
-- **P2-2** `WhackAMoleBoard` 中 `let paused` 改为 `const paused = ref(false)`
-
-### ⚪ P3 可选（进 backlog）
-- **P3-1** `copyText` 函数跨组件重复（RaceView / TicTacToeOnlineView），建议后续抽到 `@/lib/clipboard.ts`
-- **P3-2** 倒计时同步依赖网络 RTT，当前 ±1s 容忍度满足；后续可带时间戳同步
+|------|--------|------:---------|
