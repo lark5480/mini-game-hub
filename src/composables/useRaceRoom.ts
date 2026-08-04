@@ -22,16 +22,21 @@ export interface RaceRoomApi {
   sendFinalScore: (score: number) => void
   requestStart: () => void
   requestPlayAgain: () => void
+  acceptPlayAgain: () => void
+  declinePlayAgain: () => void
   setDifficulty: (d: string) => void
   leave: () => void
 }
 
 export interface RaceRoomOptions {
+  game?: string
   onOpponentScore?: (score: number) => void
   onOpponentLeave?: () => void
   onStartCountdown?: () => void
   onSettle?: (result: RaceSettleResult) => void
-  onPlayAgain?: () => void
+  onPlayAgainRequest?: () => void
+  onPlayAgainAccept?: () => void
+  onPlayAgainDeclined?: () => void
   onDifficulty?: (d: string) => void
 }
 
@@ -43,7 +48,7 @@ export interface RaceRoomOptions {
  * 不含任何打地鼠专有逻辑，后续竞速游戏可复用。
  */
 export function useRaceRoom(roomCode: string, opts: RaceRoomOptions = {}): RaceRoomApi {
-  const room = useRealtimeRoom(roomCode, { game: 'whackamole-race' })
+  const room = useRealtimeRoom(roomCode, { game: opts.game ?? 'race' })
 
   const opponentScore = ref(0)
   const difficulty = ref('normal')
@@ -141,16 +146,12 @@ export function useRaceRoom(roomCode: string, opts: RaceRoomOptions = {}): RaceR
       opts.onDifficulty?.(data)
     }
   })
-  // 再来一局：重置结算状态，由视图决定是否开新局
-  room.on('play-again', () => {
-    myFinal.value = null
-    opponentFinal.value = null
-    opponentScore.value = 0
-    hadOpponent.value = false
-    leftNotified = false
-    settled = false
-    opts.onPlayAgain?.()
-  })
+  // 再来一局：客人收到房主请求
+  room.on('play-again', () => opts.onPlayAgainRequest?.())
+  // 再来一局：房主收到客人接受
+  room.on('play-again-accept', () => opts.onPlayAgainAccept?.())
+  // 再来一局：房主收到客人拒绝
+  room.on('play-again-decline', () => opts.onPlayAgainDeclined?.())
 
   function sendScore(score: number) {
     const now = Date.now()
@@ -176,7 +177,27 @@ export function useRaceRoom(roomCode: string, opts: RaceRoomOptions = {}): RaceR
 
   function requestPlayAgain() {
     if (!isHost.value) return
-    room.send('play-again', { difficulty: difficulty.value })
+    myFinal.value = null
+    opponentFinal.value = null
+    opponentScore.value = 0
+    hadOpponent.value = false
+    leftNotified = false
+    settled = false
+    room.send('play-again', {})
+  }
+
+  function acceptPlayAgain() {
+    myFinal.value = null
+    opponentFinal.value = null
+    opponentScore.value = 0
+    hadOpponent.value = false
+    leftNotified = false
+    settled = false
+    room.send('play-again-accept', {})
+  }
+
+  function declinePlayAgain() {
+    room.send('play-again-decline', {})
   }
 
   function setDifficulty(d: string) {
@@ -202,6 +223,8 @@ export function useRaceRoom(roomCode: string, opts: RaceRoomOptions = {}): RaceR
     sendFinalScore,
     requestStart,
     requestPlayAgain,
+    acceptPlayAgain,
+    declinePlayAgain,
     setDifficulty,
     leave,
   }

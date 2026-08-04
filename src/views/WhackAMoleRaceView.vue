@@ -23,7 +23,7 @@
       <div v-else-if="room.status.value === 'reconnecting'" class="banner banner-warn">网络不稳定，正在重新连接…</div>
       <div v-else-if="room.status.value === 'error'" class="banner banner-warn">连接异常，请刷新重试</div>
       <div v-else-if="room.amSpectator.value" class="banner banner-warn">房间已满（已有两人），请换房间或刷新等待空位</div>
-      <div v-else-if="room.opponentLeft.value" class="banner banner-warn">对手已离开，时间到后结算（标注"对手已离开"）</div>
+      <div v-else-if="room.opponentLeft.value" class="banner banner-warn">{{ phase === 'playing' ? '对手已离开，时间到后结算（标注"对手已离开"）' : '对手已离开' }}</div>
       <div v-else-if="!room.opponentPresent.value" class="banner banner-wait">
         等待对手加入…（把上面的房间号发给好友即可同玩）
       </div>
@@ -86,15 +86,26 @@
     :message="settleMessage"
   >
     <template #action>
-      <button v-if="room.isHost.value" class="dialog-btn" @click="onPlayAgain">再来一局</button>
-      <span v-else class="wait-hint">等待房主开始下一局…</span>
+      <button v-if="room.isHost.value && !playAgainWaiting" class="dialog-btn" @click="onPlayAgain">再来一局</button>
+      <span v-else-if="playAgainWaiting" class="wait-hint">等待对方确认…</span>
+      <span v-else-if="!room.isHost.value && !playAgainConfirm" class="wait-hint">等待房主开始下一局…</span>
     </template>
   </GameDialog>
+
+  <!-- 客人再来一局确认面板 -->
+  <div v-if="playAgainConfirm" class="play-again-confirm">
+    <p class="play-again-text">房主邀请再来一局</p>
+    <div class="play-again-actions">
+      <button class="dialog-btn" @click="acceptPlayAgain">接受</button>
+      <button class="dialog-btn dialog-btn-ghost" @click="declinePlayAgain">拒绝</button>
+    </div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useToast } from '@/composables/useToast'
 import { useSound } from '@/composables/useSound'
 import { useHaptics } from '@/composables/useHaptics'
 import { useRaceRoom } from '@/composables/useRaceRoom'
@@ -113,6 +124,7 @@ const router = useRouter()
 const route = useRoute()
 const sound = useSound()
 const haptics = useHaptics()
+const toast = useToast()
 
 // 房间号：沿用 TTT 格式（4 位字母数字）
 const ROOM_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -133,11 +145,22 @@ const countdown = ref<number | null>(null)
 const showSettle = ref(false)
 const settleResult = ref<{ me: number; opponent: number; outcome: string } | null>(null)
 const copied = ref(false)
+// 再来一局：房主等待客人确认 / 客人确认面板
+const playAgainWaiting = ref(false)
+const playAgainConfirm = ref(false)
+// 倒计时挂起的 setTimeout id（可取消）
+let countdownTimer: number | undefined
 
 const room = useRaceRoom(roomCode.value, {
-  onStartCountdown: () => runCountdown(),
+  game: 'whackamole-race',
+  onStartCountdown: () => { if (phase.value === 'idle') runCountdown() },
   onSettle: (r) => showSettleResult(r.me, r.opponent, r.outcome),
-  onPlayAgain: () => resetForNextRound(),
+  onPlayAgainRequest: () => { playAgainConfirm.value = true },
+  onPlayAgainAccept: () => { resetForNextRound(); runCountdown() },
+  onPlayAgainDeclined: () => {
+    playAgainWaiting.value = false
+    toast.show('对方拒绝了再来一局', 'info')
+  },
 })
 
 const settleIcon = computed<'success' | 'fail' | 'info'>(() => {
@@ -166,6 +189,7 @@ function onSelectDifficulty(name: string) {
 }
 
 function onHostStart() {
+  if (phase.value !== 'idle') return
   if (!room.isHost.value || !room.opponentPresent.value) return
   room.requestStart()
   runCountdown()
@@ -176,13 +200,14 @@ function runCountdown() {
   countdown.value = 3
   const tick = () => {
     if (countdown.value !== null && countdown.value > 0) {
-      setTimeout(() => {
+      countdownTimer = window.setTimeout(() => {
         countdown.value!--
         tick()
       }, 700)
     } else {
       // 开始!
-      setTimeout(() => {
+      countdownTimer = window.setTimeout(() => {
+        countdownTimer = undefined
         countdown.value = null
         phase.value = 'playing'
         boardRef.value?.startGame()
@@ -216,6 +241,11 @@ function showSettleResult(me: number, opponent: number, outcome: string) {
 }
 
 function resetForNextRound() {
+  if (countdownTimer !== undefined) {
+    window.clearTimeout(countdownTimer)
+    countdownTimer = undefined
+  }
+  countdown.value = null
   showSettle.value = false
   settleResult.value = null
   myScore.value = 0
@@ -226,7 +256,17 @@ function resetForNextRound() {
 function onPlayAgain() {
   if (!room.isHost.value) return
   room.requestPlayAgain()
+  playAgainWaiting.value = true
+}
+
+function acceptPlayAgain() {
+  playAgainConfirm.value = false
+  room.acceptPlayAgain()
   resetForNextRound()
+}
+function declinePlayAgain() {
+  playAgainConfirm.value = false
+  room.declinePlayAgain()
 }
 
 // 复制邀请链接
@@ -265,6 +305,13 @@ async function copyRoom() {
 onMounted(() => {
   if (!(typeof route.query.room === 'string' && /^[A-Z0-9]{4}$/.test(route.query.room))) {
     router.replace({ query: { ...route.query, room: roomCode.value } })
+  }
+})
+
+onUnmounted(() => {
+  if (countdownTimer !== undefined) {
+    window.clearTimeout(countdownTimer)
+    countdownTimer = undefined
   }
 })
 
@@ -428,6 +475,31 @@ defineExpose({ resetForNextRound })
 .dialog-btn:hover { transform: scale(1.05); }
 
 .wait-hint { color: #9aa0b5; font-size: 0.9em; }
+
+.play-again-confirm {
+  margin-top: 16px;
+  padding: 18px 22px;
+  background: rgba(255, 122, 61, 0.08);
+  border: 1px solid rgba(255, 122, 61, 0.3);
+  border-radius: 16px;
+  text-align: center;
+}
+.play-again-text {
+  color: #cfd3e0;
+  font-size: 0.95em;
+  margin: 0 0 12px;
+}
+.play-again-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+.dialog-btn-ghost {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #cfd3e0;
+}
+.dialog-btn-ghost:hover { background: rgba(255, 255, 255, 0.12); }
 
 @media (max-width: 640px) {
   .countdown-num { font-size: 3.5em; }

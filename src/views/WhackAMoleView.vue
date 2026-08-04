@@ -9,7 +9,7 @@
     :confirmRestart="confirmRestart"
     :tutorial="layoutTutorial"
     @back="goHome"
-    @restart="onRestart"
+    v-on="mode === 'single' ? { restart: onRestart } : {}"
   >
     <!-- 模式选择屏 -->
     <div v-if="mode === null" class="mode-panel">
@@ -224,7 +224,6 @@ function startRace() {
 }
 function onRestart() {
   if (mode.value === 'single') restartGame()
-  else if (mode.value === 'race') raceRef.value?.resetForNextRound()
 }
 
 function goHome() {
