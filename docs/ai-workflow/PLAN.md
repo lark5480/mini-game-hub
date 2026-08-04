@@ -20,25 +20,25 @@
 
 | 文件 | 修改内容 | 完成 |
 |------|---------|:----:|
-| `src/composables/useRaceRoom.ts` | 加 join/ack 握手；修 presence `lockedPlayers` 逻辑 | ☐ |
-| `src/views/WhackAMoleRaceView.vue` | 初始化判定房主/客人；客人发 join；处理 ack；优化 copyRoom 文案 | ☐ |
-| `src/views/WhackAMoleView.vue` | 模式选择屏加"输入房间号加入"区域 | ☐ |
+| `src/composables/useRaceRoom.ts` | 加 join/ack 握手；修 presence `lockedPlayers` 逻辑 | ☑ |
+| `src/views/WhackAMoleRaceView.vue` | 初始化判定房主/客人；客人发 join；处理 ack；优化 copyRoom 文案 | ☑ |
+| `src/views/WhackAMoleView.vue` | 模式选择屏加"输入房间号加入"区域 | ☑ |
 
 ## 验收标准
 
-- [ ] 房主创建房间 → 同事通过 URL 带 `?room=XXXX` 加入 → 双方都能看到对方加入 → 房主点开始 → 双方棋盘同时跑地鼠
-- [ ] 房主创建房间 → 同事打开无参数 URL → 在模式选择屏输入房间号 → 点加入 → 同上
-- [ ] 同事输入无效房间号（3 位 / 含非法字符） → 显示格式错误提示，不跳转
-- [ ] 同事加入后房主刷新页面 → 房主仍为房主，角色不翻转
-- [ ] 同事加入后掉线 → 房主看到"对手已离开"提示
+- [x] 房主创建房间 → 同事通过 URL 带 `?room=XXXX` 加入 → 双方都能看到对方加入 → 房主点开始 → 双方棋盘同时跑地鼠
+- [x] 房主创建房间 → 同事打开无参数 URL → 在模式选择屏输入房间号 → 点加入 → 同上
+- [x] 同事输入无效房间号（3 位 / 含非法字符） → 显示格式错误提示，不跳转
+- [x] 同事加入后房主刷新页面 → 房主仍为房主，角色不翻转
+- [x] 同事加入后掉线 → 房主看到"对手已离开"提示
 
 ## Review Checklist
 
-- [ ] 逻辑：join/ack 握手时序正确，不会出现"双方房主"或"双方客人"
-- [ ] 空安全：supabase 为 null（no-supabase）时握手逻辑不报错
+- [x] 逻辑：join/ack 握手时序正确，不会出现"双方房主"或"双方客人"
+- [x] 空安全：supabase 为 null（no-supabase）时握手逻辑不报错
 - [ ] 兼容性：旧版房主 + 新版客人互通时不卡死（3 秒超时兜底）
-- [ ] build：`npm run build` 通过（noUnusedLocals / noUnusedParameters）
-- [ ] 风格：匹配现有代码风格（注释密度、命名）
+- [x] build：`npm run build` 通过（noUnusedLocals / noUnusedParameters）
+- [x] 风格：匹配现有代码风格（注释密度、命名）
 
 ## 关键参考
 

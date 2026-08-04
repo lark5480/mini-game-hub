@@ -25,6 +25,18 @@
           <span class="mode-desc">分享房间号 · 实时对战</span>
         </button>
       </div>
+      <div class="join-room">
+        <input
+          v-model="joinCode"
+          maxlength="4"
+          placeholder="输入房间号"
+          class="join-input"
+          @input="joinCode = joinCode.toUpperCase()"
+          @keyup.enter="joinRoom"
+        />
+        <button class="join-btn" @click="joinRoom">加入</button>
+      </div>
+      <p v-if="joinError" class="join-error">{{ joinError }}</p>
       <p class="mode-tip">联机需配置 Supabase（见 .env.example）；未配置会提示。</p>
       <LeaderboardStrip game="whackamole" />
     </div>
@@ -142,6 +154,8 @@ const gameOverDialog = ref(false)
 const newRecord = ref(false)
 const achievementHint = ref<string | null>(null)
 const showLeaderboard = ref(false)
+const joinCode = ref('')
+const joinError = ref('')
 const lastScore = ref(0)
 
 const confirmRestart = computed(() => gameStarted.value && !gameOverDialog.value)
@@ -221,6 +235,21 @@ function startSingle() {
 }
 function startRace() {
   mode.value = 'race'
+}
+
+function joinRoom() {
+  joinError.value = ''
+  const code = joinCode.value.trim().toUpperCase()
+  if (code.length !== 4) {
+    joinError.value = `房间号为 4 位字母或数字`
+    return
+  }
+  if (!/^[A-Z0-9]{4}$/.test(code)) {
+    joinError.value = `房间号含非法字符`
+    return
+  }
+  mode.value = 'race'
+  router.replace({ query: { room: code } })
 }
 function onRestart() {
   if (mode.value === 'single') restartGame()
@@ -341,6 +370,48 @@ onMounted(() => {
   transition: all 0.2s;
 }
 .start-btn:hover, .restart-btn:hover {
+
+/* 房间号输入区 */
+.join-room {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+.join-input {
+  width: 120px;
+  padding: 10px 14px;
+  background: var(--game-btn-bg);
+  border: 1px solid var(--game-btn-border);
+  border-radius: 10px;
+  color: var(--game-text);
+  font-size: 1em;
+  letter-spacing: 2px;
+  text-align: center;
+  text-transform: uppercase;
+}
+.join-input:focus {
+  border-color: var(--game-accent);
+  outline: none;
+}
+.join-btn {
+  background: rgba(255, 158, 0, 0.15);
+  border: 1px solid rgba(255, 158, 0, 0.3);
+  color: #FF9E00;
+  padding: 10px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.95em;
+  transition: all 0.2s;
+}
+.join-btn:hover {
+  background: rgba(255, 158, 0, 0.25);
+}
+.join-error {
+  color: #FF6B6B;
+  font-size: 0.85em;
+  margin: 0;
+}
   transform: translateY(-2px);
   box-shadow: 0 5px 20px rgba(255,107,107,0.4);
 }

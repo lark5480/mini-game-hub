@@ -161,6 +161,10 @@ const room = useRaceRoom(roomCode.value, {
     playAgainWaiting.value = false
     toast.show('对方拒绝了再来一局', 'info')
   },
+  onAck: (players: [string, string]) => {
+    const opponent = players.find(id => id !== room.myId)
+    if (opponent) room.setOpponent(opponent)
+  },
 })
 
 const settleIcon = computed<'success' | 'fail' | 'info'>(() => {
@@ -296,7 +300,9 @@ async function copyText(text: string): Promise<boolean> {
 
 async function copyRoom() {
   const isLocalhost = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
-  const text = isLocalhost ? `房间号 ${roomCode.value}` : window.location.href
+  const text = isLocalhost
+  ? `房间号 ${roomCode.value}（好友在「联机竞速」输入此号码即可加入）`
+  : window.location.href
   const ok = await copyText(text)
   copied.value = ok
   if (ok) setTimeout(() => (copied.value = false), 1500)
@@ -305,6 +311,8 @@ async function copyRoom() {
 onMounted(() => {
   if (!(typeof route.query.room === 'string' && /^[A-Z0-9]{4}$/.test(route.query.room))) {
     router.replace({ query: { ...route.query, room: roomCode.value } })
+  } else {
+    room.join()
   }
 })
 

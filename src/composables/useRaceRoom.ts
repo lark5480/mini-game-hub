@@ -10,6 +10,7 @@ export interface RaceSettleResult {
 export interface RaceRoomApi {
   status: Ref<RoomStatus>
   peerCount: Ref<number>
+  myId: string
   isHost: ComputedRef<boolean>
   opponentPresent: ComputedRef<boolean>
   opponentLeft: ComputedRef<boolean>
@@ -25,6 +26,8 @@ export interface RaceRoomApi {
   acceptPlayAgain: () => void
   declinePlayAgain: () => void
   setDifficulty: (d: string) => void
+  join: () => void
+  setOpponent: (playerId: string) => void
   leave: () => void
 }
 
@@ -38,6 +41,7 @@ export interface RaceRoomOptions {
   onPlayAgainAccept?: () => void
   onPlayAgainDeclined?: () => void
   onDifficulty?: (d: string) => void
+  onAck?: (players: [string, string]) => void
 }
 
 /**
@@ -104,12 +108,11 @@ export function useRaceRoom(roomCode: string, opts: RaceRoomOptions = {}): RaceR
 
   room.onPresenceSync((ids: string[]) => {
     const present = ids.slice().sort()
-    if (lockedPlayers.value.length >= 2) {
+    if (present.length >= 2) {
+      lockedPlayers.value = present.slice(0, 2)
+    } else if (lockedPlayers.value.length >= 2) {
       const here = lockedPlayers.value.filter(id => present.includes(id))
       if (here.length === 0) lockedPlayers.value = []
-    }
-    if (lockedPlayers.value.length === 0 && present.length >= 2) {
-      lockedPlayers.value = present.slice(0, 2)
     }
     const iAmP = lockedPlayers.value.includes(room.myId)
     opponentId.value = iAmP ? (lockedPlayers.value.find(id => id !== room.myId) ?? null) : null
@@ -146,6 +149,17 @@ export function useRaceRoom(roomCode: string, opts: RaceRoomOptions = {}): RaceR
       opts.onDifficulty?.(data)
     }
   })
+  // 握手：客人发 join，房主回 ack 并附带双方 id
+  room.on('join', (_data: any, from: string | undefined) => {
+    if (isHost.value && from) {
+      room.send('ack', { players: [room.myId, from] })
+    }
+  })
+  room.on('ack', (data: any) => {
+    if (Array.isArray(data?.players) && data.players.length === 2) {
+      opts.onAck?.(data.players as [string, string])
+    }
+  })
   // 再来一局：客人收到房主请求
   room.on('play-again', () => opts.onPlayAgainRequest?.())
   // 再来一局：房主收到客人接受
@@ -165,6 +179,20 @@ export function useRaceRoom(roomCode: string, opts: RaceRoomOptions = {}): RaceR
     room.send('final', score)
     myFinal.value = score
     trySettle()
+  }
+
+  function join() {
+    room.send('join', {})
+  }
+
+  function setOpponent(playerId: string) {
+    if (playerId === room.myId) return
+    if (!lockedPlayers.value.includes(room.myId)) {
+      lockedPlayers.value = [room.myId, playerId]
+    } else if (lockedPlayers.value.length < 2) {
+      lockedPlayers.value = [lockedPlayers.value[0], playerId]
+    }
+    opponentId.value = playerId
   }
 
   function requestStart() {
@@ -213,6 +241,7 @@ export function useRaceRoom(roomCode: string, opts: RaceRoomOptions = {}): RaceR
   return {
     status: room.status,
     peerCount: room.peerCount,
+    myId: room.myId,
     isHost,
     opponentPresent,
     opponentLeft,
@@ -226,6 +255,8 @@ export function useRaceRoom(roomCode: string, opts: RaceRoomOptions = {}): RaceR
     acceptPlayAgain,
     declinePlayAgain,
     setDifficulty,
+    join,
+    setOpponent,
     leave,
   }
 }
