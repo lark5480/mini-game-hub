@@ -71,10 +71,10 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 | `useHaptics` | 触觉反馈 | `light/tap/select/pulse/success/error/win` |
 | `useScoreFloats` | 浮动分数 | `pop(text, x, y)` → `popups` ref |
 | `useGameSave` | 存档/读档 | `saveGame(data)` / `loadGame()` / `clearGame()` |
-| `usePause` | 统一暂停/恢复（骨架） | P/Esc + 失焦 + ResumePrompt 封装 |
+| `useGamePause` | 统一暂停/恢复（骨架） | P/Esc + 失焦 + ResumePrompt 封装 |
 | `useLeaderboard` | 排行榜 CRUD | `submit(nickname, score)` / `fetch()` / `fetchNearby(score, nickname, range)` 邻位排名 |
 | `useGameOver` | 游戏结束统一处理 | `checkGameOver(gameName, score)` → `{ isNewRecord, achievementHint }`；新记录检测 + 分数写入 + 音效 + 成就接近提示/解锁 |
-| `useLeaderboardAutoRefresh` | 监听版本号自动刷新 | `useLeaderboardAutoRefresh(fetch)` |
+| `useLeaderboardAutoRefresh` | 监听版本号自动刷新（从 `useLeaderboard.ts` 导出） | `useLeaderboardAutoRefresh(fetch)` |
 | `useToast` | Toast 通知 | `toast.show(message, icon)` |
 | `useSwipe` | 移动端滑动手势 | `useSwipe({ el, active, onSwipe })` |
 
