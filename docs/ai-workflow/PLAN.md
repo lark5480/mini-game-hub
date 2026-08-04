@@ -64,28 +64,89 @@
 
 ---
 
-# 任务模式：（未选择 — 等待新任务填入）
+# 任务模式：细（micro）
 
 ## 任务目标
 
-（等待新任务填入）
+消化 `docs/ai-workflow/BACKLOG.md` 的两条存量事项（均在 `src/views/WhackAMoleView.vue`，纯风格/CSS 改动、零逻辑风险），并回填 backlog 状态。本轮同时是新 backlog 消费流程的首次实战。
 
 ## 文件级修改点
 
 | 文件 | 修改内容 | 完成 |
 |------|---------|:----:|
+| `src/views/WhackAMoleView.vue` | 行 46：`ScoreFloat` 的 prop 单引号 → 双引号 | ☐ |
+| `src/views/WhackAMoleView.vue` | 行 564：删媒体查询内 `.mole-board` 的冗余 `position: relative;` | ☐ |
+| `docs/ai-workflow/BACKLOG.md` | 条目 1、2 状态改「已完成」并注明 commit 哈希 | ☐ |
 
 ## 验收标准
 
-- [ ] ...
+- [ ] 行 46 变为 `<ScoreFloat :popups="popups" />`
+- [ ] `@media (max-width: 640px)` 内 `.mole-board` 只保留 `gap: 10px; padding: 14px;`，无 `position` 声明
+- [ ] 基类 `.mole-board`（行 372-373）的 `position: relative` 保留（ScoreFloat 的定位锚点，勿动）
+- [ ] 无其他改动（不顺手格式化无关代码）
+- [ ] `npm run build` 通过
+- [ ] BACKLOG.md 条目 1、2 标注完成并注明 commit
 
 ## Review Checklist
 
-- [ ] ...
+- [ ] diff 仅三处：单双引号 1 行、CSS 删除 1 行、BACKLOG 状态 2 行
+- [ ] ScoreFloat 挂载位置未被误动（仍是 `.mole-board` 最后一个子元素，行 46）
+- [ ] 未顺带改动其他引号风格
+- [ ] build 通过
 
 ## 关键参考
 
-## 交接记录
+- `src/views/WhackAMoleView.vue:46` — ScoreFloat 引用处（改动点 1）
+- `src/views/WhackAMoleView.vue:372-378` — `.mole-board` 基类声明，`position: relative` 在行 373（勿动）
+- `src/views/WhackAMoleView.vue:562-572` — 待清理的媒体查询（改动点 2）
+- `docs/ai-workflow/BACKLOG.md` — 条目 1、2
+
+## 实现细节
+
+### 改动点 1：单引号 → 双引号（行 46）
+
+改前：
+
+```html
+      <ScoreFloat :popups='popups' />
+```
+
+改后：
+
+```html
+      <ScoreFloat :popups="popups" />
+```
+
+### 改动点 2：删除冗余 CSS 声明（行 563-567）
+
+改前：
+
+```css
+  .mole-board {
+  position: relative;
+    gap: 10px;
+    padding: 14px;
+  }
+```
+
+改后：
+
+```css
+  .mole-board {
+    gap: 10px;
+    padding: 14px;
+  }
+```
+
+原因：基类（行 373）已声明 `position: relative`，媒体查询内重复声明不产生任何效果。
+
+### 提交方式（分两个 commit）
+
+1. 两处代码改动完成、`npm run build` 通过后提交，建议消息：`style(whackamole): 消化 backlog 两条 — 引号风格与冗余 CSS`
+2. 再将 BACKLOG.md 条目 1、2 状态更新为 `已完成(<上一条 commit 哈希>)`，单独提交，建议消息：`docs: BACKLOG 回填 — whackamole 两条消化完毕`
+
+## 交接记录（每轮更新）
 
 | 轮次 | 执行者 | 结果 | 遗留问题 |
-|------|--------|------:---------|
+|------|--------|------|---------|
+| 1 | Claude（计划） | micro 计划完成，写入 PLAN.md | — |
