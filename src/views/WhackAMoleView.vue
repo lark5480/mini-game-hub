@@ -370,6 +370,9 @@ onMounted(() => {
   transition: all 0.2s;
 }
 .start-btn:hover, .restart-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 20px rgba(255,107,107,0.4);
+}
 
 /* 房间号输入区 */
 .join-room {
@@ -411,8 +414,5 @@ onMounted(() => {
   color: #FF6B6B;
   font-size: 0.85em;
   margin: 0;
-}
-  transform: translateY(-2px);
-  box-shadow: 0 5px 20px rgba(255,107,107,0.4);
 }
 </style>
