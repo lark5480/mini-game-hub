@@ -120,6 +120,17 @@ Review 结果按严重度分级，Codex 根据级别决定处理方式：
 | P2 打磨 | 🔵 | 风格/微优化、零风险 | 不进 backlog，Codex 顺手修 | 单双引号、冗余媒体查询、未使用变量 |
 | P3 可选 | ⚪ | 后续可做的改进 | 进 backlog（`docs/ai-workflow/BACKLOG.md`，写 review 的一方负责登记） | 动画曲线优化、新增触觉反馈 |
 
+### 自动化命令
+
+Claude 写完 PLAN.md 后，用项目命令 `/codex:plan-exec` 转发给 Codex：
+- 自动读取 `docs/ai-workflow/PLAN.md` 的 TASK_BODY 区
+- 校验是否为占位状态（避免空跑）
+- 按 gpt-5-4-prompting 规范组装 prompt（含前置规则 + 验证循环 + grounding）
+- 调用 `codex:codex-rescue` 子代理（真正跑 Codex CLI，不是 Claude 子代理）
+- 强制要求 Codex 完成后 commit + npm run build 验证
+
+修复循环：review 发现 P0/P1 后，用 `/codex:rescue <修复指令>` 发送（`--resume` 可延续同一 Codex 线程）。
+
 ### 终止条件
 
 P0 + P1 清零 + P2 已修或明确跳过 + P3 已登记 BACKLOG.md → 可提交。最多 2 轮 review；第 3 轮仍存在 P0/P1 → 人工介入。

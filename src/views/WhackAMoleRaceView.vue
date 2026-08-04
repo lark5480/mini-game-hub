@@ -135,11 +135,9 @@ const settleResult = ref<{ me: number; opponent: number; outcome: string } | nul
 const copied = ref(false)
 
 const room = useRaceRoom(roomCode.value, {
-  onOpponentScore: (s) => { room.opponentScore.value = s },
   onStartCountdown: () => runCountdown(),
   onSettle: (r) => showSettleResult(r.me, r.opponent, r.outcome),
   onPlayAgain: () => resetForNextRound(),
-  onDifficulty: (d) => { room.difficulty.value = d },
 })
 
 const settleIcon = computed<'success' | 'fail' | 'info'>(() => {
@@ -372,10 +370,6 @@ defineExpose({ resetForNextRound })
   color: #FFD700;
   text-shadow: 0 0 40px rgba(255, 215, 0, 0.6);
   animation: countPop 0.5s ease-out;
-}
-@keyframes countPop {
-  from { transform: scale(0.4); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
 }
 
 .host-controls {

@@ -95,7 +95,7 @@ const holes = ref<Hole[]>([])
 let moleTimer: number | null = null
 let countdownTimer: number | null = null
 const pendingTimeouts: Set<number> = new Set()
-let paused = false
+const paused = ref(false)
 
 function currentSpec(): DifficultySpec {
   return DIFFICULTIES.find(d => d.name === props.difficulty) ?? DIFFICULTIES[1]
@@ -116,7 +116,7 @@ function initHoles() {
 
 function startGame() {
   stopAllTimers()
-  paused = false
+  paused.value = false
   gameStarted.value = true
   score.value = 0
   timeLeft.value = 30
@@ -136,8 +136,8 @@ function stopGame() {
 }
 
 function pause() {
-  if (!gameStarted.value || paused) return
-  paused = true
+  if (!gameStarted.value || paused.value) return
+  paused.value = true
   if (moleTimer) { clearInterval(moleTimer); moleTimer = null }
   if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null }
   pendingTimeouts.forEach(id => clearTimeout(id))
@@ -145,8 +145,8 @@ function pause() {
 }
 
 function resume() {
-  if (!paused) return
-  paused = false
+  if (!paused.value) return
+  paused.value = false
   countdown()
   spawnMoles()
 }
@@ -228,7 +228,7 @@ function whack(index: number) {
 function gameOver() {
   stopAllTimers()
   gameStarted.value = false
-  paused = false
+  paused.value = false
   emit('gameover', score.value)
 }
 

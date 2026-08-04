@@ -145,6 +145,12 @@
   100% { bottom: -86cqh; }
 }
 
+/* ---------- 打地鼠联机：倒计时弹出 ---------- */
+@keyframes countPop {
+  from { transform: scale(0.4); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
 /* ---------- 每游戏独特进场（entrance prop 驱动）---------- */
 @keyframes entrance-snake {
   from { opacity: 0; transform: translateX(-26px) scale(.99); }
