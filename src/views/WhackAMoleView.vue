@@ -43,7 +43,7 @@
             <div class="dirt"></div>
           </div>
         </div>
-      <ScoreFloat :popups='popups' />
+      <ScoreFloat :popups="popups" />
       </div>
 
       <div class="time-bar">
@@ -561,7 +561,6 @@ onUnmounted(() => {
 
 @media (max-width: 640px) {
   .mole-board {
-  position: relative;
     gap: 10px;
     padding: 14px;
   }
