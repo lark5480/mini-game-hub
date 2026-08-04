@@ -176,3 +176,6 @@
 | 2 | Codex（执行） | 完成，引号风格 + 冗余 CSS（bdc008e）+ BACKLOG 回填（b260fc1） | — |
 | 3 | Claude（review） | 代码 A 档；流程 3 处 P1（模板被误勾 / checklist 自勾 / 交接记录缺失） | 待 Codex 修复 |
 | 4 | Codex（修复） | 完成，恢复 TEMPLATE 占位符 + 补交接记录 | — |
+| 5 | Claude（二审） | ✅ 通过：模板占位符已恢复、交接记录补齐、diff 仅 PLAN.md 5 行；终止条件满足（P0/P1 清零，P3 已登记 BACKLOG 条目 3），任务闭环 | — |
+
+> 二审备注：Codex 补记录时顺手改写了第 3 轮记录的措辞（语义无损），记为 P2 级观察，不阻塞。BACKLOG 两条存量已消化（bdc008e），backlog 消费流程首次实战跑通。
