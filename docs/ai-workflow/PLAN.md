@@ -139,3 +139,22 @@
 | 轮次 | 执行者 | 结果 | 遗留问题 |
 |------|--------|------|---------|
 | 1 | Claude（计划） | macro 计划完成，写入 PLAN.md | — |
+| 2 | Claude（实现） | 909cfed 完成全部 4 文件，build 通过 | — |
+| 3 | Claude（主线程 review） | P0=0, P1=1, P2=2 | — |
+| 4 | Claude（修复） | 93b1290 修 P1+P2，build 通过 | P3×2 进 backlog |
+
+## Review 结果
+
+### 🔴 P0 正确性
+无。逻辑/渲染/数据流无错误，build 零警告。
+
+### 🟡 P1 规范（已修 93b1290）
+- **P1-1** `WhackAMoleRaceView.vue` 局部定义 `@keyframes countPop` → 移到 `animations.css`
+
+### 🔵 P2 打磨（已修 93b1290）
+- **P2-1** `onOpponentScore` 回调冗余（内部 handler 已写 opponentScore）→ 删除回调
+- **P2-2** `WhackAMoleBoard` 中 `let paused` 改为 `const paused = ref(false)`
+
+### ⚪ P3 可选（进 backlog）
+- **P3-1** `copyText` 函数跨组件重复（RaceView / TicTacToeOnlineView），建议后续抽到 `@/lib/clipboard.ts`
+- **P3-2** 倒计时同步依赖网络 RTT，当前 ±1s 容忍度满足；后续可带时间戳同步
