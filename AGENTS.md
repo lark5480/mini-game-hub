@@ -90,7 +90,7 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 
 ### 交接机制（硬规则）
 
-- 交接物是 git diff：Codex 每完成一个任务立即 commit，Claude review 时只看 `git diff`，不全量重读代码
+- 交接物是 git diff：Codex 执行完**不 commit**，只写文件；Claude review 时通过 `git diff` 查看未提交的改动，不全量重读代码；review 通过后由 Codex 一次性 commit。**P0/P1 未清零前禁止 commit**（commit = 验收合格，不是"我写完了"）
 - 严格串行：同一时间只有一个 agent 改动工作区文件，禁止并行改同一文件
 - 计划必须"可执行"：写清文件路径、修改点、验收标准、review checklist（模板见 [docs/ai-workflow/PLAN.md](./docs/ai-workflow/PLAN.md)）
 - **PLAN.md 使用方式**：路径固定、模板骨架在文件顶部注释里永久保留；每次新任务只覆盖 TASK_BODY 区（不新建 PLAN-xxx.md）；Codex 执行后更新勾选与交接记录；Claude 的 review 结果写入同一文件的交接记录表（不新建 review.md）；任务提交后清空 TASK_BODY 区恢复占位，TEMPLATE 区永远不动
@@ -127,9 +127,27 @@ Claude 写完 PLAN.md 后，用项目命令 `/codex:plan-exec` 转发给 Codex�
 - 校验是否为占位状态（避免空跑）
 - 按 gpt-5-4-prompting 规范组装 prompt（含前置规则 + 验证循环 + grounding）
 - 调用 `codex:codex-rescue` 子代理（真正跑 Codex CLI，不是 Claude 子代理）
-- 强制要求 Codex 完成后 commit + npm run build 验证
+- Codex 执行完**不 commit**，只写文件 + 跑 `npm run build` 验证；commit 由 Claude review 通过后触发
 
 修复循环：review 发现 P0/P1 后，用 `/codex:rescue <修复指令>` 发送（`--resume` 可延续同一 Codex 线程）。
+
+### 人为传话模式（插件不可用时的替代）
+
+当 codex 插件因环境限制无法使用时，用桌面端 Codex 手动传话：
+
+**执行 prompt 模板**（复制到 Codex 桌面端）：
+```
+请按以下任务计划在 F:/other/code/ai/mini-game-hub 中执行。
+
+{粘贴 PLAN.md TASK_BODY 区}
+
+完成后必须做：
+1. 运行 npm run build 确认零错误
+2. 不要 commit，只写文件（Claude review 通过后才 commit）
+3. 告诉我改了哪些文件
+```
+
+**流程**：Claude 写 PLAN.md → 用户复制 TASK_BODY 到桌面端 Codex → Codex 执行（不 commit）→ 用户告知"跑完了" → Claude `git diff` 审查 → 有 P0/P1 → 用户传修复指令给 Codex → 清零后 Codex commit。
 
 ### 终止条件
 
