@@ -18,3 +18,4 @@
 | 3 | 2026-08-04 | BACKLOG 消化任务 review | PLAN.md 模板头注「Codex 执行：只改 TASK_BODY 区的勾选」表述含糊，未限定可勾选的节（应仅限「文件级修改点 / 验收标准」，Review Checklist 归 Claude），建议在模板注释中显式化 | 待处理 |
 | 4 | 2026-08-04 | 打地鼠联机竞速 review（909cfed） | `copyText` 函数跨组件重复（WhackAMoleRaceView / TicTacToeOnlineView），建议抽到 `@/lib/clipboard.ts` | 待处理 |
 | 5 | 2026-08-04 | 打地鼠联机竞速 review（909cfed） | 倒计时同步依赖网络 RTT，当前 ±1s 容忍度满足；后续可带时间戳同步（composable 内记录 startTimestamp，双方对齐） | 待处理 |
+| 6 | 2026-08-04 | 打地鼠竞速独立复审 | 竞速 UX 遗留两条：客人开局前看不到房主所选难度；结算后房主离开时客人等待界面缺少明确提示 | 待处理 |
