@@ -68,9 +68,6 @@ export function useRaceRoom(roomCode: string, opts: RaceRoomOptions = {}): RaceR
   const opponentFinal = ref<number | null>(null)
   let settled = false
 
-  // 节流时间戳
-  let lastSendTs = 0
-
   const isHost = computed(() => {
     const ids = lockedPlayers.value
     return ids.length >= 1 && ids[0] === room.myId
@@ -168,14 +165,10 @@ export function useRaceRoom(roomCode: string, opts: RaceRoomOptions = {}): RaceR
   room.on('play-again-decline', () => opts.onPlayAgainDeclined?.())
 
   function sendScore(score: number) {
-    const now = Date.now()
-    if (now - lastSendTs < 1000) return
-    lastSendTs = now
     room.send('score', score)
   }
 
   function sendFinalScore(score: number) {
-    lastSendTs = Date.now()
     room.send('final', score)
     myFinal.value = score
     trySettle()

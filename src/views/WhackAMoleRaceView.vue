@@ -155,8 +155,8 @@ const room = useRaceRoom(roomCode.value, {
   game: 'whackamole-race',
   onStartCountdown: () => { if (phase.value === 'idle') runCountdown() },
   onSettle: (r) => showSettleResult(r.me, r.opponent, r.outcome),
-  onPlayAgainRequest: () => { playAgainConfirm.value = true },
-  onPlayAgainAccept: () => { resetForNextRound(); runCountdown() },
+  onPlayAgainRequest: () => { playAgainConfirm.value = true; showSettle.value = false },
+  onPlayAgainAccept: () => { playAgainWaiting.value = false; resetForNextRound(); runCountdown() },
   onPlayAgainDeclined: () => {
     playAgainWaiting.value = false
     toast.show('对方拒绝了再来一局', 'info')
@@ -261,12 +261,14 @@ function onPlayAgain() {
   if (!room.isHost.value) return
   room.requestPlayAgain()
   playAgainWaiting.value = true
+  showSettle.value = false
 }
 
 function acceptPlayAgain() {
   playAgainConfirm.value = false
   room.acceptPlayAgain()
   resetForNextRound()
+  runCountdown()
 }
 function declinePlayAgain() {
   playAgainConfirm.value = false
@@ -334,6 +336,7 @@ defineExpose({ resetForNextRound })
   gap: 18px;
   padding: 20px;
   position: relative;
+  width: 100%;
 }
 
 .notice {

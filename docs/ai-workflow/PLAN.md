@@ -206,3 +206,5 @@ const text = isLocalhost
 | 轮次 | 执行者 | 结果 | 遗留问题 |
 |------|--------|------:---------|
 | 1 | Claude | 设计完成，写 PLAN.md | 待执行 |
+| 2 | Codex | 执行 3 文件修改，commit 231ae30 | CSS P1 |
+| 3 | Claude | Review → 修 CSS，commit cb8f175 | 无 |
