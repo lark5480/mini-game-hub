@@ -96,6 +96,7 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 - **PLAN.md 使用方式**：路径固定，模板骨架详见 [docs/ai-workflow/TEMPLATE.md](docs/ai-workflow/TEMPLATE.md)；每次新任务只覆盖 TASK_BODY 区，Codex 执行后更新勾选与交接记录，Claude review 结果写入同一文件；任务提交后清空 TASK_BODY 区恢复占位（清空前确认执行/审查轮次已记入交接记录）
 - 每轮交接时，当前 agent 必须更新 PLAN.md 的状态勾选，避免基于过时计划判断
 - 审查依据 = 本文件硬规则 + PLAN.md 验收标准，不凭感觉
+- **分歧兜底**：Claude 对 P0/P1 有最终裁定权；Codex 认为计划有误时，先按原计划执行再在 PLAN.md 记录异议，不擅自跳步
 
 ### 任务模式（粗细双模式）
 
@@ -120,15 +121,16 @@ Review 结果按严重度分级，Codex 根据级别决定处理方式：
 | P2 打磨 | 🔵 | 风格/微优化、零风险 | 不进 backlog，Codex 顺手修，跟主任务同一 commit（message 注明 `+ 顺手修 xxx`）；Claude review 时对 P2 清单逐项核对，每条须为「已修」或「明确跳过 + 理由」，不允许静默遗漏 | 单双引号、冗余媒体查询、未使用变量 |
 | P3 可选 | ⚪ | 后续可做的改进 | 进 backlog（`docs/ai-workflow/BACKLOG.md`，写 review 的一方负责登记） | 动画曲线优化、新增触觉反馈 |
 
-### 自动化命令（当前未落地，保持人为传话模式）
+### 当前执行模式
 
-项目暂未注册 `/codex:plan-exec` / `/codex:rescue` 斜杠命令，当前执行阶段采用下方"人为传话模式"。后续若注册为 npm script 或插件命令，可升级为自动化。
+codex 插件未注册为斜杠命令，当前采用手动传话：
 
-### 人为传话模式（插件不可用时的替代）
-
-当 codex 插件因环境限制无法使用时，用桌面端 Codex 手动传话：
+1. Claude 写 PLAN.md → 用户复制 TASK_BODY 到桌面端 Codex
+2. Codex 执行（跑 `npm run build` 确认零错误，不 commit）→ 告知"跑完了"
+3. Claude `git diff` 审查 → 有 P0/P1 → 用户传修复指令给 Codex → 清零后 Codex commit
 
 **执行 prompt 模板**（复制到 Codex 桌面端）：
+
 ```
 请按以下任务计划在 F:/other/code/ai/mini-game-hub 中执行。
 
@@ -139,8 +141,6 @@ Review 结果按严重度分级，Codex 根据级别决定处理方式：
 2. 不要 commit，只写文件（Claude review 通过后才 commit）
 3. 告诉我改了哪些文件
 ```
-
-**流程**：Claude 写 PLAN.md → 用户复制 TASK_BODY 到桌面端 Codex → Codex 执行（不 commit）→ 用户告知"跑完了" → Claude `git diff` 审查 → 有 P0/P1 → 用户传修复指令给 Codex → 清零后 Codex commit。
 
 ### 终止条件
 
@@ -159,12 +159,10 @@ P0 + P1 清零 + P2 已修或明确跳过 + P3 已登记 BACKLOG.md → 可提�
 
 ## 注意事项
 - **游戏结束流程**：统一走 `useGameOver().checkGameOver(gameName, score)` → 返回 `{ isNewRecord, achievementHint }` → 传给 `GameDialog`（新记录检测 + 分数写入 + 音效 + 成就接近提示自动完成）
-- **PWA**：`vite-plugin-pwa` autoUpdate；`App.vue` 生产环境注册 SW；静态资源 + Supabase API 离线缓存
-- **全局错误兜底**：`main.ts` 设 `app.config.errorHandler` + `unhandledrejection` 监听，防 Vue 渲染白屏
-- Canvas 游戏 `onUnmounted` 中清理 requestAnimationFrame
-- TS 启用了 `noUnusedLocals` / `noUnusedParameters`，未使用变量会导致 `npm run build` 失败
-- 测试在 `tests/` 下，`node test-xxx.cjs` 直接跑，无测试框架依赖
-- 关卡类游戏（推箱子）：每关必须保证箱子数 = 目标数，否则无法通关
 - **动画风格**：所有弹窗/路由/Toast 的动画 keyframes 统一放 `src/styles/animations.css`，不要在各组件里重复定义 `@keyframes`
-- **可访问性**：所有交互按钮已有 `:focus-visible` 聚焦环；CRT scanlines 层加了 `aria-hidden="true"`；全局 `prefers-reduced-motion` 已处理
 - **移动端适配**：overlay 类组件 `padding-top` 用 `max(24px, env(safe-area-inset-top) + 16px)` 避免 iPhone 刘海遮挡
+- **关卡设计**：推箱子每关必须保证箱子数 = 目标数，否则无法通关
+- Canvas 游戏 `onUnmounted` 中清理 requestAnimationFrame
+- 测试在 `tests/` 下，`node test-xxx.cjs` 直接跑，无测试框架依赖
+
+> PWA、全局错误兜底架构事实见 [system_design.md](./docs/system_design.md)；TS `noUnusedLocals` 约束见 [CLAUDE.md](./CLAUDE.md) 红线；可访问性（`:focus-visible` 聚焦环、`aria-hidden`、`prefers-reduced-motion`）已全局处理，无需额外操作。
