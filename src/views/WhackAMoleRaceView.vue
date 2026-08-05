@@ -283,7 +283,12 @@ async function copyRoom() {
   : window.location.href
   const ok = await copyText(text)
   copied.value = ok
-  if (ok) setTimeout(() => (copied.value = false), 1500)
+  if (ok) {
+    toast.show('房间号已复制', '📋')
+    setTimeout(() => (copied.value = false), 1500)
+  } else {
+    toast.show('复制失败，请手动选择', '⚠️')
+  }
 }
 
 onMounted(() => {

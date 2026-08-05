@@ -101,6 +101,7 @@ import { useHaptics } from '@/composables/useHaptics'
 import { useRealtimeRoom } from '@/composables/useRealtimeRoom'
 import GameDialog from '@/components/GameDialog.vue'
 import { copyText } from '@/lib/clipboard'
+import { useToast } from '@/composables/useToast'
 
 type Cell = 'X' | 'O' | null
 type Board = Cell[]
@@ -116,6 +117,7 @@ const router = useRouter()
 const route = useRoute()
 const sound = useSound()
 const haptics = useHaptics()
+const toast = useToast()
 
 // 房间号：优先用 URL 上的 ?room=XXXX（好友分享进来的），否则生成并写回 URL 方便复制。
 const ROOM_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
@@ -326,7 +328,12 @@ async function copyRoom() {
   const text = isLocalhost ? `房间号 ${roomCode.value}` : window.location.href
   const ok = await copyText(text)
   copied.value = ok
-  if (ok) setTimeout(() => (copied.value = false), 1500)
+  if (ok) {
+    toast.show('房间号已复制', '📋')
+    setTimeout(() => (copied.value = false), 1500)
+  } else {
+    toast.show('复制失败，请手动选择', '⚠️')
+  }
 }
 
 // ---- 游戏逻辑 ----

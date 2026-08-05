@@ -123,24 +123,13 @@ Review 结果按严重度分级，Codex 根据级别决定处理方式：
 
 ### 当前执行模式
 
-codex 插件未注册为斜杠命令，当前采用手动传话：
+手动传话（codex 插件已卸载，不依赖自动调度）：
 
-1. Claude 写 PLAN.md → 用户复制 TASK_BODY 到桌面端 Codex
+1. Claude 写 PLAN.md → 运行 `/codex-plan-exec` 生成执行 prompt → 用户复制到桌面端 Codex
 2. Codex 执行（跑 `npm run build` 确认零错误，不 commit）→ 告知"跑完了"
 3. Claude `git diff` 审查 → 有 P0/P1 → 用户传修复指令给 Codex → 清零后 Codex commit
 
-**执行 prompt 模板**（复制到 Codex 桌面端）：
-
-```
-请按以下任务计划在 F:/other/code/ai/mini-game-hub 中执行。
-
-{粘贴 PLAN.md TASK_BODY 区}
-
-完成后必须做：
-1. 运行 npm run build 确认零错误
-2. 不要 commit，只写文件（Claude review 通过后才 commit）
-3. 告诉我改了哪些文件
-```
+`/codex-plan-exec` 会读 PLAN.md 的 TASK_BODY 区，按 gpt-5-4-prompting 约定生成结构化 prompt（含 `<task>` / `<prereqs>` / `<verification_loop>` / `<grounding_rules>`），输出到终端供复制。
 
 ### 终止条件
 
