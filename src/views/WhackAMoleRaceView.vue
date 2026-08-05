@@ -111,6 +111,7 @@ import { useHaptics } from '@/composables/useHaptics'
 import { useRaceRoom } from '@/composables/useRaceRoom'
 import WhackAMoleBoard from '@/components/WhackAMoleBoard.vue'
 import GameDialog from '@/components/GameDialog.vue'
+import { copyText } from '@/lib/clipboard'
 
 const difficulties = [
   { name: 'easy', label: '简单' },
@@ -273,31 +274,6 @@ function acceptPlayAgain() {
 function declinePlayAgain() {
   playAgainConfirm.value = false
   room.declinePlayAgain()
-}
-
-// 复制邀请链接
-async function copyText(text: string): Promise<boolean> {
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text)
-      return true
-    }
-  } catch { /* 降级 */ }
-  try {
-    const ta = document.createElement('textarea')
-    ta.value = text
-    ta.style.position = 'fixed'
-    ta.style.top = '-9999px'
-    ta.style.opacity = '0'
-    document.body.appendChild(ta)
-    ta.focus()
-    ta.select()
-    const ok = document.execCommand('copy')
-    document.body.removeChild(ta)
-    return ok
-  } catch {
-    return false
-  }
 }
 
 async function copyRoom() {

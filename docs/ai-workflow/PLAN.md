@@ -30,26 +30,95 @@
 -->
 
 ## 任务目标
-<!-- 等待新任务 -->
+
+将 `copyText` 函数从 `WhackAMoleRaceView.vue` 和 `TicTacToeOnlineView.vue` 两处重复实现抽取到 `src/lib/clipboard.ts`，统一维护。来源：BACKLOG #4。
 
 ## 文件级修改点
+
 | 文件 | 修改内容 | 完成 |
 |------|---------|:----:|
+| `src/lib/clipboard.ts` | **新建**：导出 `copyText(text: string): Promise<boolean>` | [x] |
+| `src/views/WhackAMoleRaceView.vue` | 删除本地 `copyText` 定义（L279-301）→ 改为 import | [x] |
+| `src/views/TicTacToeOnlineView.vue` | 删除本地 `copyText` 定义（L322-345）→ 改为 import | [x] |
 
 ## 验收标准
-- [ ] ...
+
+- [x] `src/lib/clipboard.ts` 导出 `copyText`，逻辑与原来完全一致（Clipboard API 优先 → textarea + execCommand 降级）
+- [x] 两处视图不再定义本地 `copyText`，改为 `import { copyText } from '@/lib/clipboard'`
+- [x] `npm run build` 零错误
+- [x] 复制房间邀请链接功能在两个游戏中正常工作
 
 ## Review Checklist
-- [ ] ...
+
+- [x] **正确性**：降级路径完整（secure context 判断、try/catch 包裹、execCommand 清理 DOM）
+- [x] **规范**：没有新建多余的 composable，走 `@/lib/` 工具文件路径
+- [x] **引用**：import 路径用 `@/lib/clipboard`，与项目现有 `@/lib/games.ts` 等一致
+- [x] **清理**：两处原函数完全删除，不留注释或死代码
 
 ## 关键参考
 
-## 实现细节（细模式专有，粗模式可删除此节）
+- 原实现：`src/views/WhackAMoleRaceView.vue:279-301`
+- 原实现：`src/views/TicTacToeOnlineView.vue:322-345`
+- 调用点：`WhackAMoleRaceView.vue:308`（`copyRoom` 内）、`TicTacToeOnlineView.vue:353`（`copyRoom` 内）
+- 同目录现有工具文件命名惯例：`games.ts` / `rank.ts` / `supabase.ts`（全小写 `.ts`）
 
-## 修复方案（review 阶段追加，粗模式可改为「执行调整」）
+## 实现细节（细模式专有）
+
+### 1. 新建 `src/lib/clipboard.ts`
+
+```typescript
+/**
+ * 复制文本到剪贴板。
+ * 优先 Clipboard API（需安全上下文），HTTP 局域网下降级到 execCommand。
+ * 返回是否成功。
+ */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {
+    // 落到降级方案
+  }
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.style.position = 'fixed'
+    ta.style.top = '-9999px'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.focus()
+    ta.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    return ok
+  } catch {
+    return false
+  }
+}
+```
+
+### 2. `WhackAMoleRaceView.vue` 改动
+
+- **删除** L278-301（`// 复制邀请链接` 注释 + 整个 `async function copyText`）
+- **添加 import**：`import { copyText } from '@/lib/clipboard'`
+- `copyRoom` 函数（L303+）调用不变，无需改动
+
+### 3. `TicTacToeOnlineView.vue` 改动
+
+- **删除** L321-345（`// 复制文本：优先 Clipboard API...` 注释 + 整个 `async function copyText`）
+- **添加 import**：`import { copyText } from '@/lib/clipboard'`
+- `copyRoom` 函数（L348+）调用不变，无需改动
+
+## 修复方案（review 阶段追加）
 
 ## 交接记录（每轮更新）
+
 | 轮次 | 执行者 | 结果 | 遗留问题 |
-|------|--------|------:---------|
+|------|--------|------:|---------|
+| 0 | Claude | 计划建好，待 Codex 执行 | — |
+| 1 | Codex | 执行完成，build 通过 | — |
+| 2 | Claude | Review 通过，P0/P1/P2/P3 全清零 | — |
 
 <!-- TEMPLATE:END -->
