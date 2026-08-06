@@ -92,8 +92,8 @@
     >
       <template #action>
         <div style="display:flex;gap:12px;justify-content:center">
-          <button type="button" @click="submitCampaign">提交分数</button>
-          <button type="button" @click="continueAfterClear">继续挑战</button>
+          <button type="button" class="dialog-btn" @click="submitCampaign">提交分数</button>
+          <button type="button" class="dialog-btn" @click="continueAfterClear">继续挑战</button>
         </div>
       </template>
     </GameDialog>
@@ -822,6 +822,23 @@ function selectCell(x: number, y: number) {
 .reset-btn:hover {
   background: rgba(255, 0, 110, 0.15);
   border-color: #FF006E;
+}
+
+.dialog-btn {
+  background: linear-gradient(135deg, var(--game-accent, #FF006E), #B967FF);
+  color: #0D0D1A;
+  border: none;
+  padding: 12px 35px;
+  font-size: 1.1em;
+  font-weight: 600;
+  border-radius: 25px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dialog-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--game-accent, #FF006E) 40%, transparent);
 }
 
 /* 移动端大网格（困难 10×12 等 12 列宽网格）适配：
