@@ -36,5 +36,6 @@ docs/superpowers/
 # Claude Code 个人配置（用户级协作风格，不进入项目）
 CLAUDE.local.md
 
-# Claude Code 本地工具配置（commands / settings / hooks 均为个人工作流，不共享）
-.claude/
+# Claude Code 本地工具配置（settings / hooks 为个人工作流不共享；commands 随仓库共享）
+.claude/*
+!.claude/commands/
