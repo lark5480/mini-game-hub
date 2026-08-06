@@ -102,3 +102,4 @@ L88-92 action 槽改为（opponentLeft 置首分支，房主/客人视角统一�
 | 1 | Claude（计划） | micro 计划写入，tasks/ 机制首次启用 | — |
 | 2 | Codex（执行） | 三处改动全部落地，build 通过，BACKLOG 6/7 回填已完成 | 无 |
 | 3 | Claude（review） | A 档通过：P0/P1/P2 清零，P3×1 登记条目 9；勾选边界合规 | 待提交 + BACKLOG 哈希收尾 |
+| 4 | Claude（收尾） | 主提交 0107c18 + 哈希回填/state.json 复位收尾提交；任务闭环 | — |
