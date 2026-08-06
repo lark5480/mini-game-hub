@@ -1,6 +1,6 @@
 {
-  "current_task": null,
-  "phase": "idle",
+  "current_task": "2026-08-06-whackamole-race-cleanup",
+  "phase": "planned",
   "round": 0,
   "blocking": []
 }
