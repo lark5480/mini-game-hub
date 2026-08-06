@@ -71,10 +71,10 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 | `useHaptics` | 触觉反馈 | `light/tap/select/pulse/success/error/win` |
 | `useScoreFloats` | 浮动分数 | `pop(text, x, y)` → `popups` ref |
 | `useGameSave` | 存档/读档 | `saveGame(data)` / `loadGame()` / `clearGame()` |
-| `usePause` | 统一暂停/恢复（骨架） | P/Esc + 失焦 + ResumePrompt 封装 |
+| `useGamePause` | 统一暂停/恢复（骨架） | P/Esc + 失焦 + ResumePrompt 封装 |
 | `useLeaderboard` | 排行榜 CRUD | `submit(nickname, score)` / `fetch()` / `fetchNearby(score, nickname, range)` 邻位排名 |
 | `useGameOver` | 游戏结束统一处理 | `checkGameOver(gameName, score)` → `{ isNewRecord, achievementHint }`；新记录检测 + 分数写入 + 音效 + 成就接近提示/解锁 |
-| `useLeaderboardAutoRefresh` | 监听版本号自动刷新 | `useLeaderboardAutoRefresh(fetch)` |
+| `useLeaderboardAutoRefresh` | 监听版本号自动刷新（从 `useLeaderboard.ts` 导出） | `useLeaderboardAutoRefresh(fetch)` |
 | `useToast` | Toast 通知 | `toast.show(message, icon)` |
 | `useSwipe` | 移动端滑动手势 | `useSwipe({ el, active, onSwipe })` |
 
@@ -90,16 +90,17 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 
 ### 交接机制（硬规则）
 
-- 交接物是 git diff：Codex 每完成一个任务立即 commit，Claude review 时只看 `git diff`，不全量重读代码
-- 严格串行：同一时间只有一个 agent 改动工作区文件，禁止并行改同一文件
-- 计划必须"可执行"：写清文件路径、修改点、验收标准、review checklist（模板见 [docs/ai-workflow/PLAN.md](./docs/ai-workflow/PLAN.md)）
-- **PLAN.md 使用方式**：路径固定、模板骨架在文件顶部注释里永久保留；每次新任务只覆盖 TASK_BODY 区（不新建 PLAN-xxx.md）；Codex 执行后更新勾选与交接记录；Claude 的 review 结果写入同一文件的交接记录表（不新建 review.md）；任务提交后清空 TASK_BODY 区恢复占位，TEMPLATE 区永远不动
-- 每轮交接时，当前 agent 必须更新 PLAN.md 的状态勾选，避免基于过时计划判断
-- 审查依据 = 本文件硬规则 + PLAN.md 验收标准，不凭感觉
+- 交接物是 git diff：Codex 执行完**不 commit**，只写文件；Claude review 时通过 `git diff` 查看未提交的改动，不全量重读代码；review 通过后由 Codex 一次性 commit。**P0/P1 未清零前禁止 commit**（commit = 验收合格，不是"我写完了"）
+- 严格串行：同一文件严格串行（Claude 和 Codex 不同时改同一文件），不同文件可并行；Claude review 时必须基于已冻结的文件集合
+- 计划必须"可执行"：写清文件路径、修改点、验收标准、review checklist（模板见 [docs/ai-workflow/TEMPLATE.md](./docs/ai-workflow/TEMPLATE.md)）
+- **任务文件使用方式**：一任务一文件 `docs/ai-workflow/tasks/<date>-<slug>.md`，创建时从模板骨架 [docs/ai-workflow/TEMPLATE.md](./docs/ai-workflow/TEMPLATE.md) 复制初始态；**不清空、不回填**，历史天然归档；当前任务由 `docs/ai-workflow/state.json`（current_task/phase/round）指明，current_task 取值为任务文件名去 `.md`（如 `2026-08-06-example`）；Codex 执行后更新勾选与交接记录，Claude review 结果写入同一文件；任务提交后将 state.json 的 current_task 置 null
+- 每轮交接时，当前 agent 必须更新任务文件的状态勾选，避免基于过时计划判断
+- 审查依据 = 本文件硬规则 + 任务文件验收标准，不凭感觉
+- **分歧兜底**：Claude 对 P0/P1 有最终裁定权；Codex 认为计划有误时，先按原计划执行再在任务文件记录异议，不擅自跳步
 
 ### 任务模式（粗细双模式）
 
-Claude 创建计划时根据任务规模选择模式，在 PLAN.md 顶部声明：
+Claude 创建计划时根据任务规模选择模式，在任务文件顶部声明：
 
 | 维度 | 细模式（micro） | 粗模式（macro） |
 |------|----------------|-----------------|
@@ -117,12 +118,26 @@ Review 结果按严重度分级，Codex 根据级别决定处理方式：
 |------|------|------|---------|---------|
 | P0 正确性 | 🔴 | 逻辑/渲染/数据错误 | 阻塞，Codex 必须修 | 飘字坐标偏移、得分计算错误、空指针 |
 | P1 规范 | 🟡 | 违反 AGENTS.md 硬规则 | 阻塞，Codex 必须修 | 新建了本应复用的 composable、未用 GameLayout |
-| P2 打磨 | 🔵 | 风格/微优化、零风险 | 不进 backlog，Codex 顺手修 | 单双引号、冗余媒体查询、未使用变量 |
+| P2 打磨 | 🔵 | 风格/微优化、零风险 | 不进 backlog，Codex 顺手修，跟主任务同一 commit（message 注明 `+ 顺手修 xxx`）；Claude review 时对 P2 清单逐项核对，每条须为「已修」或「明确跳过 + 理由」，不允许静默遗漏 | 单双引号、冗余媒体查询、未使用变量 |
 | P3 可选 | ⚪ | 后续可做的改进 | 进 backlog（`docs/ai-workflow/BACKLOG.md`，写 review 的一方负责登记） | 动画曲线优化、新增触觉反馈 |
+
+### 当前执行模式
+
+手动传话（codex 插件已卸载，不依赖自动调度）：
+
+1. Claude 创建任务文件并更新 state.json → 运行 `/codex-plan-exec` 生成执行 prompt → 用户复制到桌面端 Codex
+2. Codex 执行（跑 `npm run build` 确认零错误，不 commit）→ 告知"跑完了"
+3. Claude `git diff` 审查 → 有 P0/P1 → 用户传修复指令给 Codex → 清零后 Codex commit
+
+`/codex-plan-exec` 会读 state.json 指明的当前任务文件，按 gpt-5-4-prompting 约定生成结构化 prompt（含 `<task>` / `<prereqs>` / `<verification_loop>` / `<grounding_rules>` / `<delivery_report>`），输出到终端供复制。
 
 ### 终止条件
 
-P0 + P1 清零 + P2 已修或明确跳过 + P3 已登记 BACKLOG.md → 可提交。最多 2 轮 review；第 3 轮仍存在 P0/P1 → 人工介入。
+P0 + P1 清零 + P2 已修或明确跳过 + P3 已登记 BACKLOG.md → 可提交。P0/P1 清零即提交，不限制轮数。
+
+### 回滚机制
+
+提交后发现 P0/P1（review 未覆盖的盲区）→ `git revert` 回滚，不走修复循环；revert 后重新走计划。
 
 ## 成就系统（新增成就操作）
 
@@ -133,12 +148,10 @@ P0 + P1 清零 + P2 已修或明确跳过 + P3 已登记 BACKLOG.md → 可提�
 
 ## 注意事项
 - **游戏结束流程**：统一走 `useGameOver().checkGameOver(gameName, score)` → 返回 `{ isNewRecord, achievementHint }` → 传给 `GameDialog`（新记录检测 + 分数写入 + 音效 + 成就接近提示自动完成）
-- **PWA**：`vite-plugin-pwa` autoUpdate；`App.vue` 生产环境注册 SW；静态资源 + Supabase API 离线缓存
-- **全局错误兜底**：`main.ts` 设 `app.config.errorHandler` + `unhandledrejection` 监听，防 Vue 渲染白屏
-- Canvas 游戏 `onUnmounted` 中清理 requestAnimationFrame
-- TS 启用了 `noUnusedLocals` / `noUnusedParameters`，未使用变量会导致 `npm run build` 失败
-- 测试在 `tests/` 下，`node test-xxx.cjs` 直接跑，无测试框架依赖
-- 关卡类游戏（推箱子）：每关必须保证箱子数 = 目标数，否则无法通关
 - **动画风格**：所有弹窗/路由/Toast 的动画 keyframes 统一放 `src/styles/animations.css`，不要在各组件里重复定义 `@keyframes`
-- **可访问性**：所有交互按钮已有 `:focus-visible` 聚焦环；CRT scanlines 层加了 `aria-hidden="true"`；全局 `prefers-reduced-motion` 已处理
 - **移动端适配**：overlay 类组件 `padding-top` 用 `max(24px, env(safe-area-inset-top) + 16px)` 避免 iPhone 刘海遮挡
+- **关卡设计**：推箱子每关必须保证箱子数 = 目标数，否则无法通关
+- Canvas 游戏 `onUnmounted` 中清理 requestAnimationFrame
+- 测试在 `tests/` 下，`node test-xxx.cjs` 直接跑，无测试框架依赖
+
+> PWA、全局错误兜底架构事实见 [system_design.md](./docs/system_design.md)；TS `noUnusedLocals` 约束见 [CLAUDE.md](./CLAUDE.md) 红线；可访问性（`:focus-visible` 聚焦环、`aria-hidden`、`prefers-reduced-motion`）已全局处理，无需额外操作。

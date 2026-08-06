@@ -12,4 +12,4 @@
 ## 多 Agent 协作
 
 - 协作工作流（Claude 计划 → Codex 执行 → Claude review）与交接机制见 AGENTS.md「多 Agent 协作工作流」小节
-- 当前任务计划见 [docs/ai-workflow/PLAN.md](./docs/ai-workflow/PLAN.md)
+- 当前任务计划见 `docs/ai-workflow/tasks/`（当前任务由 `docs/ai-workflow/state.json` 指明）

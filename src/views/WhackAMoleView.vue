@@ -1,67 +1,92 @@
 <template>
   <GameLayout
-    title="打地鼠"
-    accentColor="#FF7A3D"
-    entrance="whackmole"
-    gradientEnd="#FFD700"
-    :hints="['点击地鼠得分', '别打空！']"
-    :infoItems="[{ label: '分数', value: score }, { label: '时间', value: timeLeft + 's' }, { label: '连击', value: combo }]"
-    :confirmRestart="score > 0"
-    tutorial="快速点击冒出来的地鼠得分，连续命中有连击加成！打空会重置连击。"
-    @back="router.push('/')"
-    @restart="restartGame"
+    :title="layoutTitle"
+    :accentColor="layoutAccent"
+    :gradientEnd="layoutGradient"
+    :entrance="layoutEntrance"
+    :hints="layoutHints"
+    :infoItems="layoutInfoItems"
+    :confirmRestart="confirmRestart"
+    :tutorial="layoutTutorial"
+    @back="goHome"
+    v-on="mode === 'single' ? { restart: onRestart } : {}"
   >
-    <div class="game-container">
-      <div class="score-panel">
-        <div class="score-display">{{ score }}</div>
-        <div class="combo-display" v-if="combo > 1">
-          <span class="combo-text">x{{ combo }}</span>
-          <span class="combo-bonus">+{{ combo * 5 }}</span>
-        </div>
+    <!-- 模式选择屏 -->
+    <div v-if="mode === null" class="mode-panel">
+      <h2 class="mode-title">打地鼠</h2>
+      <p class="mode-sub">选择游戏模式</p>
+      <div class="mode-buttons">
+        <button class="mode-card" @click="startSingle">
+          <span class="mode-name">单人挑战</span>
+          <span class="mode-desc">30 秒计分 · 冲击排行榜</span>
+        </button>
+        <button class="mode-card" @click="startRace">
+          <span class="mode-name">联机竞速</span>
+          <span class="mode-desc">分享房间号 · 实时对战</span>
+        </button>
       </div>
-      
-      <div ref="boardEl" class="mole-board" :style="{ '--grid-cols': gridCols, '--grid-rows': gridRows }">
-        <div
-          v-for="(hole, index) in holes"
-          :key="index"
-          class="mole-hole"
-          @click="whack(index)"
-        >
-          <div class="hole">
-            <div class="mole" :class="{ visible: hole.active, hit: hole.hit }">
-              <div class="mole-body">
-                <div class="mole-face">
-                  <div class="mole-eyes">
-                    <span class="eye left"></span>
-                    <span class="eye right"></span>
-                  </div>
-                  <span class="mole-nose"></span>
-                  <span class="mole-mouth"></span>
-                </div>
-              </div>
-            </div>
-            <div class="dirt"></div>
-          </div>
-        </div>
-      <ScoreFloat :popups="popups" />
+      <div class="join-room">
+        <input
+          v-model="joinCode"
+          maxlength="4"
+          placeholder="输入房间号"
+          class="join-input"
+          @input="joinCode = joinCode.toUpperCase()"
+          @keyup.enter="joinRoom"
+        />
+        <button class="join-btn" @click="joinRoom">加入</button>
       </div>
-
-      <div class="time-bar">
-        <div class="time-fill" :style="{ width: (timeLeft / 30 * 100) + '%' }"></div>
-      </div>
+      <p v-if="joinError" class="join-error">{{ joinError }}</p>
+      <p class="mode-tip">联机需配置 Supabase（见 .env.example）；未配置会提示。</p>
+      <LeaderboardStrip game="whackamole" />
     </div>
-    <LeaderboardStrip game="whackamole" />
-    <template #controls>
+
+    <!-- 单人模式 -->
+    <template v-else-if="mode === 'single'">
+      <WhackAMoleBoard
+        ref="boardRef"
+        :difficulty="difficulty"
+        @gameover="onGameOver"
+      />
+      <LeaderboardStrip game="whackamole" />
+
+      <PauseOverlay :visible="paused" @resume="resumeGame" />
+      <GameDialog
+        v-model:visible="gameOverDialog"
+        accentColor="#FF7A3D"
+        :icon="newRecord ? 'success' : 'fail'"
+        :title="newRecord ? '新纪录！' : '游戏结束'"
+        :message="'最终得分: ' + lastScore"
+        :actionText="newRecord ? '提交新纪录' : '提交分数'"
+        :newRecord="newRecord"
+        :achievementHint="achievementHint"
+        @action="openLeaderboard"
+      />
+      <LeaderboardOverlay
+        :visible="showLeaderboard"
+        game="whackamole"
+        gameName="打地鼠"
+        :score="lastScore"
+        @update:visible="showLeaderboard = $event"
+        @replay="restartGame"
+      />
+    </template>
+
+    <!-- 联机竞速模式 -->
+    <WhackAMoleRaceView v-else ref="raceRef" />
+
+    <!-- controls 槽：必须作为 GameLayout 的直接子级（与 v-else-if 同级），否则 vue-tsc 无法解析 slot 绑定 -->
+    <template v-if="mode === 'single'" #controls>
       <div class="game-controls">
         <div class="difficulty-buttons">
           <button
-            v-for="diff in difficulties"
-            :key="diff.name"
+            v-for="d in difficulties"
+            :key="d.name"
             class="diff-btn"
-            :class="{ active: difficulty === diff.name }"
-            @click="setDifficulty(diff.name)"
+            :class="{ active: difficulty === d.name }"
+            @click="setDifficulty(d.name)"
           >
-            {{ diff.label }}
+            {{ d.label }}
           </button>
         </div>
         <button class="start-btn" @click="startGame" v-if="!gameStarted">
@@ -81,221 +106,115 @@
         </button>
       </div>
     </template>
-
-    <PauseOverlay :visible="paused" @resume="resumeGame" />
-    <GameDialog
-      v-model:visible="gameOverDialog"
-      accentColor="#FF7A3D"
-      :icon="newRecord ? 'success' : 'fail'"
-      :title="newRecord ? '新纪录！' : '游戏结束'"
-      :message="'最终得分: ' + score"
-      :actionText="newRecord ? '提交新纪录' : '提交分数'"
-      :newRecord="newRecord"
-      :achievementHint="achievementHint"
-      @action="openLeaderboard"
-    />
-    <LeaderboardOverlay
-      :visible="showLeaderboard"
-      game="whackamole"
-      gameName="打地鼠"
-      :score="lastScore"
-      @update:visible="showLeaderboard = $event"
-      @replay="restartGame"
-    />
   </GameLayout>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { useSound } from '@/composables/useSound'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
 import { useGamePause } from '@/composables/useGamePause'
 import { useGameOver } from '@/composables/useGameOver'
-import { useHaptics } from '@/composables/useHaptics'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
+import PauseOverlay from '@/components/PauseOverlay.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
 import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
-import { useScoreFloats } from '@/composables/useScoreFloats'
-import ScoreFloat from '@/components/ScoreFloat.vue'
+import WhackAMoleBoard from '@/components/WhackAMoleBoard.vue'
+import WhackAMoleRaceView from '@/views/WhackAMoleRaceView.vue'
 
-interface Hole {
-  active: boolean
-  hit: boolean
-}
-
-const router = useRouter()
-const sound = useSound()
-const achievements = useAchievements()
-const toast = useToast()
-const haptics = useHaptics()
-
-const { popups, pop } = useScoreFloats()
-const { checkGameOver } = useGameOver()
-const boardEl = ref<HTMLElement | null>(null)
+type Mode = 'single' | 'race'
 
 const difficulties = [
-  { name: 'easy', label: '简单', gridCols: 3, gridRows: 3, interval: 1200, duration: 1000 },
-  { name: 'normal', label: '普通', gridCols: 3, gridRows: 3, interval: 900, duration: 800 },
-  { name: 'hard', label: '困难', gridCols: 4, gridRows: 3, interval: 700, duration: 600 }
+  { name: 'easy', label: '简单' },
+  { name: 'normal', label: '普通' },
+  { name: 'hard', label: '困难' },
 ]
 
+const router = useRouter()
+const route = useRoute()
+const achievements = useAchievements()
+const toast = useToast()
+const { checkGameOver } = useGameOver()
+
+// 模式：null=选择屏；single=单人；race=联机竞速。
+// 若 URL 带 ?room=XXXX（好友分享进来的），直接进联机模式。
+const ROOM_RE = /^[A-Z0-9]{4}$/
+const mode = ref<Mode | null>(
+  (typeof route.query.room === 'string' && ROOM_RE.test(route.query.room)) ? 'race' : null
+)
+
+const boardRef = ref<InstanceType<typeof WhackAMoleBoard> | null>(null)
+const raceRef = ref<InstanceType<typeof WhackAMoleRaceView> | null>(null)
+
 const difficulty = ref('normal')
-const score = ref(0)
-const timeLeft = ref(30)
-const combo = ref(0)
 const gameStarted = ref(false)
 const gameOverDialog = ref(false)
 const newRecord = ref(false)
 const achievementHint = ref<string | null>(null)
 const showLeaderboard = ref(false)
+const joinCode = ref('')
+const joinError = ref('')
 const lastScore = ref(0)
 
-const gridCols = ref(3)
-const gridRows = ref(3)
-const moleInterval = ref(900)
-const moleDuration = ref(800)
+const confirmRestart = computed(() => gameStarted.value && !gameOverDialog.value)
 
-const holes = ref<Hole[]>([])
+// ---- 布局 props（随 mode 变化） ----
+const layoutTitle = computed(() => mode.value === 'race' ? '打地鼠·竞速' : '打地鼠')
+const layoutAccent = computed(() => mode.value === 'race' ? '#FF9E00' : '#FF7A3D')
+const layoutGradient = computed(() => mode.value === 'race' ? '#B967FF' : '#FFD700')
+const layoutEntrance = computed(() => mode.value === 'race' ? 'ttt2p' : 'whackmole')
+const layoutHints = computed(() => {
+  if (mode.value === 'single') return ['点击地鼠得分', '别打空！']
+  if (mode.value === 'race') return ['分享房间号给好友', '实时对战']
+  return ['选择模式开始']
+})
+const layoutInfoItems = computed(() => {
+  if (mode.value === 'single') return [{ label: '难度', value: difficulties.find(d => d.name === difficulty.value)?.label ?? '普通' }]
+  if (mode.value === 'race') return [{ label: '模式', value: '联机竞速' }]
+  return [{ label: '模式', value: '选择中' }]
+})
+const layoutTutorial = computed(() =>
+  mode.value === 'race'
+    ? '和好友实时对战：30 秒内得分高者获胜。分享房间号即可同玩。'
+    : '快速点击冒出来的地鼠得分，连续命中有连击加成！打空会重置连击。'
+)
 
-let moleTimer: number | null = null
-let countdownTimer: number | null = null
-const pendingTimeouts: Set<number> = new Set()
-
-function initHoles() {
-  const total = gridCols.value * gridRows.value
-  holes.value = Array.from({ length: total }, () => ({
-    active: false,
-    hit: false
-  }))
+// ---- 单人模式逻辑 ----
+function setDifficulty(name: string) {
+  if (gameStarted.value) return
+  difficulty.value = name
 }
 
 function startGame() {
   showLeaderboard.value = false
-  gameStarted.value = true
-  score.value = 0
-  timeLeft.value = 30
-  combo.value = 0
   gameOverDialog.value = false
-
-  updateDifficultySettings()
-  initHoles()
-  countdown()
-  spawnMoles()
+  gameStarted.value = true
+  boardRef.value?.startGame()
 }
 
 function restartGame() {
-  stopAllTimers()
-  startGame()
-}
-
-function setDifficulty(name: string) {
-  if (gameStarted.value) return
-  difficulty.value = name
-  updateDifficultySettings()
-  initHoles()
-}
-
-function updateDifficultySettings() {
-  const diff = difficulties.find(d => d.name === difficulty.value)!
-  gridCols.value = diff.gridCols
-  gridRows.value = diff.gridRows
-  moleInterval.value = diff.interval
-  moleDuration.value = diff.duration
-}
-
-function countdown() {
-  countdownTimer = window.setInterval(() => {
-    timeLeft.value--
-    if (timeLeft.value <= 0) {
-      gameOver()
-    }
-  }, 1000)
-}
-
-function spawnMoles() {
-  moleTimer = window.setInterval(() => {
-    spawnMole()
-  }, moleInterval.value)
-}
-
-function spawnMole() {
-  const inactiveHoles = holes.value
-    .map((hole, index) => ({ hole, index }))
-    .filter(({ hole }) => !hole.active)
-  
-  if (inactiveHoles.length === 0) return
-  
-  const randomIndex = inactiveHoles[Math.floor(Math.random() * inactiveHoles.length)].index
-  holes.value[randomIndex].active = true
-  
-  const timeoutId = window.setTimeout(() => {
-    pendingTimeouts.delete(timeoutId)
-    if (holes.value[randomIndex].active && !holes.value[randomIndex].hit) {
-      holes.value[randomIndex].active = false
-      combo.value = 0
-    }
-  }, moleDuration.value)
-  pendingTimeouts.add(timeoutId)
-}
-
-function whack(index: number) {
-  if (!gameStarted.value) return
-
-  const hole = holes.value[index]
-
-  if (hole.active && !hole.hit) {
-    hole.hit = true
-    haptics.pulse()
-    combo.value++
-
-    const baseScore = 10
-    const comboBonus = (combo.value - 1) * 5
-    score.value += baseScore + comboBonus
-
-    // 浮动分数反馈
-    const points = baseScore + comboBonus
-    const el = boardEl.value
-    const holeEl = el?.querySelectorAll('.hole')[index] as HTMLElement | undefined
-    if (el && holeEl) {
-      const boardRect = el.getBoundingClientRect()
-      const r = holeEl.getBoundingClientRect()
-      pop(`+${points}`, r.left + r.width / 2 - boardRect.left, r.top + r.height / 2 - boardRect.top)
-    }
-
-    sound.hit()
-
-    const timeoutId = window.setTimeout(() => {
-      pendingTimeouts.delete(timeoutId)
-      hole.active = false
-      hole.hit = false
-    }, 200)
-    pendingTimeouts.add(timeoutId)
-    if (combo.value >= 5) {
-      haptics.success()
-    }
-  } else if (!hole.active) {
-    combo.value = 0
-    sound.miss()
-    haptics.light()
-  }
-}
-
-function gameOver() {
-  stopAllTimers()
   gameStarted.value = false
-  gameOverDialog.value = true
-  lastScore.value = score.value
-  const { isNewRecord: isNewRecordResult, achievementHint: hint } = checkGameOver('whackamole', score.value)
+  gameOverDialog.value = false
+  showLeaderboard.value = false
+  boardRef.value?.stopGame()
+  boardRef.value?.startGame()
+  gameStarted.value = true
+}
+
+function onGameOver(score: number) {
+  gameStarted.value = false
+  lastScore.value = score
+  const { isNewRecord: isNewRecordResult, achievementHint: hint } = checkGameOver('whackamole', score)
   newRecord.value = isNewRecordResult
   achievementHint.value = hint
-  if (score.value >= 300) {
+  if (score >= 300) {
     if (achievements.unlock('whack_master')) {
       toast.show('成就解锁：神速', '🔨')
     }
   }
+  gameOverDialog.value = true
 }
 
 function openLeaderboard() {
@@ -303,210 +222,109 @@ function openLeaderboard() {
   showLeaderboard.value = true
 }
 
-function stopAllTimers() {
-  if (moleTimer) clearInterval(moleTimer)
-  if (countdownTimer) clearInterval(countdownTimer)
-  moleTimer = null
-  countdownTimer = null
-  pendingTimeouts.forEach(id => clearTimeout(id))
-  pendingTimeouts.clear()
+// 暂停/恢复：仅在单人模式且游戏进行中可用（联机模式禁用）
+const { paused, resume: resumeGame } = useGamePause({
+  canPause: () => mode.value === 'single' && gameStarted.value && !gameOverDialog.value,
+  onPause: () => boardRef.value?.pause(),
+  onResume: () => boardRef.value?.resume(),
+})
+
+// ---- 模式切换 ----
+function startSingle() {
+  mode.value = 'single'
+}
+function startRace() {
+  mode.value = 'race'
 }
 
-// 暂停 / 恢复：统一 composable（失焦自动暂停 + P/Esc + 音效 + 停/启计时器）
-const { paused, resume: resumeGame } = useGamePause({
-  canPause: () => gameStarted.value && !gameOverDialog.value,
-  onPause: stopAllTimers,
-  onResume: () => { countdown(); spawnMoles() }
-})
+function joinRoom() {
+  joinError.value = ''
+  const code = joinCode.value.trim().toUpperCase()
+  if (code.length !== 4) {
+    joinError.value = `房间号为 4 位字母或数字`
+    return
+  }
+  if (!/^[A-Z0-9]{4}$/.test(code)) {
+    joinError.value = `房间号含非法字符`
+    return
+  }
+  mode.value = 'race'
+  router.replace({ query: { room: code } })
+}
+function onRestart() {
+  if (mode.value === 'single') restartGame()
+}
+
+function goHome() {
+  boardRef.value?.stopGame()
+  router.push('/')
+}
 
 onMounted(() => {
-  updateDifficultySettings()
-  initHoles()
-})
-
-onUnmounted(() => {
-  stopAllTimers()
+  // 联机模式由子组件自行处理（含 ?room 加入），这里不干预
 })
 </script>
 
 <style scoped>
-.game-container {
+/* 模式选择屏 */
+.mode-panel {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
-  padding: 20px;
+  gap: 18px;
+  padding: 40px 20px;
 }
-
-.score-panel {
-  text-align: center;
-}
-
-.score-display {
-  font-size: 3.5em;
-  font-weight: bold;
+.mode-title {
+  font-size: 2em;
   color: #fff;
-  text-shadow: 0 0 20px rgba(255, 107, 107, 0.8);
+  margin: 0;
 }
-
-.combo-display {
+.mode-sub {
+  color: var(--game-text-muted);
+  margin: 0;
+}
+.mode-buttons {
   display: flex;
-  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 8px;
-  margin-top: 5px;
-  animation: comboPulse 0.3s ease;
+  margin-top: 8px;
 }
-
-.combo-text {
-  font-size: 1.5em;
-  font-weight: bold;
-  color: #FFD700;
-}
-
-.combo-bonus {
-  font-size: 1em;
-  color: #05FFA1;
-}
-
-.mole-board {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(var(--grid-cols), 1fr);
-  grid-template-rows: repeat(var(--grid-rows), auto);
-  gap: 15px;
-  background: rgba(0,0,0,0.4);
-  border: 2px solid rgba(255,107,107,0.3);
-  border-radius: 16px;
-  padding: 20px;
-  width: 100%;
-  max-width: 460px;
-  margin: 0 auto;
-  box-sizing: border-box;
-  box-shadow: 0 0 40px rgba(255,107,107,0.2);
-}
-
-.mole-hole {
-  width: 100%;
-  aspect-ratio: 1;
-  max-width: 110px;
-  cursor: pointer;
-  position: relative;
-  container-type: size;
-}
-
-.hole {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  overflow: hidden;
-  border-radius: 50%;
-  background: linear-gradient(180deg, #8B4513 0%, #5D3A1A 100%);
-  box-shadow: inset 0 5px 15px rgba(0,0,0,0.5);
-}
-
-.mole {
-  position: absolute;
-  bottom: -86cqh;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 86cqw;
-  height: 86cqh;
-  transition: bottom 0.2s ease;
-}
-
-.mole.visible {
-  bottom: -6cqh;
-}
-
-.mole.hit {
-  animation: hitMole 0.2s ease;
-}
-
-.mole-body {
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(180deg, #A0522D 0%, #6B4423 100%);
-  border-radius: 50% 50% 45% 45%;
-  position: relative;
-  box-shadow: 0 3px 10px rgba(0,0,0,0.3);
-}
-
-.mole-face {
-  position: absolute;
-  top: 16cqh;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.mole-eyes {
+.mode-card {
   display: flex;
-  gap: 16cqw;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  min-width: 180px;
+  padding: 22px 28px;
+  background: var(--game-btn-bg);
+  border: 1px solid var(--game-btn-border);
+  border-radius: 18px;
+  cursor: pointer;
+  color: var(--game-text);
+  transition: all 0.2s ease;
+}
+.mode-card:hover {
+  border-color: var(--game-accent);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--game-accent) 30%, transparent);
+  transform: translateY(-2px);
+}
+.mode-name {
+  font-size: 1.1em;
+  font-weight: 600;
+}
+.mode-desc {
+  font-size: 0.82em;
+  color: var(--game-text-muted);
+}
+.mode-tip {
+  font-size: 0.8em;
+  color: var(--game-text-muted);
+  text-align: center;
+  margin-top: 8px;
 }
 
-.eye {
-  width: 16cqw;
-  height: 16cqh;
-  background: #000;
-  border-radius: 50%;
-  position: relative;
-}
-
-.eye::after {
-  content: '';
-  position: absolute;
-  top: 18%;
-  left: 22%;
-  width: 35%;
-  height: 35%;
-  background: #fff;
-  border-radius: 50%;
-}
-
-.mole-nose {
-  display: block;
-  width: 14cqw;
-  height: 10cqh;
-  background: #FF69B4;
-  border-radius: 50%;
-  margin: 8cqh auto 0;
-}
-
-.mole-mouth {
-  display: block;
-  width: 26cqw;
-  height: 12cqh;
-  border-bottom: 3px solid #000;
-  border-radius: 0 0 10px 10px;
-  margin: 4cqh auto 0;
-}
-
-.dirt {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 15%;
-  background: linear-gradient(180deg, #5D3A1A 0%, #3D2817 100%);
-  border-radius: 0 0 50% 50%;
-}
-
-.time-bar {
-  width: 100%;
-  max-width: 400px;
-  height: 8px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.time-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #05FFA1, #FFD700, #FF7A3D);
-  transition: width 1s linear;
-  border-radius: 4px;
-}
-
+/* 单人对战控制区 */
 .game-controls {
   display: flex;
   flex-direction: column;
@@ -528,11 +346,9 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all 0.2s;
 }
-
 .diff-btn:hover {
   border-color: var(--game-accent);
 }
-
 .diff-btn.active {
   background: rgba(255,107,107,0.3);
   border-color: #FF7A3D;
@@ -553,20 +369,50 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all 0.2s;
 }
-
 .start-btn:hover, .restart-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 5px 20px rgba(255,107,107,0.4);
 }
 
-@media (max-width: 640px) {
-  .mole-board {
-    gap: 10px;
-    padding: 14px;
-  }
-
-  .mole-hole {
-    max-width: 96px;
-  }
+/* 房间号输入区 */
+.join-room {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+.join-input {
+  width: 120px;
+  padding: 10px 14px;
+  background: var(--game-btn-bg);
+  border: 1px solid var(--game-btn-border);
+  border-radius: 10px;
+  color: var(--game-text);
+  font-size: 1em;
+  letter-spacing: 2px;
+  text-align: center;
+  text-transform: uppercase;
+}
+.join-input:focus {
+  border-color: var(--game-accent);
+  outline: none;
+}
+.join-btn {
+  background: rgba(255, 158, 0, 0.15);
+  border: 1px solid rgba(255, 158, 0, 0.3);
+  color: #FF9E00;
+  padding: 10px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 0.95em;
+  transition: all 0.2s;
+}
+.join-btn:hover {
+  background: rgba(255, 158, 0, 0.25);
+}
+.join-error {
+  color: #FF6B6B;
+  font-size: 0.85em;
+  margin: 0;
 }
 </style>
