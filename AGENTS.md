@@ -93,7 +93,7 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 - 交接物是 git diff：Codex 执行完**不 commit**，只写文件；Claude review 时通过 `git diff` 查看未提交的改动，不全量重读代码；review 通过后由 Codex 一次性 commit。**P0/P1 未清零前禁止 commit**（commit = 验收合格，不是"我写完了"）
 - 严格串行：同一文件严格串行（Claude 和 Codex 不同时改同一文件），不同文件可并行；Claude review 时必须基于已冻结的文件集合
 - 计划必须"可执行"：写清文件路径、修改点、验收标准、review checklist（模板见 [docs/ai-workflow/TEMPLATE.md](./docs/ai-workflow/TEMPLATE.md)）
-- **任务文件使用方式**：一任务一文件 `docs/ai-workflow/tasks/<date>-<slug>.md`，创建时从模板骨架 [docs/ai-workflow/TEMPLATE.md](docs/ai-workflow/TEMPLATE.md) 复制初始态；**不清空、不回填**，历史天然归档；当前任务由 `docs/ai-workflow/state.json`（current_task/phase/round）指明；Codex 执行后更新勾选与交接记录，Claude review 结果写入同一文件；任务提交后将 state.json 的 current_task 置 null
+- **任务文件使用方式**：一任务一文件 `docs/ai-workflow/tasks/<date>-<slug>.md`，创建时从模板骨架 [docs/ai-workflow/TEMPLATE.md](./docs/ai-workflow/TEMPLATE.md) 复制初始态；**不清空、不回填**，历史天然归档；当前任务由 `docs/ai-workflow/state.json`（current_task/phase/round）指明，current_task 取值为任务文件名去 `.md`（如 `2026-08-06-example`）；Codex 执行后更新勾选与交接记录，Claude review 结果写入同一文件；任务提交后将 state.json 的 current_task 置 null
 - 每轮交接时，当前 agent 必须更新任务文件的状态勾选，避免基于过时计划判断
 - 审查依据 = 本文件硬规则 + 任务文件验收标准，不凭感觉
 - **分歧兜底**：Claude 对 P0/P1 有最终裁定权；Codex 认为计划有误时，先按原计划执行再在任务文件记录异议，不擅自跳步

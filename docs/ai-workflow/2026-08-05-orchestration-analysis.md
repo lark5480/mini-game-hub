@@ -3,6 +3,7 @@
 > 日期：2026-08-05
 > 性质：架构分析，非实施计划。结论供决策参考，未改动任何代码或流程文件。
 > 涉及：`AGENTS.md`「多 Agent 协作工作流」、`docs/ai-workflow/*`
+> ⚠️ **过时注**：本文描述 2026-08-05 迁移**前**的工作流状态（PLAN.md 当共享内存、复制提示词的手动传话）。2026-08-06 已落地迁移（任务文件迁至 `docs/ai-workflow/tasks/`、新增 `state.json`、命令文件进仓库、新增 `PITFALLS.md`），现行约定以 `AGENTS.md` 为准。文中 §2.1.1 已纠正「直调 CLI 可多 Agent 协作」的误判，§2/§5 的 L1 落地范围已收窄。
 
 ---
 
@@ -52,11 +53,11 @@
 
 **缺陷 B：规则源已漂移到 7 处**
 
-`AGENTS.md` / `CLAUDE.md` / `CLAUDE.local.md` / `PLAN.md` / `TEMPLATE.md` / `BACKLOG.md` / `~/.claude/commands/codex-plan-exec`
+`AGENTS.md` / `CLAUDE.md` / `CLAUDE.local.md` / `PLAN.md` / `TEMPLATE.md` / `BACKLOG.md` / `.claude/commands/codex-plan-exec`（迁移前位于全局 `~/.claude/commands/`）
 
 已为此付过一次账：`c25abbe docs: 模板真相源收敛 + AGENTS.md 三处事实修正`。
 
-更严重的是最后一项——**`/codex-plan-exec` 不在仓库内**，位于用户全局目录。仓库自称「唯一事实源」，但最核心的执行器换台机器即失效。
+更严重的是最后一项——**`/codex-plan-exec` 当时不在仓库内**，位于用户全局目录（2026-08-06 已迁至仓库 `.claude/commands/`）。仓库自称「唯一事实源」，但最核心的执行器换台机器即失效。
 
 **缺陷 C：2 → N 是架构相变，不是线性加压**
 

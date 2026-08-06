@@ -9,7 +9,7 @@ allowed-tools: Read
 
 ## 步骤 1：读取 state.json
 
-Read 文件 `docs/ai-workflow/state.json`，取 `current_task`。
+Read 文件 `docs/ai-workflow/state.json`（路径相对仓库根，本命令假定 cwd = 仓库根 F:/other/code/ai/mini-game-hub），取 `current_task`。
 
 如果 `current_task` 为 null：
 - 告知用户：「当前没有活跃任务。请先从 TEMPLATE.md 复制创建 docs/ai-workflow/tasks/<date>-<slug>.md 并更新 state.json，再运行此命令。」
@@ -17,7 +17,7 @@ Read 文件 `docs/ai-workflow/state.json`，取 `current_task`。
 
 ## 步骤 2：读取并校验任务文件
 
-Read 文件 `docs/ai-workflow/tasks/<current_task>.md`。
+Read 文件 `docs/ai-workflow/tasks/<current_task>.md`（路径相对仓库根，同上）。
 
 如果文件不存在，或仍是空模板骨架（仅空表格/空 checklist，无任务目标内容）：
 - 告知用户：「任务文件未填写。请先填写任务目标、修改点、验收标准，再运行此命令。」
