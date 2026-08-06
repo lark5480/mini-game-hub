@@ -61,16 +61,16 @@ prompt 正文结构：
 
 <prereqs>
 1. 先读 AGENTS.md，遵守所有硬规则（GameLayout 框架、composable 注册表、命名规范、noUnusedLocals）。
-2. 不要修改 PLAN.md 中 <!-- TEMPLATE:END --> 以上的模板骨架。
-3. 不要修改 PLAN.md 的交接记录表——那是 Claude review 时填的。
+2. PLAN.md 中 <!-- TEMPLATE:END --> 以上的模板骨架禁止触碰；勾选仅限「文件级修改点 / 验收标准」两节，Review Checklist 归 Claude，不要勾。
+3. 交接记录表须追加你自己的执行轮次（轮次 / Codex（执行）/ 结果 / 遗留问题），不要修改已有轮次。
 4. 不要 commit——review 通过后由 Claude 决定 commit 时机。
 </prereqs>
 
 <verification_loop>
 - 运行 npm run build 确认零错误（noUnusedLocals / noUnusedParameters 会触发 build 失败）
 - 遵守 AGENTS.md 硬规则
-- 更新文件修改表中的完成勾选（[ ] → [x]）
-- 用一句话告诉我改了哪些文件
+- 更新文件修改表中的完成勾选（[ ] → [x]），追加交接记录轮次
+- 完成后按 <delivery_report> 的固定格式输出交付报告
 </verification_loop>
 
 <grounding_rules>
@@ -79,6 +79,16 @@ prompt 正文结构：
 - 所有游戏视图必须用 GameLayout + GameDialog 框架
 - 不确定的实现细节，按 AGENTS.md 共享组件注册表和 composable 注册表执行，不自行发明
 </grounding_rules>
+
+<delivery_report>
+完成后必须输出以下固定格式的交付报告（Claude 据此启动 review）：
+
+改动文件：<文件清单>
+npm run build：<通过 / 失败+关键错误>
+勾选状态：<「文件级修改点 / 验收标准」已勾选项摘要>
+交接记录：<已追加的轮次与一句话结果>
+遗留问题：<无 / 具体项，含对计划的异议（如有）>
+</delivery_report>
 ````
 
 ## 步骤 5：输出到终端
