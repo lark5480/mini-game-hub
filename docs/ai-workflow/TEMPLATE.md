@@ -1,6 +1,6 @@
-# PLAN.md 模板骨架
+# 任务文件模板骨架
 
-> 本文件是 PLAN.md 的模板骨架，**永远保留，不删除**。每次新任务只覆盖 TASK_BODY 区（TEMPLATE:START ~ TEMPLATE:END 之间不动）。
+> 本文件是任务文件的模板骨架，**永远保留，不删除**。新建任务时把 TEMPLATE:START ~ TEMPLATE:END 之间的完整结构复制为 `docs/ai-workflow/tasks/<date>-<slug>.md` 的初始态（创建时复制，禁止活引用）。
 
 ---
 
@@ -8,13 +8,13 @@
 <!-- ═══════════════════════════════════════════════════════════════════════
   模板骨架 — 永远保留，不删除。
   ┌─────────────────────────────────────────────────────────────────────┐
-  │ Claude 新建任务：复制下方结构 → 填入 TASK_BODY 区                    │
-  │ Codex 执行：      只改 TASK_BODY 区（勾选仅限「文件级修改点 / 验收标准」│
-  │                   与交接记录；Review Checklist 归 Claude，TEMPLATE 禁动）│
-  │ Claude review：   只改 TASK_BODY 区的 checklist、修复方案、交接记录   │
-  │ 任务提交后：      清空 TASK_BODY 区（保留标题占位），TEMPLATE 不动     │
+  │ Claude 新建任务：复制下方结构 → 创建 tasks/<date>-<slug>.md          │
+  │ Codex 执行：      勾选仅限「文件级修改点 / 验收标准」，交接记录只追加  │
+  │                   自己的轮次（Review Checklist 归 Claude，其余禁改）  │
+  │ Claude review：   只改 checklist、修复方案、交接记录                 │
+  │ 任务提交后：      state.json 的 current_task 置 null，任务文件保留   │
   └─────────────────────────────────────────────────────────────────────┘
-  动态区只覆盖「任务模式」到文件末尾，TEMPLATE:START ~ TEMPLATE:END 之间不动。
+  TEMPLATE:START ~ TEMPLATE:END 之间即任务文件完整结构，复制时只取区内各节。
   ═══════════════════════════════════════════════════════════════════════ -->
 
 <!--

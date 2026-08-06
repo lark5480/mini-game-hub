@@ -1,27 +1,31 @@
 ---
-description: 读取 PLAN.md 的活跃任务，生成可复制给 Codex 的执行 prompt（AGENTS.md 工作流的执行步）
+description: 读取 state.json 指明的当前任务文件，生成可复制给 Codex 的执行 prompt（AGENTS.md 工作流的执行步）
 allowed-tools: Read
 ---
 
-读取 `docs/ai-workflow/PLAN.md` 的 TASK_BODY 区，生成一段完整的 Codex 执行 prompt，输出到终端供用户复制粘贴到桌面端 Codex。
+读取 `docs/ai-workflow/state.json` 指明的当前任务文件，生成一段完整的 Codex 执行 prompt，输出到终端供用户复制粘贴到桌面端 Codex。
 
 这是 AGENTS.md「多 Agent 协作工作流」的**执行步**：Claude 已写好计划 → 此命令生成 prompt → 用户复制到桌面端 Codex → Codex 执行 → 用户回来说"跑完了" → Claude review。
 
-## 步骤 1：读取 PLAN.md
+## 步骤 1：读取 state.json
 
-Read 文件 `docs/ai-workflow/PLAN.md`。
+Read 文件 `docs/ai-workflow/state.json`，取 `current_task`。
 
-## 步骤 2：校验活跃任务
+如果 `current_task` 为 null：
+- 告知用户：「当前没有活跃任务。请先从 TEMPLATE.md 复制创建 docs/ai-workflow/tasks/<date>-<slug>.md 并更新 state.json，再运行此命令。」
+- **停止，不生成 prompt。**
 
-TASK_BODY 区 = `<!-- TEMPLATE:END -->` 标记之后的全部内容。
+## 步骤 2：读取并校验任务文件
 
-如果 TASK_BODY 仍是占位状态（含 `（未选择 — 等待新任务填入）` 或 `（等待新任务填入）` 或仅有空表格/空 checklist）：
-- 告知用户：「PLAN.md 没有活跃任务。请先填写 TASK_BODY 区（任务目标、修改点、验收标准），再运行此命令。」
+Read 文件 `docs/ai-workflow/tasks/<current_task>.md`。
+
+如果文件不存在，或仍是空模板骨架（仅空表格/空 checklist，无任务目标内容）：
+- 告知用户：「任务文件未填写。请先填写任务目标、修改点、验收标准，再运行此命令。」
 - **停止，不生成 prompt。**
 
 ## 步骤 3：提取任务内容
 
-从 TASK_BODY 区提取：
+从任务文件提取：
 - 任务模式（细/粗）
 - 任务目标
 - 文件级修改点表
@@ -61,7 +65,7 @@ prompt 正文结构：
 
 <prereqs>
 1. 先读 AGENTS.md，遵守所有硬规则（GameLayout 框架、composable 注册表、命名规范、noUnusedLocals）。
-2. PLAN.md 中 <!-- TEMPLATE:END --> 以上的模板骨架禁止触碰；勾选仅限「文件级修改点 / 验收标准」两节，Review Checklist 归 Claude，不要勾。
+2. 不要修改任务文件的章节结构（标题层级与节名）；勾选仅限「文件级修改点 / 验收标准」两节，Review Checklist 归 Claude，不要勾。
 3. 交接记录表须追加你自己的执行轮次（轮次 / Codex（执行）/ 结果 / 遗留问题），不要修改已有轮次。
 4. 不要 commit——review 通过后由 Claude 决定 commit 时机。
 </prereqs>
@@ -96,4 +100,4 @@ npm run build：<通过 / 失败+关键错误>
 将生成的 prompt 用代码块包裹输出，方便用户复制。
 
 输出后告知用户：
-「**下一步**：将上面的 prompt 复制到桌面端 Codex，执行完后告诉我"跑完了"。我会用 `git diff` 审查产出，按 P0~P3 分级记录到 PLAN.md。」
+「**下一步**：将上面的 prompt 复制到桌面端 Codex，执行完后告诉我"跑完了"。我会用 `git diff` 审查产出，按 P0~P3 分级记录到任务文件。」

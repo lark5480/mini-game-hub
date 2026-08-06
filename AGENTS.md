@@ -93,14 +93,14 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 - 交接物是 git diff：Codex 执行完**不 commit**，只写文件；Claude review 时通过 `git diff` 查看未提交的改动，不全量重读代码；review 通过后由 Codex 一次性 commit。**P0/P1 未清零前禁止 commit**（commit = 验收合格，不是"我写完了"）
 - 严格串行：同一文件严格串行（Claude 和 Codex 不同时改同一文件），不同文件可并行；Claude review 时必须基于已冻结的文件集合
 - 计划必须"可执行"：写清文件路径、修改点、验收标准、review checklist（模板见 [docs/ai-workflow/TEMPLATE.md](./docs/ai-workflow/TEMPLATE.md)）
-- **PLAN.md 使用方式**：路径固定，模板骨架详见 [docs/ai-workflow/TEMPLATE.md](docs/ai-workflow/TEMPLATE.md)；每次新任务只覆盖 TASK_BODY 区，Codex 执行后更新勾选与交接记录，Claude review 结果写入同一文件；任务提交后清空 TASK_BODY 区恢复占位（清空前确认执行/审查轮次已记入交接记录）
-- 每轮交接时，当前 agent 必须更新 PLAN.md 的状态勾选，避免基于过时计划判断
-- 审查依据 = 本文件硬规则 + PLAN.md 验收标准，不凭感觉
-- **分歧兜底**：Claude 对 P0/P1 有最终裁定权；Codex 认为计划有误时，先按原计划执行再在 PLAN.md 记录异议，不擅自跳步
+- **任务文件使用方式**：一任务一文件 `docs/ai-workflow/tasks/<date>-<slug>.md`，创建时从模板骨架 [docs/ai-workflow/TEMPLATE.md](docs/ai-workflow/TEMPLATE.md) 复制初始态；**不清空、不回填**，历史天然归档；当前任务由 `docs/ai-workflow/state.json`（current_task/phase/round）指明；Codex 执行后更新勾选与交接记录，Claude review 结果写入同一文件；任务提交后将 state.json 的 current_task 置 null
+- 每轮交接时，当前 agent 必须更新任务文件的状态勾选，避免基于过时计划判断
+- 审查依据 = 本文件硬规则 + 任务文件验收标准，不凭感觉
+- **分歧兜底**：Claude 对 P0/P1 有最终裁定权；Codex 认为计划有误时，先按原计划执行再在任务文件记录异议，不擅自跳步
 
 ### 任务模式（粗细双模式）
 
-Claude 创建计划时根据任务规模选择模式，在 PLAN.md 顶部声明：
+Claude 创建计划时根据任务规模选择模式，在任务文件顶部声明：
 
 | 维度 | 细模式（micro） | 粗模式（macro） |
 |------|----------------|-----------------|
@@ -125,11 +125,11 @@ Review 结果按严重度分级，Codex 根据级别决定处理方式：
 
 手动传话（codex 插件已卸载，不依赖自动调度）：
 
-1. Claude 写 PLAN.md → 运行 `/codex-plan-exec` 生成执行 prompt → 用户复制到桌面端 Codex
+1. Claude 创建任务文件并更新 state.json → 运行 `/codex-plan-exec` 生成执行 prompt → 用户复制到桌面端 Codex
 2. Codex 执行（跑 `npm run build` 确认零错误，不 commit）→ 告知"跑完了"
 3. Claude `git diff` 审查 → 有 P0/P1 → 用户传修复指令给 Codex → 清零后 Codex commit
 
-`/codex-plan-exec` 会读 PLAN.md 的 TASK_BODY 区，按 gpt-5-4-prompting 约定生成结构化 prompt（含 `<task>` / `<prereqs>` / `<verification_loop>` / `<grounding_rules>`），输出到终端供复制。
+`/codex-plan-exec` 会读 state.json 指明的当前任务文件，按 gpt-5-4-prompting 约定生成结构化 prompt（含 `<task>` / `<prereqs>` / `<verification_loop>` / `<grounding_rules>` / `<delivery_report>`），输出到终端供复制。
 
 ### 终止条件
 
