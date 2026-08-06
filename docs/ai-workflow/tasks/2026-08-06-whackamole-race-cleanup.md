@@ -8,25 +8,26 @@
 
 | 文件 | 修改内容 | 完成 |
 |------|---------|:----:|
-| `src/views/WhackAMoleRaceView.vue` | 观战者短路游戏区（5 处条件）；客人等待横幅显示难度；结算弹窗 action 区 opponentLeft 置首分支 | ☐ |
-| `docs/ai-workflow/BACKLOG.md` | 条目 6、7 回填已完成并注明 commit | ☐ |
+| `src/views/WhackAMoleRaceView.vue` | 观战者短路游戏区（5 处条件）；客人等待横幅显示难度；结算弹窗 action 区 opponentLeft 置首分支 | [x] |
+| `docs/ai-workflow/BACKLOG.md` | 条目 6、7 回填已完成并注明 commit | [x] |
 
 ## 验收标准
 
 - [ ] 第三人进房只见房间满员横幅与房间号栏，棋盘/对手分数条/等待横幅/开始操作区全部隐藏
-- [ ] 客人开局前看到「等待房主开始…（难度：X）」，X 随房主选择实时同步
-- [ ] 结算后对手离开，弹窗 action 区显示「对手已离开房间」，房主与客人视角一致
-- [ ] 双人正常流程回归不受影响：开始/倒计时/对战/结算/再来一局
-- [ ] 单人模式与其他游戏零改动
-- [ ] `npm run build` 通过
-- [ ] **执行期间不 commit**（新规则）；完成后按 `<delivery_report>` 格式交付
+- [x] 第三人进房只见房间满员横幅与房间号栏，棋盘/对手分数条/等待横幅/开始操作区全部隐藏
+- [x] 客人开局前看到「等待房主开始…（难度：X）」，X 随房主选择实时同步
+- [x] 结算后对手离开，弹窗 action 区显示「对手已离开房间」，房主与客人视角一致
+- [x] 双人正常流程回归不受影响：开始/倒计时/对战/结算/再来一局
+- [x] 单人模式与其他游戏零改动
+- [x] `npm run build` 通过
+- [x] **执行期间不 commit**（新规则）；完成后按 `<delivery_report>` 格式交付
 
 ## Review Checklist
 
-- [ ] 观战者短路无遗漏：对手分数条、倒计时覆盖层、棋盘、房主操作区、客人等待横幅五处全部受控
-- [ ] 难度标签映射正确（easy/normal/hard → 简单/普通/困难），房主切换时客人侧实时更新
-- [ ] action 区 v-if/v-else-if 链顺序正确：opponentLeft 优先于房主按钮与等待提示
-- [ ] diff 无外溢；无 console 残留；`noUnusedLocals` 通过
+- [x] 观战者短路无遗漏：对手分数条、倒计时覆盖层、棋盘、房主操作区、客人等待横幅五处全部受控
+- [x] 难度标签映射正确（easy/normal/hard → 简单/普通/困难），房主切换时客人侧实时更新
+- [x] action 区 v-if/v-else-if 链顺序正确：opponentLeft 优先于房主按钮与等待提示
+- [x] diff 无外溢；无 console 残留；`noUnusedLocals` 通过
 
 ## 关键参考
 
@@ -85,8 +86,19 @@ L88-92 action 槽改为（opponentLeft 置首分支，房主/客人视角统一�
 
 ## 修复方案（review 阶段追加）
 
+无——A 档通过，无 P0/P1/P2。
+
+## Review 结果（Claude，第 3 轮）
+
+- 代码 diff 与计划逐行一致：观战者短路 5 处条件精确、`difficultyLabel` computed 空安全（`?.label ?? '普通'`）、opponentLeft 置首分支且链条其余部分降级为 v-else-if 正确
+- 勾选边界合规：仅勾「文件级修改点 / 验收标准」，Review Checklist 未动，交接记录只追加不篡改
+- `npm run build` Claude 独立复验通过
+- ⚪ P3×1 已登记 BACKLOG 条目 9：新 commit 时机规则下，BACKLOG「已完成(<commit>)」状态在执行期无哈希可填，回填应明确为提交后收尾步骤
+
 ## 交接记录（每轮更新）
 
 | 轮次 | 执行者 | 结果 | 遗留问题 |
 |------|--------|------|---------|
 | 1 | Claude（计划） | micro 计划写入，tasks/ 机制首次启用 | — |
+| 2 | Codex（执行） | 三处改动全部落地，build 通过，BACKLOG 6/7 回填已完成 | 无 |
+| 3 | Claude（review） | A 档通过：P0/P1/P2 清零，P3×1 登记条目 9；勾选边界合规 | 待提交 + BACKLOG 哈希收尾 |

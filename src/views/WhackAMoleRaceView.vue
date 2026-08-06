@@ -29,7 +29,7 @@
       </div>
 
       <!-- 对手实时分数条 -->
-      <div v-if="room.opponentPresent.value || room.opponentLeft.value" class="opponent-bar">
+      <div v-if="(room.opponentPresent.value || room.opponentLeft.value) && !room.amSpectator.value" class="opponent-bar">
         <span class="opp-label">对手</span>
         <span class="opp-score">{{ room.opponentScore.value }}</span>
         <span class="opp-divider">|</span>
@@ -38,12 +38,13 @@
       </div>
 
       <!-- 倒计时覆盖层 -->
-      <div v-if="countdown !== null" class="countdown-overlay">
+      <div v-if="countdown !== null && !room.amSpectator.value" class="countdown-overlay">
         <div class="countdown-num" :key="countdown">{{ countdown === 0 ? '开始!' : countdown }}</div>
       </div>
 
       <!-- 棋盘 -->
       <WhackAMoleBoard
+        v-if="!room.amSpectator.value"
         ref="boardRef"
         :difficulty="room.difficulty.value"
         @score="onScore"
@@ -52,7 +53,7 @@
       />
 
       <!-- 房主操作区：选难度 + 开始 -->
-      <div v-if="room.isHost.value && phase === 'idle'" class="host-controls">
+      <div v-if="room.isHost.value && phase === 'idle' && !room.amSpectator.value" class="host-controls">
         <div class="difficulty-buttons">
           <button
             v-for="d in difficulties"
@@ -71,8 +72,8 @@
           {{ room.opponentPresent.value ? '开始游戏' : '等待对手…' }}
         </button>
       </div>
-      <div v-else-if="phase === 'idle' && !room.isHost.value" class="banner banner-wait">
-        等待房主开始…
+      <div v-else-if="phase === 'idle' && !room.isHost.value && !room.amSpectator.value" class="banner banner-wait">
+        等待房主开始…（难度：{{ difficultyLabel }}）
       </div>
     </template>
   </div>
@@ -86,7 +87,8 @@
     :message="settleMessage"
   >
     <template #action>
-      <button v-if="room.isHost.value && !playAgainWaiting" class="dialog-btn" @click="onPlayAgain">再来一局</button>
+      <span v-if="room.opponentLeft.value" class="wait-hint">对手已离开房间</span>
+      <button v-else-if="room.isHost.value && !playAgainWaiting" class="dialog-btn" @click="onPlayAgain">再来一局</button>
       <span v-else-if="playAgainWaiting" class="wait-hint">等待对方确认…</span>
       <span v-else-if="!room.isHost.value && !playAgainConfirm" class="wait-hint">等待房主开始下一局…</span>
     </template>
@@ -187,6 +189,8 @@ const settleMessage = computed(() => {
   if (r.outcome === 'opponent-left') return `本局对手中途离开。你的得分 ${r.me}。`
   return `你的得分 ${r.me} · 对手得分 ${r.opponent}`
 })
+
+const difficultyLabel = computed(() => difficulties.find(d => d.name === room.difficulty.value)?.label ?? '普通')
 
 function onSelectDifficulty(name: string) {
   if (phase.value !== 'idle') return
