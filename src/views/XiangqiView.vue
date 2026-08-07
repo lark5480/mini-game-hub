@@ -1,5 +1,5 @@
 <template>
-  <GameLayout
+<GameLayout
     :title="layoutTitle"
     :accentColor="layoutAccent"
     :gradientEnd="layoutGradient"
@@ -24,6 +24,10 @@
           <span class="mode-name">联机对战</span>
           <span class="mode-desc">分享房间号实时对战</span>
         </button>
+        <button class="mode-card" @click="startAI">
+          <span class="mode-name">单人挑战 AI</span>
+          <span class="mode-desc">与电脑对战</span>
+        </button>
       </div>
       <p class="mode-tip">联机需配置 Supabase（见 .env.example）；未配置会提示。</p>
     </div>
@@ -42,6 +46,7 @@
           :legalTargets="legalTargets"
           :interactive="!gameOver && !isCheckmate"
           :lastMove="lastMove"
+          :check-side="checkSide"
           @tap="handleTap"
         />
 
@@ -84,11 +89,79 @@
       <ResumePrompt :visible="paused" @continue="continueGame" @new-game="newGame" />
     </template>
 
+    <!-- 人机模式 -->
+    <template v-else-if="mode === 'ai'">
+      <div class="game-container">
+        <div class="ai-settings" v-if="!gameStarted">
+          <span class="ai-label">难度</span>
+          <button class="diff-btn" :class="{ active: difficulty === 'easy' }" @click="difficulty = 'easy'">简单</button>
+          <button class="diff-btn" :class="{ active: difficulty === 'hard' }" @click="difficulty = 'hard'">困难</button>
+          <span class="ai-divider">|</span>
+          <span class="ai-label">执子</span>
+          <button class="diff-btn" :class="{ active: aiSide === 'black' }" @click="aiSide = 'black'">我执红（先手）</button>
+          <button class="diff-btn" :class="{ active: aiSide === 'red' }" @click="aiSide = 'red'">我执黑（后手）</button>
+          <button class="start-ai-btn" @click="startAIGame">开始对局</button>
+        </div>
+
+        <div class="turn-indicator" :class="{ 'red-turn': currentSide === 'red', 'black-turn': currentSide === 'black' }">
+          <span class="turn-dot" :class="{ red: currentSide === 'red', black: currentSide === 'black' }"></span>
+          {{ turnLabel }}
+        </div>
+
+        <XiangqiBoard
+          :board="board"
+          :selected="selected"
+          :legalTargets="legalTargets"
+          :interactive="!gameOver && !isCheckmate && !(mode === 'ai' && (aiThinking || currentSide === aiSide))"
+          :lastMove="lastMove"
+          :check-side="checkSide"
+          @tap="handleTap"
+        />
+
+        <div class="controls-row">
+          <button class="ctrl-btn" :disabled="history.length === 0 || gameOver || aiThinking" @click="undoMove">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 10h10a5 5 0 0 1 0 10H9"/>
+              <path d="M7 14l-4-4 4-4"/>
+            </svg>
+            悔棋
+          </button>
+          <button class="ctrl-btn" :disabled="gameOver || aiThinking" @click="surrender">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+              <path d="M2 17l10 5 10-5"/>
+              <path d="M2 12l10 5 10-5"/>
+            </svg>
+            认输
+          </button>
+        </div>
+
+        <div class="move-count">
+          <span class="count-label">步数</span>
+          <span class="count-value">{{ moveCount }}</span>
+        </div>
+      </div>
+
+      <GameDialog
+        v-model:visible="gameOverDialog"
+        accentColor="#FF4D4D"
+        :icon="resultIcon"
+        :title="resultTitle"
+        :message="resultMessage"
+      >
+        <template #action>
+          <button class="dialog-btn" @click="resetGame">再来一局</button>
+        </template>
+      </GameDialog>
+
+      <ResumePrompt :visible="paused" @continue="continueGame" @new-game="newGame" />
+    </template>
+
     <!-- 联机模式 -->
     <XiangqiOnlineView v-else ref="onlineRef" />
 
     <template #controls>
-      <button v-if="mode === 'local' && !gameOver" class="submit-score-btn" @click="resetGame">重新开始</button>
+      <button v-if="(mode === 'local' || mode === 'ai') && !gameOver && !aiThinking" class="submit-score-btn" @click="resetGame">重新开始</button>
     </template>
   </GameLayout>
   <PauseOverlay :visible="paused" @resume="continueGame" />
@@ -111,8 +184,11 @@ import XiangqiOnlineView from '@/views/XiangqiOnlineView.vue'
 import type { Board, Position, Move, Side } from '@/engine/xiangqi/types'
 import { cloneBoard } from '@/engine/xiangqi/types'
 import { initialBoard, generateMoves, applyMove, isInCheck, getGameStatus, classifyMove, isPinned } from '@/engine/xiangqi/rules'
+import { findBestMove } from '@/engine/xiangqi/ai'
 
-type GameMode = 'local' | 'online'
+type GameMode = 'local' | 'online' | 'ai'
+type AISide = 'red' | 'black'
+type Difficulty = 'easy' | 'hard'
 type GameResult = 'red-win' | 'black-win' | 'draw' | null
 
 const router = useRouter()
@@ -123,6 +199,11 @@ const mode = ref<GameMode | null>(
   (typeof route.query.room === 'string' && ROOM_RE.test(route.query.room)) ? 'online' : null
 )
 const onlineRef = ref<InstanceType<typeof XiangqiOnlineView> | null>(null)
+
+const aiSide = ref<AISide>('black')
+const difficulty = ref<Difficulty>('hard')
+const aiThinking = ref(false)
+const gameStarted = ref(false)
 
 const sound = useSound()
 const haptics = useHaptics()
@@ -143,7 +224,7 @@ const gameOverDialog = ref(false)
 const isCheckmate = ref(false)
 
 const { paused, resume: resumeGame } = useGamePause({
-  canPause: () => mode.value !== 'online' && !gameOver.value && result.value === null,
+  canPause: () => mode.value !== 'online' && mode.value !== 'ai' && !gameOver.value && result.value === null,
 })
 
 // ---- 模式相关 UI ----
@@ -154,17 +235,21 @@ const layoutEntrance = computed(() => mode.value === 'online' ? 'xq-online' : 'x
 const layoutHints = computed(() => {
   if (mode.value === 'local') return ['红先黑后，一人一步', '点选棋子再点落点']
   if (mode.value === 'online') return ['分享房间号给好友', '实时同步对战']
+  if (mode.value === 'ai') return ['挑战电脑玩家', '简单/困难两档难度']
   return ['选择对战模式开始']
 })
 const layoutInfoItems = computed(() => {
   if (mode.value === 'local') return [{ label: '步数', value: moveCount.value }]
   if (mode.value === 'online') return [{ label: '模式', value: '联机对战' }]
+  if (mode.value === 'ai') return [{ label: '难度', value: difficulty.value === 'easy' ? '简单' : '困难' }, { label: 'AI', value: aiSide.value === 'red' ? 'AI 先手' : '你先手' }]
   return [{ label: '模式', value: '选择中' }]
 })
 const layoutTutorial = computed(() =>
   mode.value === 'online'
     ? '和好友实时对战：分享房间号，两人各执红/黑，先将死对方将/帅者获胜。'
-    : '经典中国象棋：红先黑后，一人一步，将死对方将/帅者获胜。'
+    : mode.value === 'ai'
+      ? '挑战电脑 AI：选择难度和执子，击败 AI 获得胜利。'
+      : '经典中国象棋：红先黑后，一人一步，将死对方将/帅者获胜。'
 )
 
 const turnLabel = computed(() => {
@@ -173,7 +258,17 @@ const turnLabel = computed(() => {
     if (result.value === 'black-win') return '黑方获胜！'
     return '和棋'
   }
+  if (mode.value === 'ai' && aiThinking.value) return 'AI 思考中...'
+  if (mode.value === 'ai') {
+    return currentSide.value === aiSide.value ? 'AI 回合' : '你的回合'
+  }
   return currentSide.value === 'red' ? '红方走子' : '黑方走子'
+})
+
+const checkSide = computed(() => {
+  if (gameOver.value) return null
+  if (isInCheck(board.value, currentSide.value)) return currentSide.value
+  return null
 })
 
 const resultTitle = computed(() => {
@@ -195,6 +290,26 @@ const resultIcon = computed<'success' | 'fail' | 'info'>(() => {
 // ---- 交互逻辑 ----
 // 送将提示节流：2 秒内不重复弹，避免连点刷屏
 let lastExposeTipAt = 0
+
+// ---- AI 走子调度 ----
+let aiTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleAIMove() {
+  if (mode.value !== 'ai') return
+  if (gameOver.value) return
+  if (currentSide.value === aiSide.value) {
+    aiThinking.value = true
+    aiTimer = setTimeout(() => {
+      const depth = difficulty.value === 'easy' ? 2 : 3
+      const move = findBestMove(board.value, aiSide.value, depth)
+      aiThinking.value = false
+      if (move) {
+        executeMove(move.from, move.to)
+      }
+    }, 400)
+  }
+}
+
 function showExposeTip(message: string) {
   const now = Date.now()
   if (now - lastExposeTipAt < 2000) return
@@ -216,7 +331,8 @@ function showCheckAlert() {
 }
 
 function handleTap(pos: Position) {
-  if (gameOver.value || mode.value !== 'local') return
+  if (gameOver.value || (mode.value !== 'local' && mode.value !== 'ai')) return
+  if (mode.value === 'ai' && (aiThinking.value || currentSide.value === aiSide.value)) return
 
   const piece = board.value[pos.row][pos.col]
 
@@ -300,6 +416,8 @@ function executeMove(from: Position, to: Position) {
 
   // 检查游戏状态
   checkGameState()
+  // 人机模式：轮到 AI 时自动走子
+  scheduleAIMove()
 }
 
 function checkGameState() {
@@ -340,12 +458,18 @@ function checkGameState() {
 
 function undoMove() {
   if (history.value.length === 0 || gameOver.value) return
-  const prev = history.value.pop()!
-  board.value = prev.board
-  currentSide.value = prev.side
-  lastMove.value = prev.lastMove
-  moveCount.value = Math.max(0, moveCount.value - 1)
+  // 人机模式：撤销 AI 一步 + 玩家一步，确保回到玩家回合
+  const stepsToUndo = mode.value === 'ai' ? 2 : 1
+  for (let i = 0; i < stepsToUndo && history.value.length > 0; i++) {
+    const prev = history.value.pop()!
+    board.value = prev.board
+    currentSide.value = prev.side
+    lastMove.value = prev.lastMove
+    moveCount.value = Math.max(0, moveCount.value - 1)
+  }
   clearSelection()
+  aiThinking.value = false
+  if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
   sound.select()
   haptics.light()
 }
@@ -354,12 +478,18 @@ function surrender() {
   if (gameOver.value) return
   gameOver.value = true
   result.value = currentSide.value === 'red' ? 'black-win' : 'red-win'
+  // 清理 AI 定时器，防止认输后 AI 继续走子
+  if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
+  aiThinking.value = false
   sound.miss()
   haptics.error()
   gameOverDialog.value = true
 }
 
 function resetGame() {
+  if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
+  aiThinking.value = false
+  gameStarted.value = true
   gameRecord.value = { moves: [], sides: [] }
   gameOverDialog.value = false
   board.value = initialBoard()
@@ -396,8 +526,23 @@ function startOnline() {
   mode.value = 'online'
 }
 
+function startAI() {
+  mode.value = 'ai'
+  resetGame()
+  gameStarted.value = false
+}
+
+function startAIGame() {
+  gameStarted.value = true
+  resetGame()
+  // 如果 AI 执红，首步由 AI 走
+  if (aiSide.value === 'red') {
+    scheduleAIMove()
+  }
+}
+
 function onRestart() {
-  if (mode.value === 'local') resetGame()
+  if (mode.value === 'local' || mode.value === 'ai') resetGame()
   else if (mode.value === 'online') onlineRef.value?.resetBoard(true)
 }
 </script>
@@ -410,6 +555,7 @@ function onRestart() {
   gap: 16px;
   padding: 40px 20px;
 }
+
 .mode-title {
   font-size: 2em;
   font-weight: 700;
@@ -583,10 +729,77 @@ function onRestart() {
     font-size: 0.85em;
   }
 }
+
+.ai-settings {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 16px 20px;
+  background: rgba(255, 77, 77, 0.06);
+  border: 1px solid rgba(255, 77, 77, 0.2);
+  border-radius: 14px;
+  margin-bottom: 8px;
+}
+.ai-label {
+  font-size: 0.9em;
+  color: #9aa0b5;
+}
+.ai-divider {
+  color: #4a4f5c;
+  font-size: 0.85em;
+}
+.diff-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #ccc;
+  padding: 7px 14px;
+  border-radius: 10px;
+  font-size: 0.85em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.diff-btn:hover {
+  background: rgba(255, 77, 77, 0.12);
+  border-color: rgba(255, 77, 77, 0.4);
+}
+.diff-btn.active {
+  background: rgba(255, 77, 77, 0.2);
+  border-color: #FF4D4D;
+  color: #fff;
+  box-shadow: 0 0 10px rgba(255, 77, 77, 0.3);
+}
+.start-ai-btn {
+  background: linear-gradient(135deg, #FF4D4D, #FF6B6B);
+  color: #fff;
+  border: none;
+  padding: 9px 22px;
+  font-size: 0.95em;
+  font-weight: 600;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: 4px;
+}
+.start-ai-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(255, 77, 77, 0.4);
+}
+
+@media (max-width: 640px) {
+  .ai-settings {
+    gap: 6px;
+    padding: 12px 14px;
+  }
+  .diff-btn {
+    padding: 6px 10px;
+    font-size: 0.8em;
+  }
+  .start-ai-btn {
+    padding: 7px 16px;
+    font-size: 0.85em;
+  }
+}
 </style>
-
-
-
-
-
 

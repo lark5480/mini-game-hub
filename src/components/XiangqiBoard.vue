@@ -11,7 +11,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
-import { Board, Position, Move, ROWS, COLS, indexFromOffset, flipIndex } from '@/engine/xiangqi/types'
+import { Board, Position, Move, Side, ROWS, COLS, indexFromOffset, flipIndex } from '@/engine/xiangqi/types'
 
 const props = withDefaults(defineProps<{
   board: Board
@@ -20,8 +20,10 @@ const props = withDefaults(defineProps<{
   interactive: boolean
   lastMove: Move | null
   flipped?: boolean
+  checkSide?: Side | null
 }>(), {
-  flipped: false
+  flipped: false,
+  checkSide: null
 })
 
 const emit = defineEmits<{
@@ -36,6 +38,9 @@ let cellSize = 0
 let padding = 0
 let canvasWidth = 0
 let canvasHeight = 0
+
+// 将军呼吸环：红色光环 opacity 循环（0.3→0.8），周期 1.5s
+let checkPulseLastTime = 0
 
 // 同一次点击 touchstart 后可能再派发合成 click，双触发会把「选子+走子」变成
 // 「走子+重新选子/取消选择」→ 联机下表现为走子未生效/回合错乱；500ms 内去重
@@ -245,6 +250,32 @@ function getPieceLabel(type: string, side: string): string {
   return side === 'red' ? redLabels[type] : blackLabels[type]
 }
 
+function drawCheckPulse(ctx: CanvasRenderingContext2D, timestamp: number) {
+  if (!props.checkSide) return
+
+  if (checkPulseLastTime === 0) checkPulseLastTime = timestamp
+  const elapsed = timestamp - checkPulseLastTime
+  const phase = (elapsed % 1500) / 1500
+  checkPulseLastTime = timestamp
+
+  const opacity = 0.3 + 0.5 * (0.5 + 0.5 * Math.sin(phase * Math.PI * 2 - Math.PI / 2))
+
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const piece = props.board[r][c]
+      if (piece && piece.type === 'king' && piece.side === props.checkSide) {
+        const { x, y } = getCellCenter(viewRow(r), viewCol(c))
+        const radius = cellSize * 0.48
+        ctx.beginPath()
+        ctx.arc(x, y, radius, 0, Math.PI * 2)
+        ctx.strokeStyle = `rgba(255, 50, 50, ${opacity})`
+        ctx.lineWidth = 4
+        ctx.stroke()
+      }
+    }
+  }
+}
+
 function drawHighlights(ctx: CanvasRenderingContext2D) {
   if (props.lastMove) {
     for (const pos of [props.lastMove.from, props.lastMove.to]) {
@@ -281,6 +312,7 @@ function render() {
   ctx.clearRect(0, 0, canvasWidth, canvasHeight)
   drawBoard(ctx)
   drawHighlights(ctx)
+  drawCheckPulse(ctx, performance.now())
 
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
