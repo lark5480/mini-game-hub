@@ -12,6 +12,7 @@ const GAME_COMPONENTS: Record<string, string> = {
   whackamole:  'WhackAMoleView',
   'tic-tac-toe': 'TicTacToeView',
   'simon':       'SimonView',
+  'xiangqi':     'XiangqiView',
 }
 
 const gameRoutes = GAMES.map(g => ({
@@ -50,3 +51,4 @@ const router = createRouter({
 })
 
 export default router
+

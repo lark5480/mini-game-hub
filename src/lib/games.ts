@@ -27,6 +27,7 @@ export const GAMES: GameMeta[] = [
   { name: 'whackamole',    title: '打地鼠',     desc: '反应力大考验',       color: '#FF7A3D', path: '/whackamole' },
   { name: 'tic-tac-toe',   title: '井字棋',     desc: '单人AI · 双人在线', color: '#FF4DFF', path: '/tic-tac-toe' },
   { name: 'simon',         title: '西蒙记忆灯', desc: '看灯序挑战记忆',     color: '#00CFFF', path: '/simon' },
+  { name: 'xiangqi',        title: '中国象棋',   desc: '本地双人 · 联机',     color: '#FF4D4D', path: '/xiangqi' },
 ]
 
 /** 默认空分数字段（store 初始化） */
