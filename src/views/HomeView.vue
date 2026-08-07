@@ -108,6 +108,23 @@ const SimonIcon = () => [
   h('path', { d: 'M21 12a9 9 0 0 1-9 9v-9z', fill: '#00CFFF' }),
   h('circle', { cx: '12', cy: '12', r: '3', fill: '#0D0D1A' })
 ]
+// 象棋：九宫 + 棋子（帥/將）
+const XiangqiIcon = () => [
+  // 九宫外框
+  h('rect', { x: '3', y: '3', width: '18', height: '18', rx: '1', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.2' }),
+  // 九宫交叉线（帅对角）
+  h('line', { x1: '9', y1: '3', x2: '15', y2: '9', stroke: 'currentColor', 'stroke-width': '0.8' }),
+  h('line', { x1: '15', y1: '3', x2: '9', y2: '9', stroke: 'currentColor', 'stroke-width': '0.8' }),
+  // 九宫交叉线（将对角）
+  h('line', { x1: '9', y1: '15', x2: '15', y2: '21', stroke: 'currentColor', 'stroke-width': '0.8' }),
+  h('line', { x1: '15', y1: '15', x2: '9', y2: '21', stroke: 'currentColor', 'stroke-width': '0.8' }),
+  // 红帅（上九宫）
+  h('circle', { cx: '12', cy: '6', r: '2.2', fill: '#c0392b', stroke: '#c0392b', 'stroke-width': '0.5' }),
+  // 黑将（下九宫）
+  h('circle', { cx: '12', cy: '18', r: '2.2', fill: '#2c3e50', stroke: '#2c3e50', 'stroke-width': '0.5' }),
+  // 河界分隔
+  h('line', { x1: '5', y1: '12', x2: '19', y2: '12', stroke: 'currentColor', 'stroke-width': '0.6', 'stroke-dasharray': '2 1.5' })
+]
 const iconMap: Record<string, () => unknown> = {
   sokoban: BoxIcon,
   link: LinkIcon,
@@ -119,6 +136,7 @@ const iconMap: Record<string, () => unknown> = {
   whackamole: MoleIcon,
   'tic-tac-toe': TicTacToeIcon,
   simon: SimonIcon,
+  xiangqi: XiangqiIcon,
 }
 
 const games = computed(() =>

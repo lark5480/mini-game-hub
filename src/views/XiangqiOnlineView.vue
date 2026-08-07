@@ -24,7 +24,7 @@
         <span class="turn-dot"></span>{{ turnLabel }}
       </div>
       <!-- 黑方玩家视角翻转；观战者默认红方视角，可用「切换视角」按钮翻转 -->
-      <XiangqiBoard :board="board" :selected="selected" :legalTargets="legalTargets" :interactive="myTurn" :lastMove="lastMove" :flipped="amSpectator ? spectFlipped : myRole === 'black'" @tap="handleTap" />
+      <XiangqiBoard :board="board" :selected="selected" :legalTargets="legalTargets" :interactive="myTurn" :lastMove="lastMove" :check-side="checkSide" :flipped="amSpectator ? spectFlipped : myRole === 'black'" @tap="handleTap" />
       <div class="score-row">
         <div class="score-box"><span class="score-label">{{ amSpectator ? '身份' : '我方' }}</span><span class="score-value">{{ myLabel }}</span></div>
       </div>
@@ -136,6 +136,12 @@ const turnLabel = computed(() => {
   if (result.value === 'lose') return '你输了'
   if (result.value) return '和棋'
   return currentTurn.value === myRole.value ? '你的回合' : '对手回合'
+})
+
+const checkSide = computed(() => {
+  if (result.value !== null) return null
+  if (isInCheck(board.value, currentTurn.value)) return currentTurn.value
+  return null
 })
 
 const resultTitle = computed(() => {
