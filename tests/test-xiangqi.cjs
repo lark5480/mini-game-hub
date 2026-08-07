@@ -1,0 +1,821 @@
+/**
+ * 中国象棋规则引擎单元测试
+ * 覆盖：七种棋子走法、全局约束、将死/困毙判定
+ * 每条红线规则 >=2 个专项反例
+ * 运行前需先编译：npx tsc -p tsconfig.xiangqi.json
+ */
+
+const path = require('path')
+const { execSync } = require('child_process')
+
+try {
+  execSync('npx tsc -p tsconfig.xiangqi.json', { cwd: path.join(__dirname, '..'), stdio: 'inherit' })
+} catch (e) {
+  console.error('编译失败，请检查 TypeScript 源码')
+  process.exit(1)
+}
+
+const {
+  initialBoard, generateMoves, isLegalMove, applyMove,
+  isInCheck, getGameStatus, classifyMove, isPinned
+} = require(path.join(__dirname, '.tmp-xiangqi', 'rules'))
+const { indexFromOffset, flipIndex } = require(path.join(__dirname, '.tmp-xiangqi', 'types'))
+
+const ROWS = 10
+const COLS = 9
+
+let total = 0, passed = 0, failed = 0
+const failures = []
+
+function assert(cond, name, detail) {
+  total++
+  if (cond) { passed++; console.log('  PASS: ' + name) }
+  else { failed++; const m = detail ? name + ' -- ' + detail : name; failures.push(m); console.log('  FAIL: ' + m) }
+}
+function assertEq(a, e, n) { assert(a === e, n, 'Expected ' + JSON.stringify(e) + ', Got ' + JSON.stringify(a)) }
+function assertTrue(c, n) { assert(c === true, n) }
+function assertFalse(c, n) { assert(c === false, n) }
+
+function emptyBoard() {
+  return Array.from({ length: ROWS }, () => Array(COLS).fill(null))
+}
+function place(board, row, col, type, side) {
+  board[row][col] = { type, side }
+}
+
+// ============================================================
+// Suite 1: 初始棋盘
+// ============================================================
+console.log('\n=== Suite 1: 初始棋盘 ===')
+{
+  const b = initialBoard()
+  assertEq(b.length, 10, '棋盘 10 行')
+  assertEq(b[0].length, 9, '棋盘 9 列')
+  assertEq(b[0][0].type, 'rook', '黑车 (0,0)')
+  assertEq(b[0][4].type, 'king', '黑将 (0,4)')
+  assertEq(b[0][1].type, 'horse', '黑马 (0,1)')
+  assertEq(b[0][2].type, 'elephant', '黑象 (0,2)')
+  assertEq(b[0][3].type, 'advisor', '黑士 (0,3)')
+  assertEq(b[2][1].type, 'cannon', '黑炮 (2,1)')
+  assertEq(b[3][0].type, 'pawn', '黑卒 (3,0)')
+  assertEq(b[9][0].type, 'rook', '红车 (9,0)')
+  assertEq(b[9][4].type, 'king', '红帅 (9,4)')
+  assertEq(b[7][1].type, 'cannon', '红炮 (7,1)')
+  assertEq(b[6][0].type, 'pawn', '红兵 (6,0)')
+  assertEq(b[0][0].side, 'black', '黑方 side')
+  assertEq(b[9][4].side, 'red', '红方 side')
+}
+
+// ============================================================
+// Suite 2: 将/帅走法（九宫一步直行）
+// ============================================================
+console.log('\n=== Suite 2: 将/帅走法 ===')
+{
+  const b = emptyBoard()
+  place(b, 9, 4, 'king', 'red')
+  assertTrue(isLegalMove(b, { row: 9, col: 4 }, { row: 8, col: 4 }), '红帅上移 (9,4)->(8,4)')
+  assertTrue(isLegalMove(b, { row: 9, col: 4 }, { row: 9, col: 3 }), '红帅左移 (9,4)->(9,3)')
+  assertTrue(isLegalMove(b, { row: 9, col: 4 }, { row: 9, col: 5 }), '红帅右移 (9,4)->(9,5)')
+  assertFalse(isLegalMove(b, { row: 9, col: 4 }, { row: 7, col: 4 }), '红帅不可两步 (9,4)->(7,4)')
+  assertFalse(isLegalMove(b, { row: 9, col: 4 }, { row: 9, col: 2 }), '红帅不可两步 (9,4)->(9,2)')
+}
+{
+  const b = emptyBoard()
+  place(b, 0, 4, 'king', 'black')
+  assertTrue(isLegalMove(b, { row: 0, col: 4 }, { row: 1, col: 4 }), '黑将下移 (0,4)->(1,4)')
+  assertTrue(isLegalMove(b, { row: 0, col: 4 }, { row: 0, col: 3 }), '黑将左移 (0,4)->(0,3)')
+  assertFalse(isLegalMove(b, { row: 0, col: 4 }, { row: 0, col: 4 }), '将不可原地不动')
+}
+{
+  const b = emptyBoard()
+  place(b, 9, 3, 'king', 'red')
+  assertFalse(isLegalMove(b, { row: 9, col: 3 }, { row: 9, col: 2 }), '红帅不可出九宫到 col=2')
+  assertFalse(isLegalMove(b, { row: 9, col: 3 }, { row: 6, col: 3 }), '红帅不可出九宫到 row=6')
+}
+
+// ============================================================
+// Suite 3: 士/仕走法（九宫斜一步）
+// ============================================================
+console.log('\n=== Suite 3: 士/仕走法 ===')
+{
+  const b = emptyBoard()
+  place(b, 9, 4, 'advisor', 'red')
+  assertTrue(isLegalMove(b, { row: 9, col: 4 }, { row: 8, col: 3 }), '红士斜上左 (9,4)->(8,3)')
+  assertTrue(isLegalMove(b, { row: 9, col: 4 }, { row: 8, col: 5 }), '红士斜上右 (9,4)->(8,5)')
+  assertFalse(isLegalMove(b, { row: 9, col: 4 }, { row: 9, col: 3 }), '士不可直行')
+  assertFalse(isLegalMove(b, { row: 9, col: 4 }, { row: 7, col: 2 }), '士不可两步')
+}
+{
+  const b = emptyBoard()
+  place(b, 0, 4, 'advisor', 'black')
+  assertTrue(isLegalMove(b, { row: 0, col: 4 }, { row: 1, col: 3 }), '黑士斜下左 (0,4)->(1,3)')
+  assertTrue(isLegalMove(b, { row: 0, col: 4 }, { row: 1, col: 5 }), '黑士斜下右 (0,4)->(1,5)')
+}
+{
+  const b = emptyBoard()
+  place(b, 9, 3, 'advisor', 'red')
+  assertFalse(isLegalMove(b, { row: 9, col: 3 }, { row: 8, col: 2 }), '红士不可出九宫到 col=2')
+}
+
+// ============================================================
+// Suite 4: 象/相走法（田字+不过河+塞象眼）
+// ============================================================
+console.log('\n=== Suite 4: 象/相走法 ===')
+{
+  const b = emptyBoard()
+  place(b, 9, 2, 'elephant', 'red')
+  assertTrue(isLegalMove(b, { row: 9, col: 2 }, { row: 7, col: 0 }), '红象飞田左上 (9,2)->(7,0)')
+  assertTrue(isLegalMove(b, { row: 9, col: 2 }, { row: 7, col: 4 }), '红象飞田右上 (9,2)->(7,4)')
+  assertFalse(isLegalMove(b, { row: 9, col: 2 }, { row: 5, col: 2 }), '象不可走双田')
+}
+{
+  const b = emptyBoard()
+  place(b, 0, 2, 'elephant', 'black')
+  assertTrue(isLegalMove(b, { row: 0, col: 2 }, { row: 2, col: 0 }), '黑象飞田左下 (0,2)->(2,0)')
+  assertTrue(isLegalMove(b, { row: 0, col: 2 }, { row: 2, col: 4 }), '黑象飞田右下 (0,2)->(2,4)')
+}
+{
+  const b = emptyBoard()
+  place(b, 5, 2, 'elephant', 'red')
+  assertFalse(isLegalMove(b, { row: 5, col: 2 }, { row: 3, col: 0 }), '红象不可过河到 row=3')
+  assertFalse(isLegalMove(b, { row: 5, col: 2 }, { row: 3, col: 4 }), '红象不可过河到 row=3(右)')
+}
+{
+  const b = emptyBoard()
+  place(b, 9, 2, 'elephant', 'red')
+  place(b, 8, 1, 'pawn', 'black')
+  assertFalse(isLegalMove(b, { row: 9, col: 2 }, { row: 7, col: 0 }), '塞象眼反例1：左上有子不可飞 (9,2)->(7,0)')
+  assertTrue(isLegalMove(b, { row: 9, col: 2 }, { row: 7, col: 4 }), '塞象眼：右上无子仍可飞 (9,2)->(7,4)')
+}
+{
+  const b = emptyBoard()
+  place(b, 9, 6, 'elephant', 'red')
+  place(b, 8, 7, 'pawn', 'black')
+  assertFalse(isLegalMove(b, { row: 9, col: 6 }, { row: 7, col: 8 }), '塞象眼反例2：右上有子不可飞 (9,6)->(7,8)')
+}
+
+// ============================================================
+// Suite 5: 马走法（日字+蹩马腿）
+// ============================================================
+console.log('\n=== Suite 5: 马走法 ===')
+{
+  const b = emptyBoard()
+  place(b, 5, 4, 'horse', 'red')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 3, col: 3 }), '马上2左1 (5,4)->(3,3)')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 3, col: 5 }), '马上2右1 (5,4)->(3,5)')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 7, col: 3 }), '马下2左1 (5,4)->(7,3)')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 7, col: 5 }), '马下2右1 (5,4)->(7,5)')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 4, col: 2 }), '马上1左2 (5,4)->(4,2)')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 6, col: 2 }), '马下1左2 (5,4)->(6,2)')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 4, col: 6 }), '马上1右2 (5,4)->(4,6)')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 6, col: 6 }), '马下1右2 (5,4)->(6,6)')
+}
+{
+  const b = emptyBoard()
+  place(b, 5, 4, 'horse', 'red')
+  place(b, 4, 4, 'pawn', 'black')
+  assertFalse(isLegalMove(b, { row: 5, col: 4 }, { row: 3, col: 3 }), '蹩马腿反例1a：正上方有子 (5,4)->(3,3)')
+  assertFalse(isLegalMove(b, { row: 5, col: 4 }, { row: 3, col: 5 }), '蹩马腿反例1b：正上方有子 (5,4)->(3,5)')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 7, col: 3 }), '蹩马腿：下方无子仍可走 (5,4)->(7,3)')
+}
+{
+  const b = emptyBoard()
+  place(b, 5, 4, 'horse', 'red')
+  place(b, 5, 3, 'pawn', 'black')
+  assertFalse(isLegalMove(b, { row: 5, col: 4 }, { row: 4, col: 2 }), '蹩马腿反例2a：正左方有子 (5,4)->(4,2)')
+  assertFalse(isLegalMove(b, { row: 5, col: 4 }, { row: 6, col: 2 }), '蹩马腿反例2b：正左方有子 (5,4)->(6,2)')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 4, col: 6 }), '蹩马腿：右方无子仍可走 (5,4)->(4,6)')
+}
+{
+  const b = emptyBoard()
+  place(b, 5, 4, 'horse', 'red')
+  place(b, 5, 5, 'pawn', 'black')
+  assertFalse(isLegalMove(b, { row: 5, col: 4 }, { row: 4, col: 6 }), '蹩马腿反例3a：正右方有子 (5,4)->(4,6)')
+  assertFalse(isLegalMove(b, { row: 5, col: 4 }, { row: 6, col: 6 }), '蹩马腿反例3b：正右方有子 (5,4)->(6,6)')
+}
+
+// ============================================================
+// Suite 6: 车走法（直线任意格）
+// ============================================================
+console.log('\n=== Suite 6: 车走法 ===')
+{
+  const b = emptyBoard()
+  place(b, 5, 4, 'rook', 'red')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 5, col: 0 }), '车左移到边 (5,4)->(5,0)')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 5, col: 8 }), '车右移到边 (5,4)->(5,8)')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 0, col: 4 }), '车上移到边 (5,4)->(0,4)')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 9, col: 4 }), '车下移到边 (5,4)->(9,4)')
+}
+{
+  const b = emptyBoard()
+  place(b, 5, 4, 'rook', 'red')
+  place(b, 5, 2, 'pawn', 'red')
+  assertFalse(isLegalMove(b, { row: 5, col: 4 }, { row: 5, col: 2 }), '车不能吃己方子')
+}
+{
+  const b = emptyBoard()
+  place(b, 5, 4, 'rook', 'red')
+  place(b, 5, 2, 'pawn', 'black')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 5, col: 2 }), '车可吃黑卒 (5,4)->(5,2)')
+  assertFalse(isLegalMove(b, { row: 5, col: 4 }, { row: 5, col: 1 }), '车不可穿越黑卒到 (5,1)')
+  assertFalse(isLegalMove(b, { row: 5, col: 4 }, { row: 5, col: 0 }), '车不可穿越黑卒到 (5,0)')
+}
+
+// ============================================================
+// Suite 7: 炮走法（直线移动+隔一子吃子）
+// ============================================================
+console.log('\n=== Suite 7: 炮走法 ===')
+{
+  const b = emptyBoard()
+  place(b, 5, 4, 'cannon', 'red')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 5, col: 0 }), '炮左移 (5,4)->(5,0)')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 5, col: 8 }), '炮右移 (5,4)->(5,8)')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 0, col: 4 }), '炮上移 (5,4)->(0,4)')
+}
+{
+  const b = emptyBoard()
+  place(b, 5, 4, 'cannon', 'red')
+  place(b, 5, 1, 'pawn', 'black')
+  assertFalse(isLegalMove(b, { row: 5, col: 4 }, { row: 5, col: 1 }), '无炮架反例1a：隔空吃子不合法 (5,4)->(5,1)')
+}
+{
+  const b = emptyBoard()
+  place(b, 5, 4, 'cannon', 'red')
+  place(b, 5, 3, 'pawn', 'red')
+  place(b, 5, 1, 'pawn', 'black')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 5, col: 1 }), '有炮架隔一子吃子合法 (5,4)->(5,1)')
+}
+{
+  const b = emptyBoard()
+  place(b, 5, 4, 'cannon', 'red')
+  place(b, 5, 3, 'pawn', 'red')
+  place(b, 5, 2, 'pawn', 'black')
+  place(b, 5, 0, 'pawn', 'black')
+  assertFalse(isLegalMove(b, { row: 5, col: 4 }, { row: 5, col: 0 }), '无炮架反例2：隔两子不能吃 (5,4)->(5,0)')
+}
+{
+  const b = emptyBoard()
+  place(b, 5, 4, 'cannon', 'red')
+  place(b, 5, 3, 'pawn', 'black')
+  assertFalse(isLegalMove(b, { row: 5, col: 4 }, { row: 5, col: 3 }), '无炮架反例3：紧邻有子无炮架不能吃 (5,4)->(5,3)')
+}
+
+// ============================================================
+// Suite 8: 兵/卒走法（过河前只进+过河后可左右）
+// ============================================================
+console.log('\n=== Suite 8: 兵/卒走法 ===')
+{
+  const b = emptyBoard()
+  place(b, 6, 4, 'pawn', 'red')
+  assertTrue(isLegalMove(b, { row: 6, col: 4 }, { row: 5, col: 4 }), '红兵前进 (6,4)->(5,4)')
+  assertFalse(isLegalMove(b, { row: 6, col: 4 }, { row: 6, col: 3 }), '红兵过河前不可左右 (6,4)->(6,3)')
+  assertFalse(isLegalMove(b, { row: 6, col: 4 }, { row: 6, col: 5 }), '红兵过河前不可左右 (6,4)->(6,5)')
+  assertFalse(isLegalMove(b, { row: 6, col: 4 }, { row: 7, col: 4 }), '红兵不可后退 (6,4)->(7,4)')
+}
+{
+  const b = emptyBoard()
+  place(b, 4, 4, 'pawn', 'red')
+  assertTrue(isLegalMove(b, { row: 4, col: 4 }, { row: 3, col: 4 }), '红兵过河后可前进 (4,4)->(3,4)')
+  assertTrue(isLegalMove(b, { row: 4, col: 4 }, { row: 4, col: 3 }), '红兵过河后可左 (4,4)->(4,3)')
+  assertTrue(isLegalMove(b, { row: 4, col: 4 }, { row: 4, col: 5 }), '红兵过河后可右 (4,4)->(4,5)')
+  assertFalse(isLegalMove(b, { row: 4, col: 4 }, { row: 5, col: 4 }), '红兵不可后退 (4,4)->(5,4)')
+}
+{
+  const b = emptyBoard()
+  place(b, 3, 4, 'pawn', 'black')
+  assertTrue(isLegalMove(b, { row: 3, col: 4 }, { row: 4, col: 4 }), '黑卒前进 (3,4)->(4,4)')
+  assertFalse(isLegalMove(b, { row: 3, col: 4 }, { row: 3, col: 3 }), '黑卒过河前不可左右 (3,4)->(3,3)')
+}
+{
+  const b = emptyBoard()
+  place(b, 5, 4, 'pawn', 'black')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 6, col: 4 }), '黑卒过河后可前进 (5,4)->(6,4)')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 5, col: 3 }), '黑卒过河后可左 (5,4)->(5,3)')
+  assertTrue(isLegalMove(b, { row: 5, col: 4 }, { row: 5, col: 5 }), '黑卒过河后可右 (5,4)->(5,5)')
+}
+
+// ============================================================
+// Suite 9: 将军检测
+// ============================================================
+console.log('\n=== Suite 9: 将军检测 ===')
+{
+  const b = emptyBoard()
+  place(b, 9, 4, 'king', 'red')
+  place(b, 0, 4, 'rook', 'black')
+  assertTrue(isInCheck(b, 'red'), '车同列将军：红帅被黑车将军')
+}
+{
+  const b = emptyBoard()
+  place(b, 9, 4, 'king', 'red')
+  place(b, 7, 4, 'pawn', 'red')
+  place(b, 0, 4, 'cannon', 'black')
+  assertTrue(isInCheck(b, 'red'), '炮隔架将军：红帅被黑炮将军')
+}
+{
+  const b = emptyBoard()
+  place(b, 9, 4, 'king', 'red')
+  place(b, 7, 3, 'horse', 'black')
+  assertTrue(isInCheck(b, 'red'), '马将军：红帅被黑马将军')
+}
+{
+  const b = emptyBoard()
+  place(b, 9, 4, 'king', 'red')
+  place(b, 0, 3, 'rook', 'black')
+  assertFalse(isInCheck(b, 'red'), '无将军：黑车不在同列')
+}
+
+// ============================================================
+// Suite 10: 飞将（将帅对面）
+// ============================================================
+console.log('\n=== Suite 10: 飞将 ===')
+{
+  const b = emptyBoard()
+  place(b, 9, 4, 'king', 'red')
+  place(b, 0, 4, 'king', 'black')
+  assertTrue(isInCheck(b, 'red'), '飞将反例1a：红帅与黑将同列无阻隔')
+  assertTrue(isInCheck(b, 'black'), '飞将反例1b：黑将与红帅同列无阻隔')
+  assertFalse(isLegalMove(b, { row: 9, col: 4 }, { row: 8, col: 4 }), '飞将反例1c：红帅不能移开暴露黑将')
+}
+{
+  const b = emptyBoard()
+  place(b, 9, 4, 'king', 'red')
+  place(b, 5, 4, 'pawn', 'red')
+  place(b, 0, 4, 'king', 'black')
+  assertFalse(isInCheck(b, 'red'), '飞将反例2：有子阻隔不飞将')
+}
+{
+  const b = emptyBoard()
+  place(b, 9, 4, 'king', 'red')
+  place(b, 0, 3, 'king', 'black')
+  assertFalse(isInCheck(b, 'red'), '飞将反例3：将帅不同列不飞将')
+}
+
+// ============================================================
+// Suite 11: 送将（走完后己方将不被攻击）
+// ============================================================
+console.log('\n=== Suite 11: 送将 ===')
+{
+  const b = emptyBoard()
+  place(b, 9, 4, 'king', 'red')
+  place(b, 8, 4, 'advisor', 'red')
+  place(b, 0, 4, 'rook', 'black')
+  assertFalse(isLegalMove(b, { row: 8, col: 4 }, { row: 7, col: 3 }), '送将反例1：士移开暴露红帅给黑车')
+}
+{
+  const b = emptyBoard()
+  place(b, 9, 4, 'king', 'red')
+  place(b, 0, 4, 'rook', 'black')
+  assertFalse(isLegalMove(b, { row: 9, col: 4 }, { row: 8, col: 4 }), '送将反例2：红帅不能走到黑车攻击线上')
+  assertTrue(isLegalMove(b, { row: 9, col: 4 }, { row: 9, col: 3 }), '送将：红帅可以走(9,3)避开')
+}
+
+// ============================================================
+// Suite 12: 将死判定
+// ============================================================
+console.log('\n=== Suite 12: 将死判定 ===')
+{
+  const b = emptyBoard()
+  place(b, 0, 4, 'king', 'black')
+  place(b, 0, 0, 'rook', 'red')
+  place(b, 1, 3, 'rook', 'red')
+  place(b, 1, 5, 'rook', 'red')
+  assertEq(getGameStatus(b, 'black'), 'checkmate', '将死1：双车错杀黑将')
+}
+{
+  const b = emptyBoard()
+  place(b, 0, 4, 'king', 'black')
+  place(b, 2, 3, 'horse', 'red')
+  place(b, 0, 8, 'rook', 'red')
+  place(b, 9, 4, 'rook', 'red')
+  assertEq(getGameStatus(b, 'black'), 'checkmate', '将死2：马+双车杀黑将')
+}
+
+// ============================================================
+// Suite 13: 困毙判定
+// ============================================================
+console.log('\n=== Suite 13: 困毙判定 ===')
+{
+  const b = emptyBoard()
+  place(b, 0, 4, 'king', 'black')
+  place(b, 1, 3, 'rook', 'red')
+  place(b, 1, 5, 'rook', 'red')
+  place(b, 2, 3, 'rook', 'red')
+  place(b, 2, 5, 'rook', 'red')
+  assertEq(getGameStatus(b, 'black'), 'stalemate', '困毙1：黑将被红车围困(无将军)')
+}
+{
+  const b = emptyBoard()
+  place(b, 0, 4, 'king', 'black')
+  place(b, 1, 3, 'rook', 'red')
+  place(b, 1, 5, 'rook', 'red')
+  place(b, 2, 3, 'rook', 'red')
+  place(b, 2, 5, 'rook', 'red')
+  place(b, 0, 0, 'advisor', 'black')
+  place(b, 0, 8, 'advisor', 'black')
+  assertEq(getGameStatus(b, 'black'), 'stalemate', '困毙2：黑将被红车围困(士堵位)')
+}
+
+// ============================================================
+// Suite 14: applyMove 纯函数
+// ============================================================
+console.log('\n=== Suite 14: applyMove 纯函数 ===')
+{
+  const b = emptyBoard()
+  place(b, 5, 4, 'rook', 'red')
+  const newBoard = applyMove(b, { from: { row: 5, col: 4 }, to: { row: 5, col: 0 } })
+  assertEq(b[5][4].type, 'rook', '原棋盘不变：起点仍有车')
+  assertEq(newBoard[5][4], null, '新棋盘起点为空')
+  assertEq(newBoard[5][0].type, 'rook', '新棋盘终点有车')
+}
+
+// ============================================================
+// Suite 15: 游戏状态 playing
+// ============================================================
+console.log('\n=== Suite 15: 游戏状态 playing ===')
+{
+  const b = initialBoard()
+  assertEq(getGameStatus(b, 'red'), 'playing', '初始局面红方 playing')
+}
+
+// ============================================================
+// Suite 16: 游戏状态 check
+// ============================================================
+console.log('\n=== Suite 16: 游戏状态 check ===')
+{
+  const b = emptyBoard()
+  place(b, 9, 4, 'king', 'red')
+  place(b, 0, 4, 'rook', 'black')
+  place(b, 0, 0, 'king', 'black')
+  assertEq(getGameStatus(b, 'red'), 'check', '红方被将军状态为 check')
+}
+
+// ============================================================
+// Suite 17: 吃子与 captured 字段
+// ============================================================
+console.log('\n=== Suite 17: 吃子 captured ===')
+{
+  const b = emptyBoard()
+  place(b, 5, 4, 'rook', 'red')
+  place(b, 5, 1, 'pawn', 'black')
+  const moves = generateMoves(b, 'red')
+  const captureMove = moves.find(m => m.to.row === 5 && m.to.col === 1)
+  assertTrue(!!captureMove, '存在吃子走法')
+  assertEq(captureMove.captured.type, 'pawn', 'captured 记录被吃的卒')
+  assertEq(captureMove.captured.side, 'black', 'captured 记录黑方')
+}
+
+// ============================================================
+// Suite 18: 边界检查
+// ============================================================
+console.log('\n=== Suite 18: 边界检查 ===')
+{
+  const b = emptyBoard()
+  place(b, 0, 0, 'horse', 'black')
+  assertTrue(isLegalMove(b, { row: 0, col: 0 }, { row: 2, col: 1 }), '马在 (0,0) 可走 (2,1)')
+  assertTrue(isLegalMove(b, { row: 0, col: 0 }, { row: 1, col: 2 }), '马在 (0,0) 可走 (1,2)')
+  assertFalse(isLegalMove(b, { row: 0, col: 0 }, { row: 2, col: -1 }), '马不可越界到 col=-1')
+}
+
+// ============================================================
+// Suite 19: 初始局面走法数量
+// ============================================================
+console.log('\n=== Suite 19: 初始局面走法数量 ===')
+{
+  const b = initialBoard()
+  const moves = generateMoves(b, 'red')
+  assertEq(moves.length, 44, '红方开局 44 种走法')
+}
+
+// ============================================================
+// Suite 20: 整盘对弈（脚本化名局，红黑交替）
+// 由规则引擎自对弈生成并冻结的合法序列（偏进攻启发式），覆盖开局→中局。
+// 每手断言合法 + 双帅始终在场 + 无飞将违例；终局状态合法性断言。
+// 注：弱 AI 自对弈不保证将死，故仅断言「整盘走子全程合法且局面始终有效」；
+//     将死/困毙终局判定由 Suite 12 / Suite 13 覆盖。
+// ============================================================
+console.log('\n=== Suite 20: 整盘对弈（红黑交替走子）===')
+{
+  // 冻结的脚本化对局：坐标 row/col，row0=黑底线 / row9=红底线，红先走
+  const GAME = [
+    { from: { row: 7, col: 1 }, to: { row: 0, col: 1 }, captured: { type: 'horse', side: 'black' } },
+    { from: { row: 2, col: 7 }, to: { row: 9, col: 7 }, captured: { type: 'horse', side: 'red' } },
+    { from: { row: 9, col: 8 }, to: { row: 9, col: 7 }, captured: { type: 'cannon', side: 'black' } },
+    { from: { row: 0, col: 0 }, to: { row: 0, col: 1 }, captured: { type: 'cannon', side: 'red' } },
+    { from: { row: 7, col: 7 }, to: { row: 1, col: 7 } },
+    { from: { row: 2, col: 1 }, to: { row: 2, col: 7 } },
+    { from: { row: 9, col: 7 }, to: { row: 2, col: 7 }, captured: { type: 'cannon', side: 'black' } },
+    { from: { row: 0, col: 1 }, to: { row: 9, col: 1 }, captured: { type: 'horse', side: 'red' } },
+    { from: { row: 2, col: 7 }, to: { row: 2, col: 4 } },
+    { from: { row: 0, col: 2 }, to: { row: 2, col: 4 }, captured: { type: 'rook', side: 'red' } },
+    { from: { row: 9, col: 0 }, to: { row: 9, col: 1 }, captured: { type: 'rook', side: 'black' } },
+    { from: { row: 0, col: 3 }, to: { row: 1, col: 4 } },
+    { from: { row: 9, col: 1 }, to: { row: 0, col: 1 } },
+    { from: { row: 2, col: 4 }, to: { row: 0, col: 2 } },
+    { from: { row: 0, col: 1 }, to: { row: 0, col: 2 }, captured: { type: 'elephant', side: 'black' } },
+    { from: { row: 1, col: 4 }, to: { row: 0, col: 3 } },
+    { from: { row: 0, col: 2 }, to: { row: 0, col: 3 }, captured: { type: 'advisor', side: 'black' } },
+    { from: { row: 0, col: 4 }, to: { row: 0, col: 3 }, captured: { type: 'rook', side: 'red' } },
+    { from: { row: 6, col: 0 }, to: { row: 5, col: 0 } },
+    { from: { row: 0, col: 5 }, to: { row: 1, col: 4 } },
+    { from: { row: 5, col: 0 }, to: { row: 4, col: 0 } },
+    { from: { row: 3, col: 0 }, to: { row: 4, col: 0 }, captured: { type: 'pawn', side: 'red' } },
+    { from: { row: 6, col: 2 }, to: { row: 5, col: 2 } },
+    { from: { row: 0, col: 8 }, to: { row: 1, col: 8 } },
+    { from: { row: 5, col: 2 }, to: { row: 4, col: 2 } },
+    { from: { row: 1, col: 8 }, to: { row: 1, col: 7 }, captured: { type: 'cannon', side: 'red' } },
+    { from: { row: 4, col: 2 }, to: { row: 3, col: 2 }, captured: { type: 'pawn', side: 'black' } },
+    { from: { row: 1, col: 7 }, to: { row: 8, col: 7 } },
+    { from: { row: 9, col: 3 }, to: { row: 8, col: 4 } },
+    { from: { row: 8, col: 7 }, to: { row: 8, col: 4 }, captured: { type: 'advisor', side: 'red' } },
+    { from: { row: 9, col: 4 }, to: { row: 8, col: 4 }, captured: { type: 'rook', side: 'black' } },
+    { from: { row: 0, col: 3 }, to: { row: 1, col: 3 } },
+    { from: { row: 3, col: 2 }, to: { row: 2, col: 2 } },
+    { from: { row: 0, col: 6 }, to: { row: 2, col: 8 } },
+    { from: { row: 2, col: 2 }, to: { row: 1, col: 2 } },
+    { from: { row: 1, col: 3 }, to: { row: 2, col: 3 } },
+    { from: { row: 6, col: 4 }, to: { row: 5, col: 4 } },
+    { from: { row: 0, col: 7 }, to: { row: 2, col: 6 } },
+    { from: { row: 5, col: 4 }, to: { row: 4, col: 4 } },
+    { from: { row: 3, col: 4 }, to: { row: 4, col: 4 }, captured: { type: 'pawn', side: 'red' } },
+    { from: { row: 6, col: 6 }, to: { row: 5, col: 6 } },
+    { from: { row: 1, col: 4 }, to: { row: 2, col: 5 } },
+    { from: { row: 5, col: 6 }, to: { row: 4, col: 6 } },
+    { from: { row: 2, col: 8 }, to: { row: 4, col: 6 }, captured: { type: 'pawn', side: 'red' } },
+    { from: { row: 6, col: 8 }, to: { row: 5, col: 8 } },
+    { from: { row: 2, col: 5 }, to: { row: 1, col: 4 } },
+    { from: { row: 5, col: 8 }, to: { row: 4, col: 8 } },
+    { from: { row: 3, col: 8 }, to: { row: 4, col: 8 }, captured: { type: 'pawn', side: 'red' } }
+  ]
+
+  const b0 = initialBoard()
+  let board = b0
+  let side = 'red'
+  let ply = 0
+  let redMoves = 0
+  let blackMoves = 0
+
+  for (const mv of GAME) {
+    const tag = '第' + (ply + 1) + '手(' + side + ')'
+    assertTrue(isLegalMove(board, mv.from, mv.to), tag + ' 合法')
+    board = applyMove(board, mv)
+
+    // 双帅始终在场
+    let redKing = false
+    let blackKing = false
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const p = board[r][c]
+        if (p && p.type === 'king' && p.side === 'red') redKing = true
+        if (p && p.type === 'king' && p.side === 'black') blackKing = true
+      }
+    }
+    assertTrue(redKing && blackKing, tag + ' 后双帅仍在场')
+
+    if (side === 'red') redMoves++
+    else blackMoves++
+
+    side = side === 'red' ? 'black' : 'red'
+    ply++
+  }
+
+  // 整盘级断言
+  assert(ply >= 40, '对局长度达到偏真实对局长度 (>=40 手, 实际 ' + ply + ' 手)')
+  assertEq(redMoves, blackMoves, '红黑走子数严格相等（交替）')
+  const finalStatus = getGameStatus(board, side)
+  assertTrue(
+    ['playing', 'check', 'checkmate', 'stalemate'].includes(finalStatus),
+    '终局状态合法: ' + finalStatus + '，红' + redMoves + '手/黑' + blackMoves + '手'
+  )
+}
+
+// ============================================================
+// Suite 21: 强制将死（短杀序列）—— 红车+帅 vs 黑单将
+// 由求解器生成（连续叫将剪枝 + 迭代加深），引擎实测终局为 checkmate。
+// 红先走，红3手/黑2手，第5手将死。红车两次叫将 + 红帅一步锁飞将线做杀网。
+// 验证：每手合法 + 红黑严格交替 + 终局将死。
+// ============================================================
+{
+  console.log('\n[Suite 21] 强制将死（短杀序列）')
+
+  const b = emptyBoard()
+  place(b, 9, 3, 'king', 'red')    // 红帅
+  place(b, 6, 0, 'rook', 'red')    // 红车
+  place(b, 0, 4, 'king', 'black')  // 黑将
+
+  const MATE = [
+    { from: { row: 6, col: 0 }, to: { row: 6, col: 4 } }, // 红车第4列叫将
+    { from: { row: 0, col: 4 }, to: { row: 0, col: 5 } }, // 黑将避至 (0,5)
+    { from: { row: 9, col: 3 }, to: { row: 9, col: 4 } }, // 红帅占第4列，锁飞将线（静步做杀网）
+    { from: { row: 0, col: 5 }, to: { row: 1, col: 5 } }, // 黑将退至 (1,5)
+    { from: { row: 6, col: 4 }, to: { row: 6, col: 5 } }  // 红车第5列叫将 -> 将死
+  ]
+
+  // 起始局面红先走、未被将
+  assertEq(getGameStatus(b, 'red'), 'playing', '起始：红先走且未被将')
+
+  let board = b
+  let side = 'red'
+  let redCount = 0
+  let blackCount = 0
+  MATE.forEach((mv, i) => {
+    const tag = '第' + (i + 1) + '手(' + side + ')'
+    assertTrue(isLegalMove(board, mv.from, mv.to), tag + ' 合法')
+    board = applyMove(board, mv)
+    if (side === 'red') redCount++
+    else blackCount++
+    side = side === 'red' ? 'black' : 'red'
+  })
+
+  assert(MATE.length >= 2, '短杀序列：手数 >= 2 (实际 ' + MATE.length + ')')
+  assertEq(redCount, 3, '红走 3 手')
+  assertEq(blackCount, 2, '黑走 2 手（严格交替）')
+  assertEq(getGameStatus(board, 'black'), 'checkmate', '终局：黑被将死')
+}
+
+// ============================================================
+// Suite 22: 回归 — 炮隔一子吃中卒 + 回合严格交替
+// 背景：用户报告「炮二平五 → 马八进七 → 炮五进四吃中卒」链路异常
+// （回合错乱 / 吃子未生效），需固化引擎层正确性：
+//   1) 红炮隔红中兵（己方炮架）吃黑中卒合法
+//   2) 吃子后目标点为红炮、黑卒被移除、起点清空
+//   3) 双方走子严格交替，任何一步后对方走子集合不含已走棋子的重复位移
+// ============================================================
+console.log('\n=== Suite 22: 回归 — 炮五进四吃中卒 ===')
+{
+  let b = initialBoard()
+
+  // 第1手（红）：炮二平五 (7,7) -> (7,4)
+  assertTrue(isLegalMove(b, { row: 7, col: 7 }, { row: 7, col: 4 }), '回归1：炮二平五合法')
+  b = applyMove(b, { from: { row: 7, col: 7 }, to: { row: 7, col: 4 } })
+  assertEq(b[7][4].type, 'cannon', '回归1：中炮到位 (7,4)')
+  assertEq(b[7][7], null, '回归1：炮原位移空')
+
+  // 第2手（黑）：马八进七 (0,1) -> (2,2)
+  assertTrue(isLegalMove(b, { row: 0, col: 1 }, { row: 2, col: 2 }), '回归2：马八进七合法')
+  b = applyMove(b, { from: { row: 0, col: 1 }, to: { row: 2, col: 2 } })
+
+  // 第3手（红）：炮五进四，隔红中兵 (6,4) 吃黑中卒 (3,4)
+  assertEq(b[3][4].type, 'pawn', '回归3前置：黑中卒仍在 (3,4)')
+  assertEq(b[3][4].side, 'black', '回归3前置：中卒为黑方')
+  assertTrue(isLegalMove(b, { row: 7, col: 4 }, { row: 3, col: 4 }), '回归3：炮隔己方中兵吃黑中卒合法 (7,4)->(3,4)')
+  const capMoves = generateMoves(b, 'red').filter(m => m.from.row === 7 && m.from.col === 4 && m.to.row === 3 && m.to.col === 4)
+  assertEq(capMoves.length, 1, '回归3：generateMoves 恰含一条该吃子走法')
+  assertEq(capMoves[0].captured.type, 'pawn', '回归3：captured 记录被吃的卒')
+  assertEq(capMoves[0].captured.side, 'black', '回归3：captured 为黑方')
+
+  b = applyMove(b, { from: { row: 7, col: 4 }, to: { row: 3, col: 4 } })
+  assertEq(b[3][4].type, 'cannon', '回归3：吃子后目标点为红炮')
+  assertEq(b[3][4].side, 'red', '回归3：吃子后目标点为红方')
+  assertEq(b[7][4], null, '回归3：炮起点清空')
+  assertEq(getGameStatus(b, 'black'), 'playing', '回归3：吃中卒后黑方 playing（未被将）')
+
+  // 回合归属：轮到黑方时，黑方走子集合不得包含红炮的移动（防「代走/连走」）
+  assertFalse(
+    generateMoves(b, 'black').some(m => m.from.row === 7 && m.from.col === 4),
+    '回归3：黑方走子集合不含红炮位移'
+  )
+  // 对照反例：无炮架不得隔空吃；炮架为对方子同样可吃（炮架不限敌我）
+  const b2 = emptyBoard()
+  place(b2, 9, 4, 'king', 'red')
+  place(b2, 0, 4, 'king', 'black')
+  place(b2, 5, 4, 'cannon', 'red')
+  place(b2, 3, 4, 'pawn', 'black')
+  assertFalse(isLegalMove(b2, { row: 5, col: 4 }, { row: 3, col: 4 }), '回归4：无炮架隔空吃中卒非法')
+  place(b2, 4, 4, 'pawn', 'black')
+  assertTrue(isLegalMove(b2, { row: 5, col: 4 }, { row: 3, col: 4 }), '回归4：炮架为对方子也可吃子')
+}
+
+// ============================================================
+// Suite 23: 回归 — 走子后回合翻转与乱序走子拒绝
+// 背景：联机回合错乱根因之一是走子消息未校验行棋方归属。
+// 引擎层保证：任一方 generateMoves 仅含该方棋子；轮到某方时，
+// 重复应用同一上一步（from 已空）不可能产生合法走法。
+// ============================================================
+console.log('\n=== Suite 23: 回归 — 回合翻转与乱序拒绝 ===')
+{
+  let b = initialBoard()
+  const m1 = { from: { row: 7, col: 7 }, to: { row: 7, col: 4 } }
+  b = applyMove(b, m1) // 红走一步，轮到黑
+
+  // 乱序/重复：同一走法再执行一次，引擎判为非法（起点已空）
+  assertFalse(isLegalMove(b, m1.from, m1.to), '重复同一走法非法（起点已空）')
+  // 黑方不得走红方棋子：全部黑方走法的 from 均为黑子
+  const blackMoves = generateMoves(b, 'black')
+  assertTrue(blackMoves.length > 0, '黑方有合法应招')
+  assertTrue(
+    blackMoves.every(m => b[m.from.row][m.from.col] && b[m.from.row][m.from.col].side === 'black'),
+    '黑方全部走法起点均为黑子'
+  )
+  // 交替两步后回到红方回合，红方走法起点均为红子
+  const mv2 = blackMoves[0]
+  b = applyMove(b, mv2)
+  const redMoves = generateMoves(b, 'red')
+  assertTrue(
+    redMoves.length > 0 && redMoves.every(m => b[m.from.row][m.from.col] && b[m.from.row][m.from.col].side === 'red'),
+    '交替两步后红方全部走法起点均为红子'
+  )
+}
+
+// ============================================================
+// Suite 24: 回归 — 点击坐标→行列映射（命中区以交叉点为中心）
+// 背景：线上出现「必须点棋子下方才选中」的纵向偏移 bug，根因是
+// 映射用了 floor（命中区上偏半格）；round 保证交叉点居中。
+// ============================================================
+console.log('\n=== Suite 24: 回归 — 坐标映射 ===')
+{
+  const pad = 38, cell = 64
+  // 交叉点正中心 → 命中本行
+  assertEq(indexFromOffset(pad + 3 * cell, pad, cell, 10), 3, '中心点命中本行')
+  assertEq(indexFromOffset(pad, pad, cell, 10), 0, '首行交叉点命中')
+  assertEq(indexFromOffset(pad + 9 * cell, pad, cell, 10), 9, '末行交叉点命中')
+  // 交叉点上方半格内（交叉点下方半格内）仍命中本行（round 语义）
+  assertEq(indexFromOffset(pad + 3 * cell + cell * 0.49, pad, cell, 10), 3, '交叉点下方 0.49 格仍命中本行')
+  assertEq(indexFromOffset(pad + 3 * cell - cell * 0.49, pad, cell, 10), 3, '交叉点上方 0.49 格仍命中本行')
+  // 越过半格才到相邻行
+  assertEq(indexFromOffset(pad + 3 * cell + cell * 0.51, pad, cell, 10), 4, '越过半格命中下一行')
+  assertEq(indexFromOffset(pad + 3 * cell - cell * 0.51, pad, cell, 10), 2, '越过半格命中上一行')
+  // 棋盘外：距首行交叉点超过半格（进入上边距深处）不命中
+  assertEq(indexFromOffset(pad - cell * 0.51, pad, cell, 10), null, '首行上方超半格不命中')
+  assertEq(indexFromOffset(pad + 9 * cell + cell * 0.9, pad, cell, 10), null, '超出末行半格外不命中')
+  assertEq(indexFromOffset(-5, pad, cell, 10), null, '负坐标不命中')
+  // 防御：cell<=0 不抛异常
+  assertEq(indexFromOffset(10, pad, 0, 10), null, 'cell=0 安全返回 null')
+}
+
+// ============================================================
+// Suite 25: 送将三态分类 classifyMove + 钉死判定 isPinned
+// 背景：引擎已过滤送将，但玩家不知道为什么不能动；
+// 视图层用 classifyMove 区分「合法/送将拦截/非法」给出提示。
+// ============================================================
+console.log('\n=== Suite 25: 送将三态分类与钉死 ===')
+{
+  // 场景 A：红马被黑车完全钉死（马挡在车与帅之间，任何移动都暴露红帅）
+  const a = emptyBoard()
+  place(a, 9, 4, 'king', 'red')
+  place(a, 0, 3, 'king', 'black')
+  place(a, 0, 4, 'rook', 'black')
+  place(a, 5, 4, 'horse', 'red')
+  assertFalse(isInCheck(a, 'red'), '钉死场景：红方当前未被将（马挡住车线）')
+  assertEq(classifyMove(a, { row: 5, col: 4 }, { row: 3, col: 3 }), 'exposes-general', '钉死马跳 (3,3) 被送将拦截')
+  assertEq(classifyMove(a, { row: 5, col: 4 }, { row: 7, col: 5 }), 'exposes-general', '钉死马跳 (7,5) 被送将拦截')
+  assertFalse(isLegalMove(a, { row: 5, col: 4 }, { row: 3, col: 3 }), '钉死马走法确为非法（与引擎过滤一致）')
+  assertTrue(isPinned(a, { row: 5, col: 4 }), '马被完全钉死（伪走法全部送将）')
+
+  // 场景 B：被将军时垫将合法 / 避将合法 / 帅走进攻击线被拦
+  const b = emptyBoard()
+  place(b, 9, 4, 'king', 'red')
+  place(b, 0, 2, 'king', 'black') // 避开 col=3，防红帅避将至 (9,3) 时误触飞将
+  place(b, 5, 4, 'rook', 'black')
+  place(b, 6, 0, 'rook', 'red')
+  assertEq(getGameStatus(b, 'red'), 'check', '垫将场景：红方正被黑车将军')
+  assertEq(classifyMove(b, { row: 6, col: 0 }, { row: 6, col: 4 }), 'legal', '垫将：红车平到帅前挡车线合法')
+  assertEq(classifyMove(b, { row: 9, col: 4 }, { row: 9, col: 3 }), 'legal', '避将：红帅平移离开车线合法')
+  assertEq(classifyMove(b, { row: 9, col: 4 }, { row: 8, col: 4 }), 'exposes-general', '帅走进黑车攻击线被送将拦截')
+
+  // 场景 C：illegal 分类（非该棋子走法 / 起点无子 / 原地不动）
+  assertEq(classifyMove(a, { row: 5, col: 4 }, { row: 5, col: 5 }), 'illegal', '马走直线不符合走子规则')
+  assertEq(classifyMove(a, { row: 4, col: 4 }, { row: 5, col: 4 }), 'illegal', '起点无子非法')
+  assertEq(classifyMove(a, { row: 5, col: 4 }, { row: 5, col: 4 }), 'illegal', '原地不动非法')
+
+  // 场景 D：正常局面下棋子未被钉死
+  assertFalse(isPinned(initialBoard(), { row: 9, col: 1 }), '开局红马未被钉死')
+  assertFalse(isPinned(a, { row: 4, col: 4 }), '空位 isPinned 返回 false')
+}
+
+// ============================================================
+// Suite 26: 视角翻转映射 flipIndex（联机黑方己方在下）
+// 背景：渲染层与命中层共用同一映射，保证翻转后点哪打哪；
+// 引擎层 board 数组坐标不变。
+// ============================================================
+console.log('\n=== Suite 26: 视角翻转映射 ===')
+{
+  // 行翻转（ROWS=10）：红方底行 ↔ 屏幕顶行
+  assertEq(flipIndex(0, ROWS), 9, '行 0 翻转到 9')
+  assertEq(flipIndex(9, ROWS), 0, '行 9 翻转到 0')
+  assertEq(flipIndex(3, ROWS), 6, '行 3 翻转到 6')
+  // 列翻转（COLS=9，奇数）：中轴列不变
+  assertEq(flipIndex(0, COLS), 8, '列 0 翻转到 8')
+  assertEq(flipIndex(4, COLS), 4, '中轴列 4 翻转后不变')
+  // 自反性：渲染层与命中层互为逆映射
+  for (let i = 0; i < ROWS; i++) {
+    assertEq(flipIndex(flipIndex(i, ROWS), ROWS), i, '行 ' + i + ' 双重翻转还原')
+  }
+  for (let i = 0; i < COLS; i++) {
+    assertEq(flipIndex(flipIndex(i, COLS), COLS), i, '列 ' + i + ' 双重翻转还原')
+  }
+  // 翻转后仍落在合法范围内
+  for (let i = 0; i < ROWS; i++) {
+    const f = flipIndex(i, ROWS)
+    assertTrue(f >= 0 && f < ROWS, '行翻转结果在合法范围内')
+  }
+}
+
+// ============================================================
+// Summary
+// ============================================================
+console.log('\n' + '='.repeat(50))
+console.log('XIANGQI: ' + passed + '/' + total + ' passed, ' + failed + ' failed')
+if (failures.length) { console.log('Failures:'); failures.forEach(f => console.log('  - ' + f)) }
+console.log('='.repeat(50))
+
+module.exports = { total, passed, failed, failures }

@@ -39,3 +39,6 @@ CLAUDE.local.md
 # Claude Code 本地工具配置（settings / hooks 为个人工作流不共享；commands 随仓库共享）
 .claude/*
 !.claude/commands/
+
+# 象棋引擎测试编译产物
+tests/.tmp-xiangqi/
