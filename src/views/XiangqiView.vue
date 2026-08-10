@@ -86,7 +86,7 @@
       <div v-if="showNotation" class="notation-panel">
         <div class="notation-header">
           <span class="notation-title">棋谱</span>
-          <button class="notation-close" @click="showNotation = false">×</button>
+          <button class="notation-close" @click="closeNotation">×</button>
         </div>
         <div class="notation-list">
           <div v-for="(item, i) in notationList" :key="i" class="notation-item" :class="{ active: reviewMove === item.index, red: item.side === 'red', black: item.side === 'black' }" @click="reviewMoveAt(item.index)">
@@ -107,7 +107,7 @@
         <template #action>
           <div class="dialog-actions">
             <button class="dialog-btn" @click="resetGame">再来一局</button>
-            <button class="dialog-btn dialog-btn-secondary" @click="showNotation = true">查看棋谱</button>
+            <button class="dialog-btn dialog-btn-secondary" @click="openNotation">查看棋谱</button>
           </div>
         </template>
       </GameDialog>
@@ -136,6 +136,7 @@
         <div class="ai-settings" v-if="!gameStarted">
           <span class="ai-label">难度</span>
           <button class="diff-btn" :class="{ active: difficulty === 'easy' }" @click="difficulty = 'easy'">简单</button>
+          <button class="diff-btn" :class="{ active: difficulty === 'medium' }" @click="difficulty = 'medium'">中等</button>
           <button class="diff-btn" :class="{ active: difficulty === 'hard' }" @click="difficulty = 'hard'">困难</button>
           <span class="ai-divider">|</span>
           <span class="ai-label">执子</span>
@@ -196,7 +197,7 @@
       <div v-if="showNotation" class="notation-panel">
         <div class="notation-header">
           <span class="notation-title">棋谱</span>
-          <button class="notation-close" @click="showNotation = false">×</button>
+          <button class="notation-close" @click="closeNotation">×</button>
         </div>
         <div class="notation-list">
           <div v-for="(item, i) in notationList" :key="i" class="notation-item" :class="{ active: reviewMove === item.index, red: item.side === 'red', black: item.side === 'black' }" @click="reviewMoveAt(item.index)">
@@ -217,7 +218,7 @@
         <template #action>
           <div class="dialog-actions">
             <button class="dialog-btn" @click="resetGame">再来一局</button>
-            <button class="dialog-btn dialog-btn-secondary" @click="showNotation = true">查看棋谱</button>
+            <button class="dialog-btn dialog-btn-secondary" @click="openNotation">查看棋谱</button>
           </div>
         </template>
       </GameDialog>
@@ -257,7 +258,7 @@ import { findBestMove } from '@/engine/xiangqi/ai'
 
 type GameMode = 'local' | 'online' | 'ai'
 type AISide = 'red' | 'black'
-type Difficulty = 'easy' | 'hard'
+type Difficulty = 'easy' | 'medium' | 'hard'
 type GameResult = 'red-win' | 'black-win' | 'draw' | null
 
 const router = useRouter()
@@ -315,13 +316,13 @@ const layoutEntrance = computed(() => mode.value === 'online' ? 'xq-online' : 'x
 const layoutHints = computed(() => {
   if (mode.value === 'local') return ['红先黑后，一人一步', '点选棋子再点落点']
   if (mode.value === 'online') return ['分享房间号给好友', '实时同步对战']
-  if (mode.value === 'ai') return ['挑战电脑玩家', '简单/困难两档难度']
+  if (mode.value === 'ai') return ['挑战电脑玩家', '简单/中等/困难三档难度']
   return ['选择对战模式开始']
 })
 const layoutInfoItems = computed(() => {
   if (mode.value === 'local') return [{ label: '步数', value: moveCount.value }]
   if (mode.value === 'online') return [{ label: '模式', value: '联机对战' }]
-  if (mode.value === 'ai') return [{ label: '难度', value: difficulty.value === 'easy' ? '简单' : '困难' }, { label: 'AI', value: aiSide.value === 'red' ? 'AI 先手' : '你先手' }]
+  if (mode.value === 'ai') return [{ label: '难度', value: difficulty.value === 'easy' ? '简单' : difficulty.value === 'medium' ? '中等' : '困难' }, { label: 'AI', value: aiSide.value === 'red' ? 'AI 先手' : '你先手' }]
   return [{ label: '模式', value: '选择中' }]
 })
 const layoutTutorial = computed(() =>
@@ -404,10 +405,12 @@ let aiTimer: ReturnType<typeof setTimeout> | null = null
 
 function showHint() {
   if (gameOver.value || aiThinking.value || currentSide.value === aiSide.value) return
-  // 提示与 AI 同强度：简单固定深度 2，困难迭代加深（限 1.2s 保证响应）
+  // 提示与 AI 同强度：简单固定深度 2，中等深度 5，困难迭代加深（限 1.2s 保证响应）
   const hint = difficulty.value === 'easy'
     ? findBestMove(board.value, humanSide.value, 2)
-    : findBestMove(board.value, humanSide.value, 8, 1200)
+    : difficulty.value === 'medium'
+      ? findBestMove(board.value, humanSide.value, 5, 1200)
+      : findBestMove(board.value, humanSide.value, 8, 1200)
   if (hint) {
     hintMove.value = hint
     sound.select()
@@ -446,16 +449,32 @@ function reviewMoveAt(index: number) {
   haptics.tap()
 }
 
+function openNotation() {
+  // 查看棋谱时关闭结算弹窗，避免弹窗遮挡棋谱面板
+  gameOverDialog.value = false
+  showNotation.value = true
+  sound.select()
+  haptics.tap()
+}
+
+function closeNotation() {
+  showNotation.value = false
+  // 棋谱关闭后若对局已结束，恢复结算弹窗（保留「再来一局」入口）
+  if (gameOver.value) gameOverDialog.value = true
+}
+
 function scheduleAIMove() {
   if (mode.value !== 'ai') return
   if (gameOver.value) return
   if (currentSide.value === aiSide.value) {
     aiThinking.value = true
     aiTimer = setTimeout(() => {
-      // 简单固定深度 2；困难迭代加深至多 8 层、限 1.8s（超时回退已完成深度的最佳着法）
+      // 简单固定深度 2；中等深度 5；困难迭代加深至多 8 层、限 1.8s（超时回退已完成深度的最佳着法）
       const move = difficulty.value === 'easy'
         ? findBestMove(board.value, aiSide.value, 2)
-        : findBestMove(board.value, aiSide.value, 8, 1800)
+        : difficulty.value === 'medium'
+          ? findBestMove(board.value, aiSide.value, 5, 1800)
+          : findBestMove(board.value, aiSide.value, 8, 1800)
       aiThinking.value = false
       if (move) {
         executeMove(move.from, move.to)

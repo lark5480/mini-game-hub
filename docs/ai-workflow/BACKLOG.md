@@ -28,3 +28,5 @@
 | 12 | 2026-08-10 | 象棋 AI 加强 review（ai-enhancement） | AI 不感知重复局面裁决：对人局 AI 自身可能长捉/长将触发判负；搜索内无 repetition avoidance（可对最近局面哈希做避让或判和剪枝） | 已完成(2026-08-10-xiangqi-ai-strength-boost，negamax 路径 repPath 检测，重复 >=2 次给 -(MATE/2-ply) 强负分) |
 | 13 | 2026-08-10 | 象棋 AI 加强 review（ai-enhancement） | 困难模式同步搜索阻塞主线程 ≤1.8s（提示按钮 ≤1.2s），思考动画依赖合成器线程；后续可 Web Worker 化（延续 ai-mode 任务的 P3 预判） | 待处理 |
 | 14 | 2026-08-10 | 象棋 AI 加强 review（ai-enhancement） | 置换表/killer-history 启发与机动性/王安全评估项已实现（2026-08-10-xiangqi-ai-strength-boost）；剩余：开局库、王翼兵形细化、车半开放线等更多评估项，棋力上限仍受评估质量约束 | 待处理 |
+| 15 | 2026-08-10 | 搜索热路径优化 review（2026-08-10-xiangqi-search-optimization） | 叶子机动性评估每节点 2 次全量 generateMoves，本次明确跳过（收益风险不划算，已复用一次生成）；后续可做降权/采样 | 已完成(2026-08-10-xiangqi-search-optimization R2：机动性评估**整体移除**（非采样），评估回归子力+PST，深度收益补回；恢复需先评估每叶子 2 次全量 generateMoves 的成本) |
+| 16 | 2026-08-10 | 搜索提速计划（2026-08-10-xiangqi-search-optimization R2） | make/unmake 增量走子替代 copy-on-write（行级拷贝已省 80% 分配，仍有每节点数组分配与 GC）；需棋盘增量更新重构，架构级、正确性风险高，暂不立项 | 待处理 |

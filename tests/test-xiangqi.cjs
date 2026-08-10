@@ -1117,6 +1117,140 @@ console.log('\n=== Suite 29: AI 战术 ===')
 }
 
 // ============================================================
+// Suite 30: isInCheckLight 与 rules.isInCheck 语义等价（轻量直扫 vs 全盘伪走法生成）
+// ============================================================
+console.log('\n=== Suite 30: isInCheckLight 语义等价 ===')
+{
+  const { isInCheckLight } = require(path.join(__dirname, '.tmp-xiangqi', 'ai'))
+  const positions = []
+  positions.push({ name: '初始局面', b: initialBoard() })
+  // 飞将：将帅同列无阻隔
+  {
+    const b = emptyBoard()
+    place(b, 9, 4, 'king', 'red')
+    place(b, 0, 4, 'king', 'black')
+    positions.push({ name: '飞将局面', b })
+  }
+  // 黑车直线将军红帅
+  {
+    const b = emptyBoard()
+    place(b, 9, 4, 'king', 'red')
+    place(b, 0, 4, 'king', 'black')
+    place(b, 3, 4, 'rook', 'black')
+    positions.push({ name: '黑车直将红帅', b })
+  }
+  // 黑马将红帅（蹩腿位空）
+  {
+    const b = emptyBoard()
+    place(b, 9, 4, 'king', 'red')
+    place(b, 0, 4, 'king', 'black')
+    place(b, 7, 5, 'horse', 'black')
+    positions.push({ name: '黑马将红帅', b })
+  }
+  // 黑炮隔子将红帅（红兵作炮架）
+  {
+    const b = emptyBoard()
+    place(b, 9, 4, 'king', 'red')
+    place(b, 0, 4, 'king', 'black')
+    place(b, 2, 4, 'cannon', 'black')
+    place(b, 5, 4, 'pawn', 'red')
+    positions.push({ name: '黑炮隔子将红帅', b })
+  }
+  // 黑卒过河斜攻红帅
+  {
+    const b = emptyBoard()
+    place(b, 9, 4, 'king', 'red')
+    place(b, 0, 4, 'king', 'black')
+    place(b, 8, 3, 'pawn', 'black')
+    positions.push({ name: '黑卒斜攻红帅', b })
+  }
+  // 29.6 长将局面（黑将九宫被封）
+  {
+    const b = emptyBoard()
+    place(b, 9, 3, 'king', 'red')
+    place(b, 0, 0, 'rook', 'red')
+    place(b, 1, 4, 'king', 'black')
+    place(b, 0, 3, 'cannon', 'black')
+    place(b, 0, 5, 'cannon', 'black')
+    place(b, 2, 4, 'pawn', 'black')
+    place(b, 1, 3, 'pawn', 'black')
+    place(b, 1, 5, 'pawn', 'black')
+    positions.push({ name: '长将局面（29.6）', b })
+  }
+  for (const { name, b } of positions) {
+    assertEq(isInCheckLight(b, 'red'), isInCheck(b, 'red'), name + '：红方被将判定一致')
+    assertEq(isInCheckLight(b, 'black'), isInCheck(b, 'black'), name + '：黑方被将判定一致')
+  }
+}
+
+// ============================================================
+// Suite 31: nextKey 增量 Zobrist 与 boardKey 全量一致
+// ============================================================
+console.log('\n=== Suite 31: nextKey 增量 Zobrist 一致性 ===')
+{
+  const { boardKey, nextKey } = require(path.join(__dirname, '.tmp-xiangqi', 'ai'))
+  // 开局着法序列逐步断言（移子 + 换手）
+  const seq = [
+    { name: '红炮二平五', from: { row: 7, col: 1 }, to: { row: 7, col: 4 } },
+    { name: '黑炮二平五', from: { row: 2, col: 1 }, to: { row: 2, col: 4 } },
+    { name: '红马二进三', from: { row: 9, col: 1 }, to: { row: 7, col: 2 } },
+    { name: '黑马二进三', from: { row: 0, col: 1 }, to: { row: 2, col: 2 } },
+    { name: '红车一平二', from: { row: 9, col: 0 }, to: { row: 9, col: 1 } }
+  ]
+  let cur = initialBoard()
+  let side = 'red'
+  let key = boardKey(cur, side)
+  assert(key === boardKey(cur, side), '序列起点：rootKey 与全量一致')
+  for (const s of seq) {
+    const move = { from: s.from, to: s.to }
+    key = nextKey(key, cur, move, side)
+    cur = applyMove(cur, move)
+    side = side === 'red' ? 'black' : 'red'
+    assert(key === boardKey(cur, side), s.name + '：增量 key 与全量一致')
+  }
+  // 吃子场景（victim XOR）
+  {
+    const b = emptyBoard()
+    place(b, 9, 4, 'king', 'red')
+    place(b, 0, 4, 'king', 'black')
+    place(b, 5, 0, 'rook', 'red')
+    place(b, 3, 0, 'horse', 'black')
+    const move = { from: { row: 5, col: 0 }, to: { row: 3, col: 0 } }
+    const next = nextKey(boardKey(b, 'red'), b, move, 'red')
+    assert(next === boardKey(applyMove(b, move), 'black'), '吃子：增量 key 与全量一致')
+  }
+}
+
+// ============================================================
+// Suite 32: 深搜索稳定性 / ply 越界防御
+// ============================================================
+console.log('\n=== Suite 32: 深搜索稳定性 ===')
+{
+  const { findBestMove } = require(path.join(__dirname, '.tmp-xiangqi', 'ai'))
+  // 互将残局：红车将军黑将，黑车可吃子解将并反将红将——搜索反复进出静态搜索吃子链。
+  // 回归点：quiescence 被将时深度不受 qdepth 限制，极端互将长链可使 ply 超过
+  // MAX_PLY（40），killerMoves 定长数组越界 → moveOrderScore 访问 killers[0] 崩溃
+  // （浏览器困难模式实测捕获，栈：moveOrderScore → orderMoves → quiescence ×30+）。
+  const b = boardOf([
+    [9, 4, 'king', 'red'], [1, 4, 'rook', 'red'],
+    [0, 4, 'king', 'black'], [2, 4, 'rook', 'black']
+  ])
+  const m = findBestMove(b, 'red', 8)
+  assertTrue(m !== null, '深搜索：互将残局 d8 有应着')
+  assertTrue(m && isLegalMove(b, m.from, m.to), '深搜索：互将残局 d8 着法合法',
+    m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
+  const m2 = findBestMove(b, 'red', 8, 1800)
+  assertTrue(m2 !== null, '深搜索：互将残局 d8+1800ms 有应着')
+  assertTrue(m2 && isLegalMove(b, m2.from, m2.to), '深搜索：互将残局 d8+1800ms 着法合法',
+    m2 ? m2.from.row + ',' + m2.from.col + '->' + m2.to.row + ',' + m2.to.col : 'null')
+  // 困难模式真实配置（开局局面，1.8s 时限）
+  const m3 = findBestMove(initialBoard(), 'red', 8, 1800)
+  assertTrue(m3 !== null, '深搜索：开局 d8+1800ms 有应着')
+  assertTrue(m3 && isLegalMove(initialBoard(), m3.from, m3.to), '深搜索：开局 d8+1800ms 着法合法',
+    m3 ? m3.from.row + ',' + m3.from.col + '->' + m3.to.row + ',' + m3.to.col : 'null')
+}
+
+// ============================================================
 // Summary
 // ============================================================
 console.log('\n' + '='.repeat(50))
