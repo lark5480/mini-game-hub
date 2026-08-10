@@ -1026,6 +1026,80 @@ console.log('\n=== Suite 28: 重复局面判定 ===')
 }
 
 // ============================================================
+// Suite 29: AI 战术（静态搜索 / 迭代加深）
+// ============================================================
+console.log('\n=== Suite 29: AI 战术 ===')
+{
+  const { findBestMove } = require(path.join(__dirname, '.tmp-xiangqi', 'ai'))
+  function boardOf(pieces) {
+    const b = emptyBoard()
+    for (const [row, col, type, side] of pieces) b[row][col] = { type, side }
+    return b
+  }
+
+  // --- 29.1 白吃悬子：无保护的黑马应被红车吃掉 ---
+  {
+    const b = boardOf([
+      [0, 4, 'king', 'black'], [9, 3, 'king', 'red'],
+      [5, 0, 'rook', 'red'], [3, 0, 'horse', 'black']
+    ])
+    const m = findBestMove(b, 'red', 2)
+    assertTrue(m !== null, '悬子：AI 有应着')
+    assertTrue(m && m.to.row === 3 && m.to.col === 0, '悬子：车吃无保护马',
+      m ? 'got ' + m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
+  }
+
+  // --- 29.2 避开陷阱：黑马有车保护，红车不得贪吃（静态搜索消除水平线效应） ---
+  {
+    const b = boardOf([
+      [0, 4, 'king', 'black'], [9, 3, 'king', 'red'],
+      [5, 0, 'rook', 'red'], [3, 0, 'horse', 'black'], [0, 0, 'rook', 'black']
+    ])
+    const m = findBestMove(b, 'red', 2)
+    assertTrue(m !== null, '陷阱：AI 有应着')
+    assertFalse(m && m.from.row === 5 && m.from.col === 0 && m.to.row === 3 && m.to.col === 0,
+      '陷阱：不贪吃有保护的马（车换马亏子）')
+  }
+
+  // --- 29.3 一步取胜：AI 应找到将死/困毙着法 ---
+  {
+    const b = boardOf([
+      [0, 4, 'king', 'black'], [9, 3, 'king', 'red'],
+      [1, 8, 'rook', 'red'], [5, 0, 'rook', 'red']
+    ])
+    const m = findBestMove(b, 'red', 2)
+    assertTrue(m !== null, '一步杀：AI 有应着')
+    const after = applyMove(b, m)
+    const st = getGameStatus(after, 'black')
+    assertTrue(st === 'checkmate' || st === 'stalemate', '一步杀：走后黑方立败',
+      'status=' + st + ' move=' + (m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null'))
+    // 黑方已无子可走，findBestMove 应返回 null
+    assertEq(findBestMove(after, 'black', 2), null, '一步杀：终局局面 AI 返回 null')
+  }
+
+  // --- 29.4 开局纪律：深度 2 不得贪炮打马（回归测试：旧版因水平线效应必走此着） ---
+  {
+    const b = initialBoard()
+    const m = findBestMove(b, 'red', 2)
+    assertTrue(m !== null, '开局：AI 有应着')
+    const isGreedyCannon = m && m.from.row === 7 &&
+      ((m.from.col === 1 && m.to.row === 0 && m.to.col === 1) ||
+       (m.from.col === 7 && m.to.row === 0 && m.to.col === 7))
+    assertFalse(isGreedyCannon, '开局：不贪炮打马（炮换马亏子）',
+      m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
+  }
+
+  // --- 29.5 合法性：AI 返回的着法必须合法 ---
+  {
+    const b = initialBoard()
+    const m = findBestMove(b, 'red', 3)
+    assertTrue(m !== null, '合法性：AI 有应着')
+    assertTrue(m && isLegalMove(b, m.from, m.to), '合法性：开局深度3着法合法',
+      m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
+  }
+}
+
+// ============================================================
 // Summary
 // ============================================================
 console.log('\n' + '='.repeat(50))

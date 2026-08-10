@@ -47,7 +47,7 @@
           :interactive="!gameOver && !isCheckmate"
           :lastMove="lastMove"
           :check-side="checkSide"
-          :flipped="currentSide === 'black'"
+          :flipped="false"
           :hint="hintMove"
           :highlight="highlightPositions"
           @tap="handleTap"
@@ -156,6 +156,7 @@
           :interactive="!gameOver && !isCheckmate && !(mode === 'ai' && (aiThinking || currentSide === aiSide))"
           :lastMove="lastMove"
           :check-side="checkSide"
+          :flipped="humanSide === 'black'"
           :hint="hintMove"
           :highlight="highlightPositions"
           @tap="handleTap"
@@ -230,8 +231,9 @@
     <template #controls>
       <button v-if="(mode === 'local' || mode === 'ai') && !gameOver && !aiThinking" class="submit-score-btn" @click="resetGame">重新开始</button>
     </template>
+
+    <PauseOverlay :visible="paused" @resume="continueGame" />
   </GameLayout>
-  <PauseOverlay :visible="paused" @resume="continueGame" />
 </template>
 
 <script setup lang="ts">
@@ -402,8 +404,10 @@ let aiTimer: ReturnType<typeof setTimeout> | null = null
 
 function showHint() {
   if (gameOver.value || aiThinking.value || currentSide.value === aiSide.value) return
-  const depth = difficulty.value === 'easy' ? 2 : 3
-  const hint = findBestMove(board.value, humanSide.value, depth)
+  // 提示与 AI 同强度：简单固定深度 2，困难迭代加深（限 1.2s 保证响应）
+  const hint = difficulty.value === 'easy'
+    ? findBestMove(board.value, humanSide.value, 2)
+    : findBestMove(board.value, humanSide.value, 6, 1200)
   if (hint) {
     hintMove.value = hint
     sound.select()
@@ -448,8 +452,10 @@ function scheduleAIMove() {
   if (currentSide.value === aiSide.value) {
     aiThinking.value = true
     aiTimer = setTimeout(() => {
-      const depth = difficulty.value === 'easy' ? 2 : 3
-      const move = findBestMove(board.value, aiSide.value, depth)
+      // 简单固定深度 2；困难迭代加深至多 6 层、限 1.8s（超时回退已完成深度的最佳着法）
+      const move = difficulty.value === 'easy'
+        ? findBestMove(board.value, aiSide.value, 2)
+        : findBestMove(board.value, aiSide.value, 6, 1800)
       aiThinking.value = false
       if (move) {
         executeMove(move.from, move.to)
@@ -696,6 +702,10 @@ function resetGame() {
   hintMove.value = null
   drawOffered.value = false
   showNotation.value = false
+  // 人机模式：AI 执红（先手）时，重启后需手动调度首步
+  if (mode.value === 'ai' && aiSide.value === 'red') {
+    scheduleAIMove()
+  }
 }
 
 function continueGame() {
@@ -708,6 +718,9 @@ function newGame() {
 }
 
 function goHome() {
+  // 清理 AI 定时器，防止导航离开后回调在已卸载组件上执行
+  if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
+  aiThinking.value = false
   router.push('/')
 }
 
@@ -729,10 +742,7 @@ function startAI() {
 function startAIGame() {
   gameStarted.value = true
   resetGame()
-  // 如果 AI 执红，首步由 AI 走
-  if (aiSide.value === 'red') {
-    scheduleAIMove()
-  }
+  // AI 首步调度已统一在 resetGame() 中处理（aiSide === 'red' 时）
 }
 
 function onRestart() {
