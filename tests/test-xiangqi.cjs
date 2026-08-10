@@ -1097,6 +1097,23 @@ console.log('\n=== Suite 29: AI 战术 ===')
     assertTrue(m && isLegalMove(b, m.from, m.to), '合法性：开局深度3着法合法',
       m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
   }
+
+  // --- 29.6 长将规避：AI 不选择走进重复循环的长将着法（搜索内重复局面强负分） ---
+  {
+    // 黑将 (1,4) 九宫邻格全被封死仅剩 (0,4) 往返：红车 (0,0)->(1,0) 将军 → 黑将只能 (0,4)
+    // → 红车 (1,0)->(0,0) 将军 → 黑将只能 (1,4) = 回到初始局面（红方长将按重复规则判负）。
+    // 红方存在吃炮净赚着法，循环线被重复惩罚后不应被选中。
+    const b = boardOf([
+      [9, 3, 'king', 'red'], [0, 0, 'rook', 'red'],
+      [1, 4, 'king', 'black'], [0, 3, 'cannon', 'black'], [0, 5, 'cannon', 'black'],
+      [2, 4, 'pawn', 'black'], [1, 3, 'pawn', 'black'], [1, 5, 'pawn', 'black']
+    ])
+    const m = findBestMove(b, 'red', 4)
+    assertTrue(m !== null, '长将规避：AI 有应着')
+    assertFalse(m && m.from.row === 0 && m.from.col === 0 && m.to.row === 1 && m.to.col === 0,
+      '长将规避：不走进长将循环（(0,0)->(1,0)）',
+      m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
+  }
 }
 
 // ============================================================

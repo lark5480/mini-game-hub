@@ -407,7 +407,7 @@ function showHint() {
   // 提示与 AI 同强度：简单固定深度 2，困难迭代加深（限 1.2s 保证响应）
   const hint = difficulty.value === 'easy'
     ? findBestMove(board.value, humanSide.value, 2)
-    : findBestMove(board.value, humanSide.value, 6, 1200)
+    : findBestMove(board.value, humanSide.value, 8, 1200)
   if (hint) {
     hintMove.value = hint
     sound.select()
@@ -452,10 +452,10 @@ function scheduleAIMove() {
   if (currentSide.value === aiSide.value) {
     aiThinking.value = true
     aiTimer = setTimeout(() => {
-      // 简单固定深度 2；困难迭代加深至多 6 层、限 1.8s（超时回退已完成深度的最佳着法）
+      // 简单固定深度 2；困难迭代加深至多 8 层、限 1.8s（超时回退已完成深度的最佳着法）
       const move = difficulty.value === 'easy'
         ? findBestMove(board.value, aiSide.value, 2)
-        : findBestMove(board.value, aiSide.value, 6, 1800)
+        : findBestMove(board.value, aiSide.value, 8, 1800)
       aiThinking.value = false
       if (move) {
         executeMove(move.from, move.to)
