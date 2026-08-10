@@ -1,6 +1,6 @@
 {
-  "current_task": null,
-  "phase": "idle",
+  "current_task": "2026-08-10-xiangqi-repetition-detection",
+  "phase": "planned",
   "round": 0,
   "blocking": []
 }
