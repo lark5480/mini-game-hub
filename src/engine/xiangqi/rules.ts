@@ -392,3 +392,190 @@ export function getGameStatus(board: Board, sideToMove: Side): GameStatus {
 
   return inCheck ? 'check' : 'playing'
 }
+
+// ============================================================
+// 重复局面判定（长将/长捉/双方长打）
+// ============================================================
+
+function boardsEqual(a: Board, b: Board): boolean {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const pa = a[r][c]
+      const pb = b[r][c]
+      if (!pa || !pb) {
+        if (pa !== pb) return false
+        continue
+      }
+      if (pa.type !== pb.type || pa.side !== pb.side) return false
+    }
+  }
+  return true
+}
+
+// 直线（同行或同列）两端点之间是否无子（不含端点）
+function isLineClear(board: Board, r1: number, c1: number, r2: number, c2: number): boolean {
+  if (r1 === r2) {
+    const lo = Math.min(c1, c2)
+    const hi = Math.max(c1, c2)
+    for (let c = lo + 1; c < hi; c++) if (board[r1][c]) return false
+    return true
+  }
+  if (c1 === c2) {
+    const lo = Math.min(r1, r2)
+    const hi = Math.max(r1, r2)
+    for (let r = lo + 1; r < hi; r++) if (board[r][c1]) return false
+    return true
+  }
+  return false
+}
+
+function countBetween(board: Board, r1: number, c1: number, r2: number, c2: number): number {
+  let count = 0
+  if (r1 === r2) {
+    const lo = Math.min(c1, c2)
+    const hi = Math.max(c1, c2)
+    for (let c = lo + 1; c < hi; c++) if (board[r1][c]) count++
+  } else if (c1 === c2) {
+    const lo = Math.min(r1, r2)
+    const hi = Math.max(r1, r2)
+    for (let r = lo + 1; r < hi; r++) if (board[r][c1]) count++
+  }
+  return count
+}
+
+/**
+ * 纯几何吃子判定（不考虑走后是否送将）：
+ * (pieceRow,pieceCol) 处的棋子下一步能否吃到 (targetRow,targetCol) 处的敌方棋子。
+ * 用于「捉」的判定。
+ */
+function canCaptureAt(board: Board, pieceRow: number, pieceCol: number, targetRow: number, targetCol: number): boolean {
+  const piece = board[pieceRow][pieceCol]
+  if (!piece) return false
+  const target = board[targetRow][targetCol]
+  if (!target || target.side === piece.side) return false
+  const dr = targetRow - pieceRow
+  const dc = targetCol - pieceCol
+  switch (piece.type) {
+    case 'king':
+      return Math.abs(dr) + Math.abs(dc) === 1 && isInPalace({ row: targetRow, col: targetCol }, piece.side)
+    case 'advisor':
+      return Math.abs(dr) === 1 && Math.abs(dc) === 1 && isInPalace({ row: targetRow, col: targetCol }, piece.side)
+    case 'elephant':
+      if (Math.abs(dr) !== 2 || Math.abs(dc) !== 2) return false
+      if (piece.side === 'red' ? targetRow < 5 : targetRow > 4) return false
+      return board[pieceRow + dr / 2][pieceCol + dc / 2] === null
+    case 'horse': {
+      const adr = Math.abs(dr)
+      const adc = Math.abs(dc)
+      if (!((adr === 2 && adc === 1) || (adr === 1 && adc === 2))) return false
+      const legRow = adr === 2 ? pieceRow + dr / 2 : pieceRow
+      const legCol = adc === 2 ? pieceCol + dc / 2 : pieceCol
+      return board[legRow][legCol] === null
+    }
+    case 'rook':
+      return (dr === 0 || dc === 0) && isLineClear(board, pieceRow, pieceCol, targetRow, targetCol)
+    case 'cannon':
+      return (dr === 0 || dc === 0) && countBetween(board, pieceRow, pieceCol, targetRow, targetCol) === 1
+    case 'pawn': {
+      const forward = piece.side === 'red' ? -1 : 1
+      if (dr === forward && dc === 0) return true
+      const crossed = piece.side === 'red' ? pieceRow <= 4 : pieceRow >= 5
+      return crossed && dr === 0 && Math.abs(dc) === 1
+    }
+  }
+}
+
+export type RepetitionVerdict =
+  | { type: 'violation'; side: Side; reason: 'perpetual_check' | 'perpetual_chase' | 'perpetual_attack' }
+  | { type: 'mutual_draw'; reason: 'mutual_attack' | 'mutual_idle' }
+
+/**
+ * 重复局面棋例判定（简化版中国棋规）。
+ *
+ * 约定：红方先行、严格交替（本应用恒成立），moves[k] 为第 k 个半步（0 起）；
+ * positions[k] 为走完 k 个半步后的局面（positions[0] = 初始局面，
+ * positions.length === moves.length + 1）。
+ *
+ * 触发条件：当前局面第 3 次出现，且最近两个「周期4」循环（各 4 个半步，
+ * 双方各两步）着法完全相同。周期4是最小可能的重复周期（周期2在交替走子
+ * 下几何上不可能）；更长的循环（如互捉双方各自逃子，周期8）暂不判罚。
+ *
+ * 每步分类：将（走后对方被将军）/ 捉（走动子能吃到对方下一步逃走的
+ * 非将非兵棋子）/ 闲。一方两步均为「打」（将或捉）即构成该方长打。
+ *
+ * 判罚（中国棋规简化）：
+ *  - 双方长打（含双方长将）→ 不变作和；
+ *  - 一方长将、另一方其他长打 → 长将方负（长将优先判负）；
+ *  - 单方长打 → 该方负；
+ *  - 双方均闲 → 双方不变作和。
+ * 未覆盖：杀（叫杀/长杀）检测，一将一杀等含杀的混合长打暂按闲处理。
+ */
+export function checkRepetitionViolation(moves: Move[], positions: Board[]): RepetitionVerdict | null {
+  const last = moves.length
+  if (last < 8) return null
+  const current = positions[last]
+  if (!current) return null
+  // 当前局面需第 3 次出现，且间隔恰为周期4（last-4、last-8 与当前相同）
+  if (!boardsEqual(positions[last - 4], current)) return null
+  if (!boardsEqual(positions[last - 8], current)) return null
+
+  // 严格重复：连续两个周期（各 4 个半步）着法完全相同
+  for (let i = 0; i < 4; i++) {
+    const m1 = moves[last - 8 + i]
+    const m2 = moves[last - 4 + i]
+    if (m1.from.row !== m2.from.row || m1.from.col !== m2.from.col ||
+        m1.to.row !== m2.to.row || m1.to.col !== m2.to.col) return null
+  }
+
+  // 对第一个周期的 4 步逐一分类（将/捉/闲）
+  const cycleStart = last - 8
+  type StrikeClass = 'check' | 'chase' | 'idle'
+  const classes: StrikeClass[] = []
+  for (let i = 0; i < 4; i++) {
+    const m = moves[cycleStart + i]
+    // 对方循环内的下一步（i=3 时绕回周期首步，两周期相同故等价）
+    const next = moves[cycleStart + ((i + 1) % 4)]
+    const boardAfter = positions[cycleStart + i + 1]
+    const mover: Side = (cycleStart + i) % 2 === 0 ? 'red' : 'black'
+    const opp: Side = mover === 'red' ? 'black' : 'red'
+    if (isInCheck(boardAfter, opp)) {
+      classes.push('check')
+      continue
+    }
+    // 捉：对方下一步逃走的棋子（next.from）即被捉子，走动子能吃到它
+    const chased = boardAfter[next.from.row][next.from.col]
+    if (chased && chased.side === opp && chased.type !== 'king' && chased.type !== 'pawn' &&
+        canCaptureAt(boardAfter, m.to.row, m.to.col, next.from.row, next.from.col)) {
+      classes.push('chase')
+    } else {
+      classes.push('idle')
+    }
+  }
+
+  const sideA: Side = cycleStart % 2 === 0 ? 'red' : 'black'
+  const sideB: Side = sideA === 'red' ? 'black' : 'red'
+  // 周期内 sideA 走第 0、2 步，sideB 走第 1、3 步
+  const aCls = [classes[0], classes[2]]
+  const bCls = [classes[1], classes[3]]
+  const isHitting = (cls: StrikeClass[]) => cls.every(c => c !== 'idle')
+  const isAllCheck = (cls: StrikeClass[]) => cls.every(c => c === 'check')
+  const isAllChase = (cls: StrikeClass[]) => cls.every(c => c === 'chase')
+  const reasonOf = (cls: StrikeClass[]): 'perpetual_check' | 'perpetual_chase' | 'perpetual_attack' =>
+    isAllCheck(cls) ? 'perpetual_check' : isAllChase(cls) ? 'perpetual_chase' : 'perpetual_attack'
+  const aHitting = isHitting(aCls)
+  const bHitting = isHitting(bCls)
+
+  if (aHitting && bHitting) {
+    // 长将优先：一方长将而另一方非长将 → 长将方负
+    if (isAllCheck(aCls) && !isAllCheck(bCls)) return { type: 'violation', side: sideA, reason: 'perpetual_check' }
+    if (isAllCheck(bCls) && !isAllCheck(aCls)) return { type: 'violation', side: sideB, reason: 'perpetual_check' }
+    // 双方长打（含双方长将）→ 不变作和
+    return { type: 'mutual_draw', reason: 'mutual_attack' }
+  }
+  if (aHitting) return { type: 'violation', side: sideA, reason: reasonOf(aCls) }
+  if (bHitting) return { type: 'violation', side: sideB, reason: reasonOf(bCls) }
+  // 双方均为允许着法，循环不变 → 判和
+  return { type: 'mutual_draw', reason: 'mutual_idle' }
+}
+
+export { toNotation } from "./notation"

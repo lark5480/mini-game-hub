@@ -43,3 +43,10 @@
 - 症状：meta 里写死具体游戏名（如 `whackamole-race`），复用即失真
 - 修法：游戏专有配置一律入参化，composable 给默认值
 - 来源：竞速 P2（`25673e7` game 标签入参化）
+
+## P-007 tsc 编译产物混入 src 目录被 Vite 优先解析
+
+- 指纹：执行 tsc 编译（引擎测试机制）时命令行 glob 传文件 / 覆盖 outDir/rootDir 参数失效
+- 症状：`Uncaught SyntaxError: The requested module '.../types.js' doesn't provide an export named: 'COLS'`——`.js` 扩展名解析优先级高于 `.ts`，CJS 产物（`exports.COLS = 9`）被当 ESM 加载导致命名导出缺失；git status 出现 `?? src/**/*.js`
+- 修法：编译产物一律输出到 gitignored 目录（如 tests/.tmp-xiangqi）；tsc 用固定 tsconfig 的 outDir，不用 glob 传文件、不依赖命令行覆盖 outDir/rootDir；出现该报错先查 src 下是否 .js/.ts 并存，删除污染 .js 后硬刷新
+- 来源：2026-08-10-xiangqi-ai-strength-boost（用户实测 COLS 报错，误将 4 个 CJS 产物生成进 src/engine/xiangqi/）

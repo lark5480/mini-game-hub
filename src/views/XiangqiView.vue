@@ -47,6 +47,9 @@
           :interactive="!gameOver && !isCheckmate"
           :lastMove="lastMove"
           :check-side="checkSide"
+          :flipped="false"
+          :hint="hintMove"
+          :highlight="highlightPositions"
           @tap="handleTap"
         />
 
@@ -66,11 +69,31 @@
             </svg>
             认输
           </button>
+          <button class="ctrl-btn" :disabled="gameOver" @click="offerDraw">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v20M2 12h20"/>
+            </svg>
+            求和
+          </button>
         </div>
 
         <div class="move-count">
           <span class="count-label">步数</span>
           <span class="count-value">{{ moveCount }}</span>
+        </div>
+      </div>
+
+      <div v-if="showNotation" class="notation-panel">
+        <div class="notation-header">
+          <span class="notation-title">棋谱</span>
+          <button class="notation-close" @click="closeNotation">×</button>
+        </div>
+        <div class="notation-list">
+          <div v-for="(item, i) in notationList" :key="i" class="notation-item" :class="{ active: reviewMove === item.index, red: item.side === 'red', black: item.side === 'black' }" @click="reviewMoveAt(item.index)">
+            <span class="move-num">{{ Math.floor(i / 2) + 1 }}{{ i % 2 === 0 ? '.' : '...' }}</span>
+            <span class="move-text">{{ item.notation }}</span>
+          </div>
+          <div v-if="notationList.length === 0" class="notation-empty">暂无着法</div>
         </div>
       </div>
 
@@ -82,11 +105,29 @@
         :message="resultMessage"
       >
         <template #action>
-          <button class="dialog-btn" @click="resetGame">再来一局</button>
+          <div class="dialog-actions">
+            <button class="dialog-btn" @click="resetGame">再来一局</button>
+            <button class="dialog-btn dialog-btn-secondary" @click="openNotation">查看棋谱</button>
+          </div>
         </template>
       </GameDialog>
 
       <ResumePrompt :visible="paused" @continue="continueGame" @new-game="newGame" />
+
+      <GameDialog
+        v-model:visible="drawOffered"
+        accentColor="#FF9E00"
+        icon="info"
+        title="对方提议和棋"
+        message="是否接受和棋？"
+      >
+        <template #action>
+          <div class="dialog-actions">
+            <button class="dialog-btn" @click="respondDraw(true)">接受</button>
+            <button class="dialog-btn dialog-btn-secondary" @click="respondDraw(false)">拒绝</button>
+          </div>
+        </template>
+      </GameDialog>
     </template>
 
     <!-- 人机模式 -->
@@ -95,6 +136,7 @@
         <div class="ai-settings" v-if="!gameStarted">
           <span class="ai-label">难度</span>
           <button class="diff-btn" :class="{ active: difficulty === 'easy' }" @click="difficulty = 'easy'">简单</button>
+          <button class="diff-btn" :class="{ active: difficulty === 'medium' }" @click="difficulty = 'medium'">中等</button>
           <button class="diff-btn" :class="{ active: difficulty === 'hard' }" @click="difficulty = 'hard'">困难</button>
           <span class="ai-divider">|</span>
           <span class="ai-label">执子</span>
@@ -115,6 +157,9 @@
           :interactive="!gameOver && !isCheckmate && !(mode === 'ai' && (aiThinking || currentSide === aiSide))"
           :lastMove="lastMove"
           :check-side="checkSide"
+          :flipped="humanSide === 'black'"
+          :hint="hintMove"
+          :highlight="highlightPositions"
           @tap="handleTap"
         />
 
@@ -134,11 +179,32 @@
             </svg>
             认输
           </button>
+          <button class="ctrl-btn" :disabled="currentSide === aiSide || aiThinking || gameOver" :class="{ 'hint-active': hintMove }" @click="showHint">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 16v-4M12 8h.01"/>
+            </svg>
+            提示
+          </button>
         </div>
 
         <div class="move-count">
           <span class="count-label">步数</span>
           <span class="count-value">{{ moveCount }}</span>
+        </div>
+      </div>
+
+      <div v-if="showNotation" class="notation-panel">
+        <div class="notation-header">
+          <span class="notation-title">棋谱</span>
+          <button class="notation-close" @click="closeNotation">×</button>
+        </div>
+        <div class="notation-list">
+          <div v-for="(item, i) in notationList" :key="i" class="notation-item" :class="{ active: reviewMove === item.index, red: item.side === 'red', black: item.side === 'black' }" @click="reviewMoveAt(item.index)">
+            <span class="move-num">{{ Math.floor(i / 2) + 1 }}{{ i % 2 === 0 ? '.' : '...' }}</span>
+            <span class="move-text">{{ item.notation }}</span>
+          </div>
+          <div v-if="notationList.length === 0" class="notation-empty">暂无着法</div>
         </div>
       </div>
 
@@ -150,7 +216,10 @@
         :message="resultMessage"
       >
         <template #action>
-          <button class="dialog-btn" @click="resetGame">再来一局</button>
+          <div class="dialog-actions">
+            <button class="dialog-btn" @click="resetGame">再来一局</button>
+            <button class="dialog-btn dialog-btn-secondary" @click="openNotation">查看棋谱</button>
+          </div>
         </template>
       </GameDialog>
 
@@ -163,8 +232,9 @@
     <template #controls>
       <button v-if="(mode === 'local' || mode === 'ai') && !gameOver && !aiThinking" class="submit-score-btn" @click="resetGame">重新开始</button>
     </template>
+
+    <PauseOverlay :visible="paused" @resume="continueGame" />
   </GameLayout>
-  <PauseOverlay :visible="paused" @resume="continueGame" />
 </template>
 
 <script setup lang="ts">
@@ -183,12 +253,12 @@ import XiangqiBoard from '@/components/XiangqiBoard.vue'
 import XiangqiOnlineView from '@/views/XiangqiOnlineView.vue'
 import type { Board, Position, Move, Side } from '@/engine/xiangqi/types'
 import { cloneBoard } from '@/engine/xiangqi/types'
-import { initialBoard, generateMoves, applyMove, isInCheck, getGameStatus, classifyMove, isPinned } from '@/engine/xiangqi/rules'
+import { initialBoard, generateMoves, applyMove, isInCheck, getGameStatus, classifyMove, isPinned, toNotation, checkRepetitionViolation } from '@/engine/xiangqi/rules'
 import { findBestMove } from '@/engine/xiangqi/ai'
 
 type GameMode = 'local' | 'online' | 'ai'
 type AISide = 'red' | 'black'
-type Difficulty = 'easy' | 'hard'
+type Difficulty = 'easy' | 'medium' | 'hard'
 type GameResult = 'red-win' | 'black-win' | 'draw' | null
 
 const router = useRouter()
@@ -210,6 +280,11 @@ const haptics = useHaptics()
 const toast = useToast()
   const achievements = useAchievements()
   const gameRecord = ref<{ moves: Move[]; sides: Side[] }>({ moves: [], sides: [] })
+  const notations = ref<string[]>([])
+  const reviewMove = ref<number | null>(null)
+  const hintMove = ref<Move | null>(null)
+  const drawOffered = ref(false)
+  const showNotation = ref(false)
 
   const board = ref<Board>(initialBoard())
 const currentSide = ref<Side>('red')
@@ -222,7 +297,13 @@ const gameOver = ref(false)
 const result = ref<GameResult>(null)
 const gameOverDialog = ref(false)
 const isCheckmate = ref(false)
-
+// 重复局面判定：positions[k] = 走完 k 个半步后的局面（positions[0] = 初始局面），
+// playedMoves 与 positions[1..] 一一对应
+const positions = ref<Board[]>([initialBoard()])
+const playedMoves = ref<Move[]>([])
+const violationSide = ref<Side | null>(null)
+const violationReason = ref<'perpetual_check' | 'perpetual_chase' | 'perpetual_attack' | null>(null)
+const drawByRepetition = ref<'mutual_attack' | 'mutual_idle' | null>(null)
 const { paused, resume: resumeGame } = useGamePause({
   canPause: () => mode.value !== 'online' && mode.value !== 'ai' && !gameOver.value && result.value === null,
 })
@@ -235,13 +316,13 @@ const layoutEntrance = computed(() => mode.value === 'online' ? 'xq-online' : 'x
 const layoutHints = computed(() => {
   if (mode.value === 'local') return ['红先黑后，一人一步', '点选棋子再点落点']
   if (mode.value === 'online') return ['分享房间号给好友', '实时同步对战']
-  if (mode.value === 'ai') return ['挑战电脑玩家', '简单/困难两档难度']
+  if (mode.value === 'ai') return ['挑战电脑玩家', '简单/中等/困难三档难度']
   return ['选择对战模式开始']
 })
 const layoutInfoItems = computed(() => {
   if (mode.value === 'local') return [{ label: '步数', value: moveCount.value }]
   if (mode.value === 'online') return [{ label: '模式', value: '联机对战' }]
-  if (mode.value === 'ai') return [{ label: '难度', value: difficulty.value === 'easy' ? '简单' : '困难' }, { label: 'AI', value: aiSide.value === 'red' ? 'AI 先手' : '你先手' }]
+  if (mode.value === 'ai') return [{ label: '难度', value: difficulty.value === 'easy' ? '简单' : difficulty.value === 'medium' ? '中等' : '困难' }, { label: 'AI', value: aiSide.value === 'red' ? 'AI 先手' : '你先手' }]
   return [{ label: '模式', value: '选择中' }]
 })
 const layoutTutorial = computed(() =>
@@ -251,6 +332,23 @@ const layoutTutorial = computed(() =>
       ? '挑战电脑 AI：选择难度和执子，击败 AI 获得胜利。'
       : '经典中国象棋：红先黑后，一人一步，将死对方将/帅者获胜。'
 )
+
+const humanSide = computed(() => aiSide.value === 'red' ? 'black' : 'red')
+
+const notationList = computed(() => {
+  return gameRecord.value.moves.map((_move, i) => ({
+    index: i,
+    side: gameRecord.value.sides[i],
+    notation: notations.value[i] || ''
+  }))
+})
+
+const highlightPositions = computed(() => {
+  if (reviewMove.value === null) return null
+  const move = gameRecord.value.moves[reviewMove.value]
+  if (!move) return null
+  return { from: move.from, to: move.to }
+})
 
 const turnLabel = computed(() => {
   if (gameOver.value) {
@@ -278,7 +376,18 @@ const resultTitle = computed(() => {
 })
 
 const resultMessage = computed(() => {
-  if (result.value === 'draw') return `双方握手言和，共 ${moveCount.value} 步`
+  if (result.value === 'draw') {
+    if (drawByRepetition.value === 'mutual_attack') return `双方长打，不变作和（共 ${moveCount.value} 步）`
+    if (drawByRepetition.value === 'mutual_idle') return `双方循环重复不变着，判和（共 ${moveCount.value} 步）`
+    return `双方握手言和，共 ${moveCount.value} 步`
+  }
+  if (violationSide.value) {
+    const who = violationSide.value === 'red' ? '红方' : '黑方'
+    const winner = violationSide.value === 'red' ? '黑方' : '红方'
+    const why = violationReason.value === 'perpetual_check' ? '长将' :
+      violationReason.value === 'perpetual_chase' ? '长捉' : '长打'
+    return `${who}${why}违规判负，${winner}获胜`
+  }
   return `${result.value === 'red-win' ? '红方' : '黑方'}在 ${moveCount.value} 步内取胜`
 })
 
@@ -294,14 +403,78 @@ let lastExposeTipAt = 0
 // ---- AI 走子调度 ----
 let aiTimer: ReturnType<typeof setTimeout> | null = null
 
+function showHint() {
+  if (gameOver.value || aiThinking.value || currentSide.value === aiSide.value) return
+  // 提示与 AI 同强度：简单固定深度 2，中等深度 5，困难迭代加深（限 1.2s 保证响应）
+  const hint = difficulty.value === 'easy'
+    ? findBestMove(board.value, humanSide.value, 2)
+    : difficulty.value === 'medium'
+      ? findBestMove(board.value, humanSide.value, 5, 1200)
+      : findBestMove(board.value, humanSide.value, 8, 1200)
+  if (hint) {
+    hintMove.value = hint
+    sound.select()
+    haptics.tap()
+  }
+}
+
+function clearHint() {
+  hintMove.value = null
+}
+
+function offerDraw() {
+  if (gameOver.value || mode.value !== 'local') return
+  drawOffered.value = true
+  sound.select()
+  haptics.light()
+}
+
+function respondDraw(accepted: boolean) {
+  drawOffered.value = false
+  if (accepted) {
+    gameOver.value = true
+    result.value = 'draw'
+    sound.win()
+    haptics.success()
+    gameOverDialog.value = true
+  } else {
+    sound.select()
+    haptics.light()
+  }
+}
+
+function reviewMoveAt(index: number) {
+  reviewMove.value = index
+  sound.select()
+  haptics.tap()
+}
+
+function openNotation() {
+  // 查看棋谱时关闭结算弹窗，避免弹窗遮挡棋谱面板
+  gameOverDialog.value = false
+  showNotation.value = true
+  sound.select()
+  haptics.tap()
+}
+
+function closeNotation() {
+  showNotation.value = false
+  // 棋谱关闭后若对局已结束，恢复结算弹窗（保留「再来一局」入口）
+  if (gameOver.value) gameOverDialog.value = true
+}
+
 function scheduleAIMove() {
   if (mode.value !== 'ai') return
   if (gameOver.value) return
   if (currentSide.value === aiSide.value) {
     aiThinking.value = true
     aiTimer = setTimeout(() => {
-      const depth = difficulty.value === 'easy' ? 2 : 3
-      const move = findBestMove(board.value, aiSide.value, depth)
+      // 简单固定深度 2；中等深度 5；困难迭代加深至多 8 层、限 1.8s（超时回退已完成深度的最佳着法）
+      const move = difficulty.value === 'easy'
+        ? findBestMove(board.value, aiSide.value, 2)
+        : difficulty.value === 'medium'
+          ? findBestMove(board.value, aiSide.value, 5, 1800)
+          : findBestMove(board.value, aiSide.value, 8, 1800)
       aiThinking.value = false
       if (move) {
         executeMove(move.from, move.to)
@@ -393,7 +566,10 @@ function executeMove(from: Position, to: Position) {
   })
 
   // 执行走子
+  notations.value.push(toNotation(move, board.value))
   board.value = applyMove(board.value, move)
+  playedMoves.value.push(move)
+  positions.value.push(cloneBoard(board.value))
   gameRecord.value.moves.push(move)
   gameRecord.value.sides.push(currentSide.value)
   localStorage.setItem('xiangqi_record', JSON.stringify({ ...gameRecord.value, timestamp: Date.now() }))
@@ -401,6 +577,7 @@ function executeMove(from: Position, to: Position) {
   moveCount.value++
   // 走子后立即清除选中态与合法落点提示（修复：走子后提示点残留）
   clearSelection()
+  clearHint()
 
   // 音效
   if (move.captured) {
@@ -426,6 +603,30 @@ function checkGameState() {
 
   if (inCheck && status !== 'checkmate' && status !== 'stalemate') {
     showCheckAlert()
+  }
+
+  // 重复局面判定（长将/长捉/双方长打）：同一局面第 3 次出现且构成循环时裁决
+  const verdict = checkRepetitionViolation(playedMoves.value, positions.value)
+  if (verdict) {
+    gameOver.value = true
+    if (verdict.type === 'mutual_draw') {
+      drawByRepetition.value = verdict.reason
+      result.value = 'draw'
+      sound.win()
+      haptics.success()
+      toast.show(verdict.reason === 'mutual_attack' ? '双方长打，判和' : '双方循环重复，判和', '⚖️')
+    } else {
+      violationSide.value = verdict.side
+      violationReason.value = verdict.reason
+      result.value = verdict.side === 'red' ? 'black-win' : 'red-win'
+      sound.win()
+      haptics.win()
+      const who = verdict.side === 'red' ? '红方' : '黑方'
+      const why = verdict.reason === 'perpetual_check' ? '长将' : verdict.reason === 'perpetual_chase' ? '长捉' : '长打'
+      toast.show(`${who}${why}违规，判负！`, '⚖️')
+    }
+    gameOverDialog.value = true
+    return
   }
 
   if (status === 'checkmate') {
@@ -466,8 +667,16 @@ function undoMove() {
     currentSide.value = prev.side
     lastMove.value = prev.lastMove
     moveCount.value = Math.max(0, moveCount.value - 1)
+    playedMoves.value.pop()
+    positions.value.pop()
+    notations.value.pop()
   }
   clearSelection()
+  reviewMove.value = null
+  clearHint()
+  violationSide.value = null
+  violationReason.value = null
+  drawByRepetition.value = null
   aiThinking.value = false
   if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
   sound.select()
@@ -491,17 +700,31 @@ function resetGame() {
   aiThinking.value = false
   gameStarted.value = true
   gameRecord.value = { moves: [], sides: [] }
+  notations.value = []
   gameOverDialog.value = false
   board.value = initialBoard()
   currentSide.value = 'red'
   selected.value = null
   legalTargets.value = []
   history.value = []
+  positions.value = [initialBoard()]
+  playedMoves.value = []
+  violationSide.value = null
+  violationReason.value = null
+  drawByRepetition.value = null
   lastMove.value = null
   moveCount.value = 0
   gameOver.value = false
   result.value = null
   isCheckmate.value = false
+  reviewMove.value = null
+  hintMove.value = null
+  drawOffered.value = false
+  showNotation.value = false
+  // 人机模式：AI 执红（先手）时，重启后需手动调度首步
+  if (mode.value === 'ai' && aiSide.value === 'red') {
+    scheduleAIMove()
+  }
 }
 
 function continueGame() {
@@ -514,6 +737,9 @@ function newGame() {
 }
 
 function goHome() {
+  // 清理 AI 定时器，防止导航离开后回调在已卸载组件上执行
+  if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
+  aiThinking.value = false
   router.push('/')
 }
 
@@ -535,10 +761,7 @@ function startAI() {
 function startAIGame() {
   gameStarted.value = true
   resetGame()
-  // 如果 AI 执红，首步由 AI 走
-  if (aiSide.value === 'red') {
-    scheduleAIMove()
-  }
+  // AI 首步调度已统一在 resetGame() 中处理（aiSide === 'red' 时）
 }
 
 function onRestart() {
@@ -799,6 +1022,129 @@ function onRestart() {
   .start-ai-btn {
     padding: 7px 16px;
     font-size: 0.85em;
+  }
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.dialog-btn-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+.dialog-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.hint-active {
+  background: rgba(255, 165, 0, 0.15) !important;
+  border-color: rgba(255, 165, 0, 0.5) !important;
+  color: #FFA500 !important;
+}
+
+.notation-panel {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  width: 100%;
+  max-width: 280px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.notation-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.notation-title {
+  font-size: 0.95em;
+  font-weight: 600;
+  color: #fff;
+}
+.notation-close {
+  background: none;
+  border: none;
+  color: #9aa0b5;
+  font-size: 1.3em;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color 0.2s;
+}
+.notation-close:hover {
+  color: #fff;
+}
+.notation-list {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+}
+.notation-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 0.9em;
+}
+.notation-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.notation-item.active {
+  background: rgba(0, 191, 255, 0.12);
+  border: 1px solid rgba(0, 191, 255, 0.3);
+}
+.notation-item.red {
+  color: #FF6B6B;
+}
+.notation-item.black {
+  color: #9aa0b5;
+}
+.notation-item.red.active {
+  color: #FF4D4D;
+}
+.notation-item.black.active {
+  color: #fff;
+}
+.move-num {
+  font-size: 0.8em;
+  color: #6b7280;
+  min-width: 28px;
+}
+.move-text {
+  font-weight: 500;
+  font-family: serif;
+}
+.notation-empty {
+  padding: 20px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.85em;
+}
+
+@media (max-width: 640px) {
+  .notation-panel {
+    max-width: 100%;
+  }
+  .notation-list {
+    max-height: 180px;
+  }
+  .dialog-actions {
+    gap: 8px;
+  }
+  .dialog-btn {
+    padding: 10px 24px;
+    font-size: 1em;
   }
 }
 </style>

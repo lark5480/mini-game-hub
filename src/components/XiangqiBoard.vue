@@ -21,9 +21,13 @@ const props = withDefaults(defineProps<{
   lastMove: Move | null
   flipped?: boolean
   checkSide?: Side | null
+  hint?: { from: Position; to: Position } | null
+  highlight?: { from: Position; to: Position } | null
 }>(), {
   flipped: false,
-  checkSide: null
+  checkSide: null,
+  hint: null,
+  highlight: null
 })
 
 const emit = defineEmits<{
@@ -69,6 +73,9 @@ const BLACK_COLOR = '#2c3e50'
 const SELECT_RING = '#FFD700'
 const TARGET_DOT = 'rgba(0, 200, 100, 0.5)'
 const LAST_MOVE_HIGHLIGHT = 'rgba(255, 215, 0, 0.25)'
+const HINT_FROM_RING = 'rgba(255, 165, 0, 0.8)'
+const HINT_TO_MARKER = 'rgba(255, 165, 0, 0.6)'
+const HIGHLIGHT_RING = 'rgba(0, 191, 255, 0.8)'
 
 function calculateDimensions() {
   if (!wrapperRef.value) return
@@ -303,6 +310,39 @@ function drawHighlights(ctx: CanvasRenderingContext2D) {
   }
 }
 
+function drawHint(ctx: CanvasRenderingContext2D) {
+  if (!props.hint) return
+  const hint = props.hint
+
+  const fromCenter = getCellCenter(viewRow(hint.from.row), viewCol(hint.from.col))
+  ctx.beginPath()
+  ctx.arc(fromCenter.x, fromCenter.y, cellSize * 0.44, 0, Math.PI * 2)
+  ctx.strokeStyle = HINT_FROM_RING
+  ctx.lineWidth = 3
+  ctx.stroke()
+
+  const toCenter = getCellCenter(viewRow(hint.to.row), viewCol(hint.to.col))
+  ctx.beginPath()
+  ctx.arc(toCenter.x, toCenter.y, cellSize * 0.18, 0, Math.PI * 2)
+  ctx.fillStyle = HINT_TO_MARKER
+  ctx.fill()
+}
+
+
+function drawHighlight(ctx: CanvasRenderingContext2D) {
+  if (!props.highlight) return
+  const hl = props.highlight
+
+  for (const pos of [hl.from, hl.to]) {
+    const center = getCellCenter(viewRow(pos.row), viewCol(pos.col))
+    ctx.beginPath()
+    ctx.arc(center.x, center.y, cellSize * 0.44, 0, Math.PI * 2)
+    ctx.strokeStyle = HIGHLIGHT_RING
+    ctx.lineWidth = 3
+    ctx.stroke()
+  }
+}
+
 function render() {
   const canvas = canvasRef.value
   if (!canvas) return
@@ -312,6 +352,8 @@ function render() {
   ctx.clearRect(0, 0, canvasWidth, canvasHeight)
   drawBoard(ctx)
   drawHighlights(ctx)
+  drawHint(ctx)
+  drawHighlight(ctx)
   drawCheckPulse(ctx, performance.now())
 
   for (let r = 0; r < ROWS; r++) {
@@ -387,7 +429,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
 })
 
-watch(() => [props.board, props.selected, props.legalTargets, props.lastMove, props.flipped], () => {
+watch(() => [props.board, props.selected, props.legalTargets, props.lastMove, props.flipped, props.hint, props.highlight], () => {
   nextTick(render)
 }, { deep: true })
 </script>

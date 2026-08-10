@@ -17,7 +17,8 @@ try {
 
 const {
   initialBoard, generateMoves, isLegalMove, applyMove,
-  isInCheck, getGameStatus, classifyMove, isPinned
+  isInCheck, getGameStatus, classifyMove, isPinned, toNotation,
+  checkRepetitionViolation
 } = require(path.join(__dirname, '.tmp-xiangqi', 'rules'))
 const { indexFromOffset, flipIndex } = require(path.join(__dirname, '.tmp-xiangqi', 'types'))
 
@@ -808,6 +809,445 @@ console.log('\n=== Suite 26: 视角翻转映射 ===')
     const f = flipIndex(i, ROWS)
     assertTrue(f >= 0 && f < ROWS, '行翻转结果在合法范围内')
   }
+}
+
+
+// ============================================================
+// Suite 27: toNotation (7 pieces + capture + red/black views)
+// ============================================================
+console.log('\n=== Suite 27: toNotation ===')
+{
+  function notate(board, fr, fc, tr, tc, type, side) {
+    place(board, fr, fc, type, side)
+    const move = { from: { row: fr, col: fc }, to: { row: tr, col: tc } }
+    return toNotation(move, board)
+  }
+
+  const b = emptyBoard()
+
+  // --- Red view (redCol = 9 - col, col=8 -> 1, col=0 -> 9) ---
+  assertEq(notate(b, 7, 1, 7, 4, 'cannon', 'red'), '炮八平五', 'red cannon lateral (col=1->4, red view 8->5)')
+  assertEq(notate(b, 9, 1, 7, 2, 'horse', 'red'), '馬八進七', 'red horse jump (col=1->2, red view 8->7)')
+  assertEq(notate(b, 9, 0, 0, 0, 'rook', 'red'), '車九進九', 'red rook forward (col=0 view 9, forward 9)')
+  assertEq(notate(b, 9, 4, 8, 4, 'king', 'red'), '帥五進一', 'red king forward 1')
+  assertEq(notate(b, 6, 0, 5, 0, 'pawn', 'red'), '兵九進一', 'red pawn forward 1 (col=0 view 9)')
+  assertEq(notate(b, 9, 3, 8, 4, 'advisor', 'red'), '仕六進五', 'red advisor diagonal (col=3->4, view 6->5)')
+  assertEq(notate(b, 9, 2, 7, 4, 'elephant', 'red'), '相七進五', 'red elephant diagonal (col=2->4, view 7->5)')
+
+  // --- Black view (blackCol = col + 1, col=0 -> 1, col=8 -> 9) ---
+  assertEq(notate(b, 2, 1, 2, 4, 'cannon', 'black'), '炮二平五', 'black cannon lateral (col=1->4, black view 2->5)')
+  assertEq(notate(b, 0, 7, 2, 5, 'horse', 'black'), '馬八進六', 'black horse jump (col=7->5, view 8->7)')
+  assertEq(notate(b, 0, 8, 9, 8, 'rook', 'black'), '車九進九', 'black rook forward (col=8 view 9, forward 9)')
+  assertEq(notate(b, 0, 4, 1, 4, 'king', 'black'), '將五進一', 'black king forward 1')
+  assertEq(notate(b, 3, 0, 4, 0, 'pawn', 'black'), '卒一進一', 'black pawn forward 1 (col=0 view 1)')
+  assertEq(notate(b, 0, 3, 1, 4, 'advisor', 'black'), '士四進五', 'black advisor diagonal (col=3->4, view 4->5)')
+  assertEq(notate(b, 0, 2, 2, 4, 'elephant', 'black'), '象三進五', 'black elephant diagonal (col=2->4, view 3->5)')
+
+  // --- Captures ---
+  const cap = emptyBoard()
+  place(cap, 0, 4, 'king', 'black')
+  place(cap, 9, 4, 'king', 'red')
+  place(cap, 5, 4, 'rook', 'red')
+  place(cap, 2, 4, 'horse', 'black')
+  const capMove = { from: { row: 5, col: 4 }, to: { row: 2, col: 4 }, captured: cap[2][4] }
+  assertEq(toNotation(capMove, cap), '車五進三', 'red rook captures black horse (forward 3)')
+
+  const capBoard2 = emptyBoard()
+  place(capBoard2, 0, 4, 'king', 'black')
+  place(capBoard2, 9, 4, 'king', 'red')
+  place(capBoard2, 2, 4, 'horse', 'black')
+  place(capBoard2, 5, 4, 'rook', 'red')
+  const capMove2 = { from: { row: 2, col: 4 }, to: { row: 5, col: 4 }, captured: capBoard2[5][4] }
+  assertEq(toNotation(capMove2, capBoard2), '馬五進五', 'black horse captures red rook (follows dest col)')
+
+  // --- Retreat (backward) ---
+  const bk = emptyBoard()
+  assertEq(notate(bk, 5, 8, 6, 8, 'rook', 'red'), '車一退一', 'red rook backward 1 (col=8 view 1)')
+  // --- Additional: black retreat ---
+  const bk2 = emptyBoard()
+  assertEq(notate(bk2, 4, 2, 2, 1, 'horse', 'black'), '馬三退二', 'black horse retreat (col=2->1, black view 3->2)')
+  // --- Additional: pawn horizontal (after crossing river) ---
+  const bk3 = emptyBoard()
+  assertEq(notate(bk3, 4, 0, 4, 1, 'pawn', 'red'), '兵九平八', 'red pawn horizontal (col=0->1, view 9->8)')
+  // --- Additional: elephant retreat ---
+  const bk4 = emptyBoard()
+  assertEq(notate(bk4, 2, 4, 0, 2, 'elephant', 'black'), '象五退三', 'black elephant retreat (col=4->2, view 5->3)')
+}
+
+// ============================================================
+// Suite 28: 重复局面判定（长将/长捉/双方长打）
+// ============================================================
+console.log('\n=== Suite 28: 重复局面判定 ===')
+{
+  // 构造棋盘：给定棋子列表 [row, col, type, side]
+  function boardOf(pieces) {
+    const b = emptyBoard()
+    for (const [row, col, type, side] of pieces) b[row][col] = { type, side }
+    return b
+  }
+  function mv(fr, fc, tr, tc) { return { from: { row: fr, col: fc }, to: { row: tr, col: tc } } }
+  // 将 4 步循环重复 3 次得到 12 个半步；positions[k] = 走完 k 步后的局面
+  function repeat(cycle, times) {
+    const out = []
+    for (let i = 0; i < times; i++) out.push(...cycle)
+    return out
+  }
+  function positionsOf(boards, cycleLen, times) {
+    // boards 为一个周期的 cycleLen 个局面（P0..P{cycleLen-1}），positions 长度 = cycleLen*times + 1
+    const out = []
+    for (let i = 0; i <= cycleLen * times; i++) out.push(boards[i % cycleLen])
+    return out
+  }
+
+  const RKing = [9, 3, 'king', 'red']
+
+  // --- 28.1 单方长将 → 红方判负 ---
+  {
+    const P0 = boardOf([RKing, [1, 4, 'king', 'black'], [0, 0, 'rook', 'red']])
+    const P1 = boardOf([RKing, [1, 4, 'king', 'black'], [1, 0, 'rook', 'red']])
+    const P2 = boardOf([RKing, [0, 4, 'king', 'black'], [1, 0, 'rook', 'red']])
+    const P3 = boardOf([RKing, [0, 4, 'king', 'black'], [0, 0, 'rook', 'red']])
+    const cycle = [mv(0, 0, 1, 0), mv(1, 4, 0, 4), mv(1, 0, 0, 0), mv(0, 4, 1, 4)]
+    const moves = repeat(cycle, 3)
+    const positions = positionsOf([P0, P1, P2, P3], 4, 3)
+    const v = checkRepetitionViolation(moves, positions)
+    assertTrue(v !== null, '长将：有判定结果')
+    assertEq(v && v.type, 'violation', '长将：type=violation')
+    assertEq(v && v.side, 'red', '长将：违规方为红')
+    assertEq(v && v.reason, 'perpetual_check', '长将：reason=perpetual_check')
+  }
+
+  // --- 28.2 单方长捉（车追马）→ 红方判负 ---
+  {
+    const P0 = boardOf([RKing, [0, 4, 'king', 'black'], [4, 0, 'rook', 'red'], [6, 5, 'horse', 'black']])
+    const P1 = boardOf([RKing, [0, 4, 'king', 'black'], [6, 0, 'rook', 'red'], [6, 5, 'horse', 'black']])
+    const P2 = boardOf([RKing, [0, 4, 'king', 'black'], [6, 0, 'rook', 'red'], [4, 6, 'horse', 'black']])
+    const P3 = boardOf([RKing, [0, 4, 'king', 'black'], [4, 0, 'rook', 'red'], [4, 6, 'horse', 'black']])
+    const cycle = [mv(4, 0, 6, 0), mv(6, 5, 4, 6), mv(6, 0, 4, 0), mv(4, 6, 6, 5)]
+    const moves = repeat(cycle, 3)
+    const positions = positionsOf([P0, P1, P2, P3], 4, 3)
+    const v = checkRepetitionViolation(moves, positions)
+    assertTrue(v !== null, '长捉：有判定结果')
+    assertEq(v && v.type, 'violation', '长捉：type=violation')
+    assertEq(v && v.side, 'red', '长捉：违规方为红')
+    assertEq(v && v.reason, 'perpetual_chase', '长捉：reason=perpetual_chase')
+  }
+
+  // --- 28.3 双方长将 → 判和（mutual_attack） ---
+  {
+    const P0 = boardOf([RKing, [0, 4, 'king', 'black'], [0, 0, 'rook', 'red'], [9, 8, 'rook', 'black']])
+    const P1 = boardOf([RKing, [0, 4, 'king', 'black'], [0, 1, 'rook', 'red'], [9, 8, 'rook', 'black']])
+    const P2 = boardOf([RKing, [0, 4, 'king', 'black'], [0, 1, 'rook', 'red'], [9, 7, 'rook', 'black']])
+    const P3 = boardOf([RKing, [0, 4, 'king', 'black'], [0, 0, 'rook', 'red'], [9, 7, 'rook', 'black']])
+    const cycle = [mv(0, 0, 0, 1), mv(9, 8, 9, 7), mv(0, 1, 0, 0), mv(9, 7, 9, 8)]
+    const moves = repeat(cycle, 3)
+    const positions = positionsOf([P0, P1, P2, P3], 4, 3)
+    const v = checkRepetitionViolation(moves, positions)
+    assertTrue(v !== null, '双方长将：有判定结果')
+    assertEq(v && v.type, 'mutual_draw', '双方长将：type=mutual_draw')
+    assertEq(v && v.reason, 'mutual_attack', '双方长将：reason=mutual_attack')
+  }
+
+  // --- 28.4 长将优先：红长将 vs 黑长捉 → 长将方（红）判负 ---
+  {
+    const P0 = boardOf([RKing, [0, 4, 'king', 'black'], [0, 0, 'rook', 'red'], [5, 0, 'rook', 'black']])
+    const P1 = boardOf([RKing, [0, 4, 'king', 'black'], [0, 1, 'rook', 'red'], [5, 0, 'rook', 'black']])
+    const P2 = boardOf([RKing, [0, 4, 'king', 'black'], [0, 1, 'rook', 'red'], [5, 1, 'rook', 'black']])
+    const P3 = boardOf([RKing, [0, 4, 'king', 'black'], [0, 0, 'rook', 'red'], [5, 1, 'rook', 'black']])
+    const cycle = [mv(0, 0, 0, 1), mv(5, 0, 5, 1), mv(0, 1, 0, 0), mv(5, 1, 5, 0)]
+    const moves = repeat(cycle, 3)
+    const positions = positionsOf([P0, P1, P2, P3], 4, 3)
+    const v = checkRepetitionViolation(moves, positions)
+    assertTrue(v !== null, '长将优先：有判定结果')
+    assertEq(v && v.type, 'violation', '长将优先：type=violation')
+    assertEq(v && v.side, 'red', '长将优先：长将方（红）判负')
+    assertEq(v && v.reason, 'perpetual_check', '长将优先：reason=perpetual_check')
+  }
+
+  // --- 28.5 双方均闲的重复循环 → 判和（mutual_idle） ---
+  {
+    const P0 = boardOf([RKing, [0, 4, 'king', 'black'], [5, 0, 'rook', 'red'], [6, 8, 'rook', 'black']])
+    const P1 = boardOf([RKing, [0, 4, 'king', 'black'], [5, 1, 'rook', 'red'], [6, 8, 'rook', 'black']])
+    const P2 = boardOf([RKing, [0, 4, 'king', 'black'], [5, 1, 'rook', 'red'], [6, 7, 'rook', 'black']])
+    const P3 = boardOf([RKing, [0, 4, 'king', 'black'], [5, 0, 'rook', 'red'], [6, 7, 'rook', 'black']])
+    const cycle = [mv(5, 0, 5, 1), mv(6, 8, 6, 7), mv(5, 1, 5, 0), mv(6, 7, 6, 8)]
+    const moves = repeat(cycle, 3)
+    const positions = positionsOf([P0, P1, P2, P3], 4, 3)
+    const v = checkRepetitionViolation(moves, positions)
+    assertTrue(v !== null, '双方闲循环：有判定结果')
+    assertEq(v && v.type, 'mutual_draw', '双方闲循环：type=mutual_draw')
+    assertEq(v && v.reason, 'mutual_idle', '双方闲循环：reason=mutual_idle')
+  }
+
+  // --- 28.6 局面重复但两周期着法不同 → 不判 ---
+  {
+    const P0 = boardOf([RKing, [0, 4, 'king', 'black'], [5, 0, 'rook', 'red']])
+    const P1a = boardOf([RKing, [0, 4, 'king', 'black'], [5, 1, 'rook', 'red']])
+    const P2a = boardOf([RKing, [0, 3, 'king', 'black'], [5, 1, 'rook', 'red']])
+    const P3a = boardOf([RKing, [0, 3, 'king', 'black'], [5, 0, 'rook', 'red']])
+    const P1b = boardOf([RKing, [0, 4, 'king', 'black'], [5, 2, 'rook', 'red']])
+    const P2b = boardOf([RKing, [0, 3, 'king', 'black'], [5, 2, 'rook', 'red']])
+    const P3b = boardOf([RKing, [0, 3, 'king', 'black'], [5, 0, 'rook', 'red']])
+    const moves = [
+      mv(5, 0, 5, 1), mv(0, 4, 0, 3), mv(5, 1, 5, 0), mv(0, 3, 0, 4),
+      mv(5, 0, 5, 2), mv(0, 4, 0, 3), mv(5, 2, 5, 0), mv(0, 3, 0, 4)
+    ]
+    const positions = [P0, P1a, P2a, P3a, P0, P1b, P2b, P3b, P0]
+    const v = checkRepetitionViolation(moves, positions)
+    assertEq(v, null, '着法不同的重复：不判')
+  }
+
+  // --- 28.7 半步数不足 8 → 不判 ---
+  {
+    const P0 = boardOf([RKing, [0, 4, 'king', 'black'], [5, 0, 'rook', 'red']])
+    const v = checkRepetitionViolation(
+      [mv(5, 0, 5, 1), mv(0, 4, 0, 3), mv(5, 1, 5, 0), mv(0, 3, 0, 4)],
+      [P0, P0, P0, P0, P0]
+    )
+    assertEq(v, null, '半步不足：不判')
+  }
+
+  // --- 28.8 一将一捉（混合长打）→ perpetual_attack ---
+  // 红马 (4,4)→(2,5) 将军；黑马 (5,3)→(6,5) 闲；红马 (2,5)→(4,4) 后能踩 (6,5) → 捉；黑马 (6,5)→(5,3) 闲返回
+  {
+    const P0 = boardOf([RKing, [0, 4, 'king', 'black'], [4, 4, 'horse', 'red'], [5, 3, 'horse', 'black']])
+    const P1 = boardOf([RKing, [0, 4, 'king', 'black'], [2, 5, 'horse', 'red'], [5, 3, 'horse', 'black']])
+    const P2 = boardOf([RKing, [0, 4, 'king', 'black'], [2, 5, 'horse', 'red'], [6, 5, 'horse', 'black']])
+    const P3 = boardOf([RKing, [0, 4, 'king', 'black'], [4, 4, 'horse', 'red'], [6, 5, 'horse', 'black']])
+    const cycle = [mv(4, 4, 2, 5), mv(5, 3, 6, 5), mv(2, 5, 4, 4), mv(6, 5, 5, 3)]
+    const moves = repeat(cycle, 3)
+    const positions = positionsOf([P0, P1, P2, P3], 4, 3)
+    const v = checkRepetitionViolation(moves, positions)
+    assertTrue(v !== null, '一将一捉：有判定结果')
+    assertEq(v && v.type, 'violation', '一将一捉：type=violation')
+    assertEq(v && v.side, 'red', '一将一捉：违规方为红')
+    assertEq(v && v.reason, 'perpetual_attack', '一将一捉：reason=perpetual_attack')
+  }
+}
+
+// ============================================================
+// Suite 29: AI 战术（静态搜索 / 迭代加深）
+// ============================================================
+console.log('\n=== Suite 29: AI 战术 ===')
+{
+  const { findBestMove } = require(path.join(__dirname, '.tmp-xiangqi', 'ai'))
+  function boardOf(pieces) {
+    const b = emptyBoard()
+    for (const [row, col, type, side] of pieces) b[row][col] = { type, side }
+    return b
+  }
+
+  // --- 29.1 白吃悬子：无保护的黑马应被红车吃掉 ---
+  {
+    const b = boardOf([
+      [0, 4, 'king', 'black'], [9, 3, 'king', 'red'],
+      [5, 0, 'rook', 'red'], [3, 0, 'horse', 'black']
+    ])
+    const m = findBestMove(b, 'red', 2)
+    assertTrue(m !== null, '悬子：AI 有应着')
+    assertTrue(m && m.to.row === 3 && m.to.col === 0, '悬子：车吃无保护马',
+      m ? 'got ' + m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
+  }
+
+  // --- 29.2 避开陷阱：黑马有车保护，红车不得贪吃（静态搜索消除水平线效应） ---
+  {
+    const b = boardOf([
+      [0, 4, 'king', 'black'], [9, 3, 'king', 'red'],
+      [5, 0, 'rook', 'red'], [3, 0, 'horse', 'black'], [0, 0, 'rook', 'black']
+    ])
+    const m = findBestMove(b, 'red', 2)
+    assertTrue(m !== null, '陷阱：AI 有应着')
+    assertFalse(m && m.from.row === 5 && m.from.col === 0 && m.to.row === 3 && m.to.col === 0,
+      '陷阱：不贪吃有保护的马（车换马亏子）')
+  }
+
+  // --- 29.3 一步取胜：AI 应找到将死/困毙着法 ---
+  {
+    const b = boardOf([
+      [0, 4, 'king', 'black'], [9, 3, 'king', 'red'],
+      [1, 8, 'rook', 'red'], [5, 0, 'rook', 'red']
+    ])
+    const m = findBestMove(b, 'red', 2)
+    assertTrue(m !== null, '一步杀：AI 有应着')
+    const after = applyMove(b, m)
+    const st = getGameStatus(after, 'black')
+    assertTrue(st === 'checkmate' || st === 'stalemate', '一步杀：走后黑方立败',
+      'status=' + st + ' move=' + (m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null'))
+    // 黑方已无子可走，findBestMove 应返回 null
+    assertEq(findBestMove(after, 'black', 2), null, '一步杀：终局局面 AI 返回 null')
+  }
+
+  // --- 29.4 开局纪律：深度 2 不得贪炮打马（回归测试：旧版因水平线效应必走此着） ---
+  {
+    const b = initialBoard()
+    const m = findBestMove(b, 'red', 2)
+    assertTrue(m !== null, '开局：AI 有应着')
+    const isGreedyCannon = m && m.from.row === 7 &&
+      ((m.from.col === 1 && m.to.row === 0 && m.to.col === 1) ||
+       (m.from.col === 7 && m.to.row === 0 && m.to.col === 7))
+    assertFalse(isGreedyCannon, '开局：不贪炮打马（炮换马亏子）',
+      m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
+  }
+
+  // --- 29.5 合法性：AI 返回的着法必须合法 ---
+  {
+    const b = initialBoard()
+    const m = findBestMove(b, 'red', 3)
+    assertTrue(m !== null, '合法性：AI 有应着')
+    assertTrue(m && isLegalMove(b, m.from, m.to), '合法性：开局深度3着法合法',
+      m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
+  }
+
+  // --- 29.6 长将规避：AI 不选择走进重复循环的长将着法（搜索内重复局面强负分） ---
+  {
+    // 黑将 (1,4) 九宫邻格全被封死仅剩 (0,4) 往返：红车 (0,0)->(1,0) 将军 → 黑将只能 (0,4)
+    // → 红车 (1,0)->(0,0) 将军 → 黑将只能 (1,4) = 回到初始局面（红方长将按重复规则判负）。
+    // 红方存在吃炮净赚着法，循环线被重复惩罚后不应被选中。
+    const b = boardOf([
+      [9, 3, 'king', 'red'], [0, 0, 'rook', 'red'],
+      [1, 4, 'king', 'black'], [0, 3, 'cannon', 'black'], [0, 5, 'cannon', 'black'],
+      [2, 4, 'pawn', 'black'], [1, 3, 'pawn', 'black'], [1, 5, 'pawn', 'black']
+    ])
+    const m = findBestMove(b, 'red', 4)
+    assertTrue(m !== null, '长将规避：AI 有应着')
+    assertFalse(m && m.from.row === 0 && m.from.col === 0 && m.to.row === 1 && m.to.col === 0,
+      '长将规避：不走进长将循环（(0,0)->(1,0)）',
+      m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
+  }
+}
+
+// ============================================================
+// Suite 30: isInCheckLight 与 rules.isInCheck 语义等价（轻量直扫 vs 全盘伪走法生成）
+// ============================================================
+console.log('\n=== Suite 30: isInCheckLight 语义等价 ===')
+{
+  const { isInCheckLight } = require(path.join(__dirname, '.tmp-xiangqi', 'ai'))
+  const positions = []
+  positions.push({ name: '初始局面', b: initialBoard() })
+  // 飞将：将帅同列无阻隔
+  {
+    const b = emptyBoard()
+    place(b, 9, 4, 'king', 'red')
+    place(b, 0, 4, 'king', 'black')
+    positions.push({ name: '飞将局面', b })
+  }
+  // 黑车直线将军红帅
+  {
+    const b = emptyBoard()
+    place(b, 9, 4, 'king', 'red')
+    place(b, 0, 4, 'king', 'black')
+    place(b, 3, 4, 'rook', 'black')
+    positions.push({ name: '黑车直将红帅', b })
+  }
+  // 黑马将红帅（蹩腿位空）
+  {
+    const b = emptyBoard()
+    place(b, 9, 4, 'king', 'red')
+    place(b, 0, 4, 'king', 'black')
+    place(b, 7, 5, 'horse', 'black')
+    positions.push({ name: '黑马将红帅', b })
+  }
+  // 黑炮隔子将红帅（红兵作炮架）
+  {
+    const b = emptyBoard()
+    place(b, 9, 4, 'king', 'red')
+    place(b, 0, 4, 'king', 'black')
+    place(b, 2, 4, 'cannon', 'black')
+    place(b, 5, 4, 'pawn', 'red')
+    positions.push({ name: '黑炮隔子将红帅', b })
+  }
+  // 黑卒过河斜攻红帅
+  {
+    const b = emptyBoard()
+    place(b, 9, 4, 'king', 'red')
+    place(b, 0, 4, 'king', 'black')
+    place(b, 8, 3, 'pawn', 'black')
+    positions.push({ name: '黑卒斜攻红帅', b })
+  }
+  // 29.6 长将局面（黑将九宫被封）
+  {
+    const b = emptyBoard()
+    place(b, 9, 3, 'king', 'red')
+    place(b, 0, 0, 'rook', 'red')
+    place(b, 1, 4, 'king', 'black')
+    place(b, 0, 3, 'cannon', 'black')
+    place(b, 0, 5, 'cannon', 'black')
+    place(b, 2, 4, 'pawn', 'black')
+    place(b, 1, 3, 'pawn', 'black')
+    place(b, 1, 5, 'pawn', 'black')
+    positions.push({ name: '长将局面（29.6）', b })
+  }
+  for (const { name, b } of positions) {
+    assertEq(isInCheckLight(b, 'red'), isInCheck(b, 'red'), name + '：红方被将判定一致')
+    assertEq(isInCheckLight(b, 'black'), isInCheck(b, 'black'), name + '：黑方被将判定一致')
+  }
+}
+
+// ============================================================
+// Suite 31: nextKey 增量 Zobrist 与 boardKey 全量一致
+// ============================================================
+console.log('\n=== Suite 31: nextKey 增量 Zobrist 一致性 ===')
+{
+  const { boardKey, nextKey } = require(path.join(__dirname, '.tmp-xiangqi', 'ai'))
+  // 开局着法序列逐步断言（移子 + 换手）
+  const seq = [
+    { name: '红炮二平五', from: { row: 7, col: 1 }, to: { row: 7, col: 4 } },
+    { name: '黑炮二平五', from: { row: 2, col: 1 }, to: { row: 2, col: 4 } },
+    { name: '红马二进三', from: { row: 9, col: 1 }, to: { row: 7, col: 2 } },
+    { name: '黑马二进三', from: { row: 0, col: 1 }, to: { row: 2, col: 2 } },
+    { name: '红车一平二', from: { row: 9, col: 0 }, to: { row: 9, col: 1 } }
+  ]
+  let cur = initialBoard()
+  let side = 'red'
+  let key = boardKey(cur, side)
+  assert(key === boardKey(cur, side), '序列起点：rootKey 与全量一致')
+  for (const s of seq) {
+    const move = { from: s.from, to: s.to }
+    key = nextKey(key, cur, move, side)
+    cur = applyMove(cur, move)
+    side = side === 'red' ? 'black' : 'red'
+    assert(key === boardKey(cur, side), s.name + '：增量 key 与全量一致')
+  }
+  // 吃子场景（victim XOR）
+  {
+    const b = emptyBoard()
+    place(b, 9, 4, 'king', 'red')
+    place(b, 0, 4, 'king', 'black')
+    place(b, 5, 0, 'rook', 'red')
+    place(b, 3, 0, 'horse', 'black')
+    const move = { from: { row: 5, col: 0 }, to: { row: 3, col: 0 } }
+    const next = nextKey(boardKey(b, 'red'), b, move, 'red')
+    assert(next === boardKey(applyMove(b, move), 'black'), '吃子：增量 key 与全量一致')
+  }
+}
+
+// ============================================================
+// Suite 32: 深搜索稳定性 / ply 越界防御
+// ============================================================
+console.log('\n=== Suite 32: 深搜索稳定性 ===')
+{
+  const { findBestMove } = require(path.join(__dirname, '.tmp-xiangqi', 'ai'))
+  // 互将残局：红车将军黑将，黑车可吃子解将并反将红将——搜索反复进出静态搜索吃子链。
+  // 回归点：quiescence 被将时深度不受 qdepth 限制，极端互将长链可使 ply 超过
+  // MAX_PLY（40），killerMoves 定长数组越界 → moveOrderScore 访问 killers[0] 崩溃
+  // （浏览器困难模式实测捕获，栈：moveOrderScore → orderMoves → quiescence ×30+）。
+  const b = boardOf([
+    [9, 4, 'king', 'red'], [1, 4, 'rook', 'red'],
+    [0, 4, 'king', 'black'], [2, 4, 'rook', 'black']
+  ])
+  const m = findBestMove(b, 'red', 8)
+  assertTrue(m !== null, '深搜索：互将残局 d8 有应着')
+  assertTrue(m && isLegalMove(b, m.from, m.to), '深搜索：互将残局 d8 着法合法',
+    m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
+  const m2 = findBestMove(b, 'red', 8, 1800)
+  assertTrue(m2 !== null, '深搜索：互将残局 d8+1800ms 有应着')
+  assertTrue(m2 && isLegalMove(b, m2.from, m2.to), '深搜索：互将残局 d8+1800ms 着法合法',
+    m2 ? m2.from.row + ',' + m2.from.col + '->' + m2.to.row + ',' + m2.to.col : 'null')
+  // 困难模式真实配置（开局局面，1.8s 时限）
+  const m3 = findBestMove(initialBoard(), 'red', 8, 1800)
+  assertTrue(m3 !== null, '深搜索：开局 d8+1800ms 有应着')
+  assertTrue(m3 && isLegalMove(initialBoard(), m3.from, m3.to), '深搜索：开局 d8+1800ms 着法合法',
+    m3 ? m3.from.row + ',' + m3.from.col + '->' + m3.to.row + ',' + m3.to.col : 'null')
 }
 
 // ============================================================
