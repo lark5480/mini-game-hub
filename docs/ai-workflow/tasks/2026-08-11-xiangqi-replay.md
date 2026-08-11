@@ -86,7 +86,11 @@ let playTimer: ReturnType<typeof setInterval> | null = null
 1. togglePlay 先置 playing=true 再调 reviewMoveAt → reviewMoveAt 内 stopPlayback 把 playing 重置导致播放状态错乱；改为位置处理在 playing 置位之前
 2. 空棋谱时 stepForward 按钮 disabled 漏 notationList.length === 0 → 点击 reviewMoveAt(0) 读 positions[1]=undefined；修复按钮条件 + reviewMoveAt 加越界防御
 
+用户实测反馈修复（51ebc32）：
+3. 播放只走一步即停（点一次暂停一次）——播放 tick 每步调 reviewMoveAt，其开头无条件 stopPlayback 清掉 interval，播放自我终止；修复：reviewMoveAt 剥离停止逻辑只切局面，手动入口（onNotationClick/stepBack/stepForward）显式停播
+
 ## 交接记录（每轮更新）
 | 轮次 | 执行者 | 结果 | 遗留问题 |
 |------|--------|------:---------|
 | R1 | Codex | build 零错误；引擎零改动未跑回归测试（按用户惯例环境会卡死，跳过）；手动冒烟未做 | 冒烟清单 5 项待验证 |
+| R1-fix | Codex | 用户实测发现播放自停（51ebc32 修复），build 零错误 | 冒烟清单其余 4 项待验证（播放连续性已修复待复测） |
