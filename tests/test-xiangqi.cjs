@@ -1328,6 +1328,56 @@ console.log('\n=== Suite 34: 取消搜索语义 ===')
 }
 
 // ============================================================
+// Suite 35: 开局库（主变查表，命中直出）
+// ============================================================
+console.log('\n=== Suite 35: 开局库 ===')
+{
+  const { lookupOpening } = require(path.join(__dirname, '.tmp-xiangqi', 'openings'))
+  const mk = (r1, c1, r2, c2) => ({ from: { row: r1, col: c1 }, to: { row: r2, col: c2 } })
+  // 断言 1：初始局面命中且合法（红方有库着法）
+  const o1 = lookupOpening(initialBoard(), 'red')
+  assertTrue(o1 !== null && isLegalMove(initialBoard(), o1.from, o1.to), '初始局面命中开局库且着法合法',
+    o1 ? o1.from.row + ',' + o1.from.col + '->' + o1.to.row + ',' + o1.to.col : 'null')
+  // 断言 2：红方库着法后黑方有应着（随机变着同样覆盖黑方）
+  const b1 = applyMove(initialBoard(), o1)
+  const o2 = lookupOpening(b1, 'black')
+  assertTrue(o2 !== null && isLegalMove(b1, o2.from, o2.to), '黑方应着命中且合法',
+    o2 ? o2.from.row + ',' + o2.from.col + '->' + o2.to.row + ',' + o2.to.col : 'null')
+  // 断言 3：沿中炮直车对屏风马主变逐步走，每步查表均命中且合法
+  // （谱：炮二平五 马8进7 马二进三 车9平8 车一平二 马2进3）
+  const line = [mk(7, 7, 7, 4), mk(0, 7, 2, 6), mk(9, 7, 7, 6), mk(0, 8, 0, 7), mk(9, 8, 9, 7), mk(0, 1, 2, 2)]
+  let b3 = initialBoard()
+  let side3 = 'red'
+  for (let i = 0; i < line.length; i++) {
+    const m = lookupOpening(b3, side3)
+    assertTrue(m !== null && isLegalMove(b3, m.from, m.to), '主变第 ' + (i + 1) + ' 步命中且合法',
+      m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
+    b3 = applyMove(b3, line[i])
+    side3 = side3 === 'red' ? 'black' : 'red'
+  }
+  // 断言 4：走完主变后乱走一步（红车九平八），黑方查表返回 null（超出库覆盖）
+  b3 = applyMove(b3, mk(9, 0, 9, 1))
+  assertTrue(lookupOpening(b3, 'black') === null, '主变外乱走一步后查表返回 null')
+  // 断言 5：中盘乱走 20 步后查表返回 null
+  let b5 = initialBoard()
+  let side5 = 'red'
+  for (let i = 0; i < 20; i++) {
+    const ms = generateMoves(b5, side5)
+    if (ms.length === 0) break
+    b5 = applyMove(b5, ms[Math.floor(Math.random() * ms.length)])
+    side5 = side5 === 'red' ? 'black' : 'red'
+  }
+  assertTrue(lookupOpening(b5, side5) === null, '中盘乱走 20 步后查表返回 null')
+  // 随机性（仅记录不硬断言，避免 flaky）：初始局面查 5 次统计变着数
+  const seen = new Set()
+  for (let i = 0; i < 5; i++) {
+    const m = lookupOpening(initialBoard(), 'red')
+    if (m) seen.add(m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col)
+  }
+  console.log('  INFO: 初始局面 5 次查表变着数 = ' + seen.size)
+}
+
+// ============================================================
 // Summary
 // ============================================================
 console.log('\n' + '='.repeat(50))

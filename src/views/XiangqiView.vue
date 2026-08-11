@@ -256,6 +256,7 @@ import type { Board, Position, Move, Side } from '@/engine/xiangqi/types'
 import { cloneBoard } from '@/engine/xiangqi/types'
 import { initialBoard, generateMoves, applyMove, isInCheck, getGameStatus, classifyMove, isPinned, toNotation, checkRepetitionViolation } from '@/engine/xiangqi/rules'
 import { boardKey } from '@/engine/xiangqi/ai'
+import { lookupOpening } from '@/engine/xiangqi/openings'
 
 type GameMode = 'local' | 'online' | 'ai'
 type AISide = 'red' | 'black'
@@ -429,6 +430,16 @@ async function showHint() {
   if (gameOver.value || aiThinking.value || currentSide.value === aiSide.value) return
   const seq = ++hintSeq
   hintThinking.value = true
+  // 开局库：命中主变直接给提示（零延迟），未命中才进 Worker 搜索
+  const opening = lookupOpening(board.value, humanSide.value)
+  if (opening) {
+    if (seq !== hintSeq) return // 过期（又点/走子/取消），丢弃
+    hintThinking.value = false
+    hintMove.value = opening
+    sound.select()
+    haptics.tap()
+    return
+  }
   // 提示与 AI 同强度：简单固定深度 2，中等深度 4，困难迭代加深（限 2s 保证响应，异步不阻塞 UI）
   // 均传入对局历史 key：提示不走进长将/长捉判负的着法
   const hint = await requestSearch({
@@ -503,6 +514,16 @@ function scheduleAIMove() {
     const seq = ++aiSeq
     aiTimer = setTimeout(async () => {
       aiTimer = null
+      // 开局库：命中主变直接走（零搜索延迟），未命中才进 Worker 搜索
+      const opening = lookupOpening(board.value, aiSide.value)
+      if (opening) {
+        aiThinking.value = false
+        if (seq !== aiSeq) return
+        if (!gameOver.value && currentSide.value === aiSide.value && mode.value === 'ai') {
+          executeMove(opening.from, opening.to)
+        }
+        return
+      }
       // 简单固定深度 2；中等深度 4、限 1.2s；困难迭代加深至多 8 层、限 4s（超时回退已完成深度的最佳着法）
       // 均传入对局历史 key：AI 不走进长将/长捉判负的着法
       const move = await requestSearch({
