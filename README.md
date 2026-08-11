@@ -23,9 +23,9 @@
 | 6 | 🎱 弹球打砖块 | 经典街机游戏 | ⭐⭐ |
 | 7 | 🔢 2048 | 数字合成挑战 | ⭐⭐ |
 | 8 | 🔨 打地鼠 | 反应力大考验 | ⭐ |
-| 9 | ⭕ 井字棋 | 经典对战 AI | ⭐ |
+| 9 | ⭕ 井字棋 | 单人 AI · 在线双人 | ⭐ |
 | 10 | 💡 西蒙记忆灯 | 看灯序挑战记忆 | ⭐ |
-| 11 | 👥 井字棋·双人 | 在线实时对战（联机） | ⭐ |
+| 11 | ♟️ 中国象棋 | 人机对弈（三档难度）· 本地双人 · 联机 | ⭐⭐ |
 
 ---
 
@@ -105,7 +105,9 @@ game-collection/
 │   │   ├── GameToast.vue          # 成就解锁 Toast（带过渡动画 + safe-area）
 │   │   ├── PauseOverlay.vue       # 暂停遮罩（带过渡动画）
 │   │   ├── ResumePrompt.vue       # 继续/重开选择弹窗（带过渡动画）
-│   │   └── ScoreFloat.vue         # 浮动分数动画（"+10" 等）
+│   │   ├── ScoreFloat.vue         # 浮动分数动画（"+10" 等）
+│   │   ├── XiangqiBoard.vue       # 中国象棋棋盘（Canvas 渲染 + 点击交互）
+│   │   └── WhackAMoleBoard.vue    # 打地鼠棋盘
 │   ├── composables/         # 组合式函数
 │   │   ├── useGameKeyboard.ts  # 键盘输入处理（支持 repeat 长按连发 + isDown 查询）
 │   │   ├── useGameLoop.ts      # 游戏循环管理（暂停停 rAF + dt clamp）
@@ -116,13 +118,28 @@ game-collection/
 │   │   ├── useHaptics.ts       # 触觉反馈（移动端震动）
 │   │   ├── useScoreFloats.ts   # 浮动分数堆叠管理
 │   │   ├── useGameSave.ts      # 存档/读档/继续游戏
+│   │   ├── useAutoSave.ts      # 自动保存（300ms 节流）
+│   │   ├── useGameOver.ts      # 游戏结束统一处理（新记录 + 成就提示）
+│   │   ├── useGamePause.ts     # 统一的暂停/恢复（P/Esc + 失焦 + ResumePrompt）
 │   │   ├── useSwipe.ts         # 移动端滑动手势
-│   │   └── usePause.ts         # 统一的暂停/恢复（P/Esc + 失焦 + ResumePrompt）
+│   │   ├── useRealtimeRoom.ts  # 联机房间基础（井字棋/象棋双人）
+│   │   ├── useRaceRoom.ts      # 打地鼠竞速房间
+│   │   └── useXiangqiAI.ts     # 象棋 AI 调度器（Web Worker 搜索 + 取消协议）
 │   ├── router/              # 路由配置（从 GAMES 注册表循环生成）
 │   │   └── index.ts
 │   ├── lib/
 │   │   ├── supabase.ts       # Supabase 客户端
-│   │   └── games.ts          # 🎮 游戏注册表 — 单一数据源（新增游戏只改这里）
+│   │   ├── games.ts          # 🎮 游戏注册表 — 单一数据源（新增游戏第一步）
+│   │   ├── linkGame.ts       # 连连看算法（消除判定/洗牌）
+│   │   ├── rank.ts           # 排行榜排名工具
+│   │   └── clipboard.ts      # 剪贴板复制工具
+│   ├── engine/xiangqi/       # 中国象棋引擎（纯 TS，零依赖）
+│   │   ├── types.ts          # 类型定义（Board / Piece / Move / Side）
+│   │   ├── rules.ts          # 走法生成/合法性/将死困毙/重复局面裁决
+│   │   ├── ai.ts             # 搜索（negamax + alpha-beta + TT）+ 评估
+│   │   ├── openings.ts       # 开局库（UCCI 主变查表 + 构建期自检）
+│   │   └── notation.ts       # 中国象棋记谱（车五进三 等）
+│   ├── workers/xiangqi-ai.worker.ts  # 象棋 AI 搜索 Worker（保留 TT 跨调用）
 │   ├── stores/               # 状态管理
 │   │   ├── game.ts            # 游戏本地分数管理（分数自动引用 defaultScoreKeys）
 │   │   └── achievements.ts    # 成就系统管理（解锁时自动触发音效+震动）
@@ -140,9 +157,12 @@ game-collection/
 │   │   ├── BreakoutView.vue  # 弹球打砖块（支持触摸拖拽挡板）
 │   │   ├── Game2048View.vue  # 2048
 │   │   ├── WhackAMoleView.vue # 打地鼠（已补震动反馈）
+│   │   ├── WhackAMoleRaceView.vue # 打地鼠·竞速（在线对战）
 │   │   ├── SimonView.vue    # 西蒙记忆灯
+│   │   ├── TicTacToeView.vue # 井字棋（单人 AI）
 │   │   ├── TicTacToeOnlineView.vue # 井字棋·双人（联机）
-│   │   └── TicTacToeView.vue # 井字棋
+│   │   ├── XiangqiView.vue   # 中国象棋（人机/本地双人）
+│   │   └── XiangqiOnlineView.vue # 中国象棋·联机
 │   ├── App.vue              # 根组件（页面路由过渡 + 全局动画样式引入）
 │   └── main.ts              # 入口文件
 ├── public/                  # 静态资源
@@ -187,7 +207,7 @@ game-collection/
 - 完整音效列表见 [docs/class-diagram.mermaid](./docs/class-diagram.mermaid) 的 `useSound` 类
 
 ### 🏅 成就系统
-- 10 个可解锁成就 + 自动 `perfectionist` 元成就
+- 13 个可解锁成就 + 自动 `perfectionist` 元成就
 - 解锁时顶部弹入 Toast 通知 + 音效 + 震动，进度保存到 localStorage
 - 成就页面（`/achievements`）网格展示所有成就的解锁状态
 
