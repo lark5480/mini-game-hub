@@ -129,6 +129,16 @@ const MAX_QUIESCENCE_DEPTH = 8
 // （机动性 / 王安全已移除：每叶子 2 次全量 generateMoves + 每评估 2 次 findKing 扫描，
 //   与搜索内 isInCheckLight 重复计算，开销与收益不成比例，R2 提速时去除）
 
+// ---- 结构评估权重（2026-08-11 新增：车半开放线 + 兵形 + 王翼保护）----
+// 设计约束：只做单遍扫描内收集的轻量特征（无走法生成、无二次全盘扫描，规避 R2 性能教训）；
+// 权重宁小勿大，总影响 < 1 个兵（100 分），不颠覆子力主导。
+const ROOK_SEMI_OPEN = 25 // 车在半开放线（该列无己方兵）
+const ROOK_OPEN = 15      // 车在开放线（该列无任何兵，与半开放叠加）
+const PAWN_CONNECTED = 8  // 连兵（邻列有己方兵且行差 <= 1）
+const PAWN_ISOLATED = -12 // 孤兵（左右邻列无己方兵）
+const PAWN_DOUBLED = -8   // 叠兵（同列多兵，每个多余兵）
+const KING_SHIELD = 6     // 王翼兵保护（王所在列 +/-1 内的己方兵）
+
 // ---- 走法排序基差 ----
 const SCORE_CAPTURE = 100000
 const SCORE_KILLER = 50000
@@ -253,17 +263,76 @@ function sameMove(a: Move, b: Move): boolean {
 }
 
 // 评估函数：从红方视角（正=红优势，负=黑优势）
-function evaluateBoard(board: Board): number {
+// 结构评估（车半开放线/兵形/王翼保护）在单遍扫描内顺带收集，无二次全盘扫描、无走法生成
+// （测试导出：Suite 36 用行为断言验证各评估项方向与幅度）
+export function evaluateBoard(board: Board): number {
   let score = 0
+  // 单遍扫描收集轻量特征（每列兵数、每列兵行位图、车所在列、王位置）
+  const filePawns = [new Int8Array(COLS), new Int8Array(COLS)]
+  const pawnMask = [new Int32Array(COLS), new Int32Array(COLS)] // 每列兵行位图（1 << row）
+  const rookFiles = [new Int8Array(COLS), new Int8Array(COLS)]
+  const kingPos: ({ row: number; col: number } | null)[] = [null, null]
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const p = board[r][c]
       if (!p) continue
       const value = PIECE_VALUE[p.type] + getPositionBonus(p, r, c)
       score += p.side === 'red' ? value : -value
+      const i = p.side === 'red' ? 0 : 1
+      if (p.type === 'pawn') { filePawns[i][c]++; pawnMask[i][c] |= 1 << r }
+      else if (p.type === 'rook') rookFiles[i][c]++
+      else if (p.type === 'king') kingPos[i] = { row: r, col: c }
     }
   }
+  score += evalStructure(0, filePawns, pawnMask, rookFiles, kingPos) -
+    evalStructure(1, filePawns, pawnMask, rookFiles, kingPos)
   return score
+}
+
+// 单方结构评估（红方视角正值；sideIdx 0=红 1=黑，黑方结果在调用处取负）
+function evalStructure(
+  sideIdx: number,
+  filePawns: Int8Array[],
+  pawnMask: Int32Array[],
+  rookFiles: Int8Array[],
+  kingPos: ({ row: number; col: number } | null)[]
+): number {
+  let s = 0
+  const other = 1 - sideIdx
+  // 车：半开放线（列内无己方兵）+ 开放线（列内无任何兵）
+  for (let c = 0; c < COLS; c++) {
+    if (!rookFiles[sideIdx][c]) continue
+    if (filePawns[sideIdx][c] === 0) {
+      s += ROOK_SEMI_OPEN
+      if (filePawns[other][c] === 0) s += ROOK_OPEN
+    }
+  }
+  // 兵：连兵/孤兵（行位图 O(1) 判定，行差 <= 1）、叠兵
+  for (let c = 0; c < COLS; c++) {
+    const own = filePawns[sideIdx][c]
+    if (own === 0) continue
+    for (let b = 0; b < ROWS; b++) {
+      if (!(pawnMask[sideIdx][c] & (1 << b))) continue
+      // 邻列同行差 <= 1 的己方兵（掩码 & 0x3ff 截取行 0-9 有效位）
+      const nb = c > 0 && (pawnMask[sideIdx][c - 1] & (((1 << (b - 1)) | (1 << b) | (1 << (b + 1))) & 0x3ff)) !== 0
+      const nb2 = c < COLS - 1 && (pawnMask[sideIdx][c + 1] & (((1 << (b - 1)) | (1 << b) | (1 << (b + 1))) & 0x3ff)) !== 0
+      if (nb || nb2) s += PAWN_CONNECTED
+      else {
+        const left = c > 0 ? filePawns[sideIdx][c - 1] : 0
+        const right = c < COLS - 1 ? filePawns[sideIdx][c + 1] : 0
+        if (left === 0 && right === 0) s += PAWN_ISOLATED
+      }
+    }
+    if (own > 1) s += PAWN_DOUBLED * (own - 1)
+  }
+  // 王翼兵保护：王所在列 +/-1 内的己方兵
+  const kp = kingPos[sideIdx]
+  if (kp) {
+    for (let c = Math.max(0, kp.col - 1); c <= Math.min(COLS - 1, kp.col + 1); c++) {
+      s += KING_SHIELD * filePawns[sideIdx][c]
+    }
+  }
+  return s
 }
 
 // 王位置查找（isInCheckLight / 飞将判定共用）

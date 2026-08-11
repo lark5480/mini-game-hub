@@ -1378,6 +1378,76 @@ console.log('\n=== Suite 35: 开局库 ===')
 }
 
 // ============================================================
+// Suite 36: 结构评估（车半开放线 + 兵形 + 王翼保护）
+// 构造原则：每个断言比较两个「仅目标特征不同」的局面，其余特征与子力抵消；
+// 无王局面（断言 2-6）隔离王翼项，断言 7 单独带王验证王翼保护。
+// ============================================================
+console.log('\n=== Suite 36: 结构评估 ===')
+{
+  const { evaluateBoard } = require(path.join(__dirname, '.tmp-xiangqi', 'ai'))
+  // 断言 1：初始局面红黑对称 eval === 0
+  assertEq(evaluateBoard(initialBoard()), 0, '初始局面 eval = 0（红黑对称）')
+
+  // 断言 2：车半开放线——列内无己方兵 +25（红兵(6,0) vs (6,1) 仅移动己方兵，子力/PST 相同）
+  {
+    const a1 = emptyBoard(); place(a1, 5, 0, 'rook', 'red'); place(a1, 6, 0, 'pawn', 'red'); place(a1, 3, 2, 'pawn', 'black')
+    const a2 = emptyBoard(); place(a2, 5, 0, 'rook', 'red'); place(a2, 6, 1, 'pawn', 'red'); place(a2, 3, 2, 'pawn', 'black')
+    const diff = evaluateBoard(a2) - evaluateBoard(a1)
+    assertTrue(diff >= 25, '车半开放线：列内无己方兵时红车 +25', 'diff=' + diff)
+  }
+
+  // 断言 3：全开放线——列内无任何兵再 +15（黑兵(3,1) vs (3,0) 仅移动黑兵，PST 镜像相同）
+  {
+    const c1 = emptyBoard(); place(c1, 5, 0, 'rook', 'red'); place(c1, 3, 1, 'pawn', 'black')
+    const c2 = emptyBoard(); place(c2, 5, 0, 'rook', 'red'); place(c2, 3, 0, 'pawn', 'black')
+    const diff = evaluateBoard(c1) - evaluateBoard(c2)
+    assertTrue(diff >= 15, '车全开放线：列内无任何兵再 +15', 'diff=' + diff)
+  }
+
+  // 断言 4：孤兵——左右邻列无己方兵 -12（孤立 vs 连兵对）
+  {
+    const e1 = emptyBoard(); place(e1, 5, 2, 'pawn', 'red'); place(e1, 1, 8, 'pawn', 'red')
+    const e2 = emptyBoard(); place(e2, 5, 2, 'pawn', 'red'); place(e2, 5, 3, 'pawn', 'red')
+    const diff = evaluateBoard(e2) - evaluateBoard(e1)
+    assertTrue(diff >= 12, '孤兵：孤立兵受 -12 惩罚（连兵对照）', 'diff=' + diff)
+  }
+
+  // 断言 5：连兵——邻列行差 <= 1 的兵对 +8/兵（行差 0 vs 行差 4）
+  {
+    const g1 = emptyBoard(); place(g1, 5, 4, 'pawn', 'red'); place(g1, 5, 5, 'pawn', 'red')
+    const g2 = emptyBoard(); place(g2, 5, 4, 'pawn', 'red'); place(g2, 1, 5, 'pawn', 'red')
+    const diff = evaluateBoard(g1) - evaluateBoard(g2)
+    assertTrue(diff >= 8, '连兵：邻列行差 <= 1 得奖励', 'diff=' + diff)
+  }
+
+  // 断言 6：叠兵——同列多兵每多余 -8（同列双兵 vs 邻列分兵）
+  {
+    const f1 = emptyBoard(); place(f1, 5, 4, 'pawn', 'red'); place(f1, 6, 4, 'pawn', 'red')
+    const f2 = emptyBoard(); place(f2, 5, 4, 'pawn', 'red'); place(f2, 6, 3, 'pawn', 'red')
+    const diff = evaluateBoard(f1) - evaluateBoard(f2)
+    assertTrue(diff <= -8, '叠兵：同列双兵受 -8 惩罚', 'diff=' + diff)
+  }
+
+  // 断言 7：王翼兵保护——王所在列 +/-1 内每己方兵 +6（兵(6,3) vs (6,6) 仅移出王翼）
+  {
+    const h1 = emptyBoard(); place(h1, 9, 4, 'king', 'red'); place(h1, 6, 3, 'pawn', 'red')
+    const h2 = emptyBoard(); place(h2, 9, 4, 'king', 'red'); place(h2, 6, 6, 'pawn', 'red')
+    const diff = evaluateBoard(h1) - evaluateBoard(h2)
+    assertTrue(diff >= 6, '王翼兵保护：王翼内己方兵 +6', 'diff=' + diff)
+  }
+
+  // 断言 8：红黑镜像局面 eval === 0（含王翼项，验证黑方结构取负后对称）
+  {
+    const b = emptyBoard()
+    place(b, 5, 4, 'rook', 'red'); place(b, 4, 4, 'rook', 'black')
+    place(b, 6, 0, 'pawn', 'red'); place(b, 3, 8, 'pawn', 'black')
+    place(b, 9, 4, 'king', 'red'); place(b, 0, 4, 'king', 'black')
+    assertEq(evaluateBoard(b), 0, '红黑镜像局面 eval = 0')
+  }
+}
+
+
+// ============================================================
 // Summary
 // ============================================================
 console.log('\n' + '='.repeat(50))
