@@ -245,10 +245,6 @@
     <!-- 联机模式 -->
     <XiangqiOnlineView v-else ref="onlineRef" />
 
-    <template #controls>
-      <button v-if="(mode === 'local' || mode === 'ai') && !gameOver && !aiThinking" class="submit-score-btn" @click="resetGame">重新开始</button>
-    </template>
-
     <PauseOverlay :visible="paused" @resume="continueGame" />
   </GameLayout>
 </template>
@@ -326,6 +322,7 @@ const playedMoves = ref<Move[]>([])
 const violationSide = ref<Side | null>(null)
 const violationReason = ref<'perpetual_check' | 'perpetual_chase' | 'perpetual_mate' | 'perpetual_attack' | null>(null)
 const drawByRepetition = ref<'mutual_attack' | 'mutual_idle' | null>(null)
+const staleMated = ref(false) // 困毙（无子可走）判负标志：区别于将死，用于结果文案
 const { paused, resume: resumeGame } = useGamePause({
   canPause: () => mode.value !== 'online' && mode.value !== 'ai' && !gameOver.value && result.value === null,
 })
@@ -398,6 +395,10 @@ const resultTitle = computed(() => {
 })
 
 const resultMessage = computed(() => {
+  if (staleMated.value) {
+    const loser = result.value === 'red-win' ? '黑方' : '红方'
+    return `${loser}困毙（无子可走）判负，共 ${moveCount.value} 步`
+  }
   if (result.value === 'draw') {
     if (drawByRepetition.value === 'mutual_attack') return `双方长打，不变作和（共 ${moveCount.value} 步）`
     if (drawByRepetition.value === 'mutual_idle') return `双方循环重复不变着，判和（共 ${moveCount.value} 步）`
@@ -824,13 +825,20 @@ function checkGameState() {
     }
     gameOverDialog.value = true
   } else if (status === 'stalemate') {
+    // 困毙（无子可走）：中国象棋规则判走子方负、对方胜（与国际象棋不同，非和棋）
     isCheckmate.value = true
     gameOver.value = true
-    result.value = 'draw'
+    staleMated.value = true
+    result.value = currentSide.value === 'red' ? 'black-win' : 'red-win'
     sound.win()
-    haptics.success()
+    haptics.win()
     if (achievements.unlock('xiangqi_first_game')) {
       toast.show('成就解锁：象棋新手 ♟️', '🏆')
+    }
+    if (result.value === 'red-win' || result.value === 'black-win') {
+      if (achievements.unlock('xiangqi_first_win')) {
+        toast.show('成就解锁：象棋胜利 🏆', '🏆')
+      }
     }
     gameOverDialog.value = true
   }
@@ -898,6 +906,7 @@ function resetGame() {
   violationSide.value = null
   violationReason.value = null
   drawByRepetition.value = null
+  staleMated.value = false
   lastMove.value = null
   moveCount.value = 0
   gameOver.value = false
@@ -1111,20 +1120,6 @@ function onRestart() {
 .dialog-btn:hover {
   transform: scale(1.05);
   box-shadow: 0 8px 25px rgba(255, 77, 77, 0.4);
-}
-
-.submit-score-btn {
-  background: rgba(255, 77, 77, 0.15);
-  border: 1px solid rgba(255, 77, 77, 0.4);
-  color: #fff;
-  padding: 10px 20px;
-  border-radius: 14px;
-  font-size: 0.95em;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.submit-score-btn:hover {
-  background: rgba(255, 77, 77, 0.25);
 }
 
 @media (max-width: 640px) {

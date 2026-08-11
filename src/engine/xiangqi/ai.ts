@@ -542,14 +542,15 @@ function negamax(
   searchNodes++
   tickTimeout()
 
-  // 重复局面规避：路径中已出现 2 次 → 视为循环，给强负分（AI 不主动走进长将/长捉被判负）。
+  // 重复局面规避：路径中已出现 2 次 → 视为循环，给判负级强分（AI 不主动走进长将/长捉被判负）。
   // 当前节点 key 是「上一步走子者」走出的局面：重复 = 该方走出第 3 次出现（长将/长捉判罚点），
   // 判罚对象是上一步走子者（= 当前 side 的对方）→ 当前 side 视角返回强正分（对方判负己方胜），
-  // 根着法视角取负后为强负分，AI 因此规避长将线（原实现返回负分导致符号反转，AI 反而偏好长将）
+  // 根着法视角取负后为判负级强负分，AI 因此规避长将线（原实现返回负分导致符号反转，AI 反而偏好长将；
+  // 判负分用 MATE 而非 MATE/2：折中分时 AI 必败倾向长将拖延——长将线 -50 万优于被杀线 -100 万）
   if (enableRep) {
     let repeats = 0
     for (let i = 0; i < repPath.length; i++) {
-      if (repPath[i] === key && ++repeats >= 2) return Math.floor(MATE / 2) - ply
+      if (repPath[i] === key && ++repeats >= 2) return MATE - ply
     }
   }
 
