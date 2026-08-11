@@ -97,7 +97,7 @@
           <button class="nc-btn" @click="cycleSpeed">{{ playSpeed === 800 ? '慢' : playSpeed === 500 ? '中' : '快' }}</button>
         </div>
         <div class="notation-list">
-          <div v-for="(item, i) in notationList" :key="i" class="notation-item" :class="{ active: reviewMove === item.index, red: item.side === 'red', black: item.side === 'black' }" @click="reviewMoveAt(item.index)">
+          <div v-for="(item, i) in notationList" :key="i" class="notation-item" :class="{ active: reviewMove === item.index, red: item.side === 'red', black: item.side === 'black' }" @click="onNotationClick(item.index)">
             <span class="move-num">{{ Math.floor(i / 2) + 1 }}{{ i % 2 === 0 ? '.' : '...' }}</span>
             <span class="move-text">{{ item.notation }}</span>
           </div>
@@ -216,7 +216,7 @@
           <button class="nc-btn" @click="cycleSpeed">{{ playSpeed === 800 ? '慢' : playSpeed === 500 ? '中' : '快' }}</button>
         </div>
         <div class="notation-list">
-          <div v-for="(item, i) in notationList" :key="i" class="notation-item" :class="{ active: reviewMove === item.index, red: item.side === 'red', black: item.side === 'black' }" @click="reviewMoveAt(item.index)">
+          <div v-for="(item, i) in notationList" :key="i" class="notation-item" :class="{ active: reviewMove === item.index, red: item.side === 'red', black: item.side === 'black' }" @click="onNotationClick(item.index)">
             <span class="move-num">{{ Math.floor(i / 2) + 1 }}{{ i % 2 === 0 ? '.' : '...' }}</span>
             <span class="move-text">{{ item.notation }}</span>
           </div>
@@ -512,7 +512,6 @@ function respondDraw(accepted: boolean) {
 
 function reviewMoveAt(index: number) {
   if (index < 0 || index >= gameRecord.value.moves.length) return // 空谱/越界防御
-  stopPlayback()
   reviewMove.value = index
   // 回放核心：棋盘切到该步走完后的局面快照（positions[k] = 走完 k 步后的局面，moves[i] ↔ positions[i+1]）
   board.value = positions.value[index + 1]
@@ -520,6 +519,12 @@ function reviewMoveAt(index: number) {
   clearSelection()
   sound.select()
   haptics.tap()
+}
+
+// 手动点击棋谱条目：先停播放再切局面（播放 tick 内部的 reviewMoveAt 不触发停止）
+function onNotationClick(index: number) {
+  stopPlayback()
+  reviewMoveAt(index)
 }
 
 // ---- 复盘演示：逐手回放 + 自动播放 ----
@@ -537,12 +542,14 @@ function goToStart() {
 }
 
 function stepBack() {
+  stopPlayback() // 手动步进停止播放
   if (reviewMove.value === null) return
   if (reviewMove.value - 1 < 0) goToStart()
   else reviewMoveAt(reviewMove.value - 1)
 }
 
 function stepForward() {
+  stopPlayback() // 手动步进停止播放
   if (reviewMove.value === null) {
     reviewMoveAt(0)
     return
