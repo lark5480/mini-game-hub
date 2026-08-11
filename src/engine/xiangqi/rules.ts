@@ -485,8 +485,29 @@ function canCaptureAt(board: Board, pieceRow: number, pieceCol: number, targetRo
   }
 }
 
+// 「杀」判定：side 刚走完一步，轮到对方走；若对方无论怎么应，
+// side 下一步都存在将死/困毙着法 → 该走子构成叫杀。
+// 仅重复局面触发时调用（低频路径），1 层搜索成本可接受。
+function isMateThreat(board: Board, side: Side): boolean {
+  const opp = side === 'red' ? 'black' : 'red'
+  const oppMoves = generateMoves(board, opp)
+  if (oppMoves.length === 0) return false // 已直接致胜（将死/困毙），不是「杀」
+  for (const m of oppMoves) {
+    const b2 = applyMove(board, m)
+    const sideMoves = generateMoves(b2, side)
+    let hasMate = false
+    for (const sm of sideMoves) {
+      const b3 = applyMove(b2, sm)
+      const st = getGameStatus(b3, opp)
+      if (st === 'checkmate' || st === 'stalemate') { hasMate = true; break }
+    }
+    if (!hasMate) return false
+  }
+  return true
+}
+
 export type RepetitionVerdict =
-  | { type: 'violation'; side: Side; reason: 'perpetual_check' | 'perpetual_chase' | 'perpetual_attack' }
+  | { type: 'violation'; side: Side; reason: 'perpetual_check' | 'perpetual_chase' | 'perpetual_mate' | 'perpetual_attack' }
   | { type: 'mutual_draw'; reason: 'mutual_attack' | 'mutual_idle' }
 
 /**
@@ -496,50 +517,62 @@ export type RepetitionVerdict =
  * positions[k] 为走完 k 个半步后的局面（positions[0] = 初始局面，
  * positions.length === moves.length + 1）。
  *
- * 触发条件：当前局面第 3 次出现，且最近两个「周期4」循环（各 4 个半步，
- * 双方各两步）着法完全相同。周期4是最小可能的重复周期（周期2在交替走子
- * 下几何上不可能）；更长的循环（如互捉双方各自逃子，周期8）暂不判罚。
+ * 触发条件：当前局面第 3 次出现，且最近两个周期（各 p 个半步）着法完全相同；
+ * 周期 p 从最小可能值 4 起扫描到 MAX_PERIOD（4, 6, 8, ...），取第一个成立者
+ * （周期 4 是最小可能的重复周期；更长的循环如周期 8 互捉同样可判罚）。
  *
- * 每步分类：将（走后对方被将军）/ 捉（走动子能吃到对方下一步逃走的
- * 非将非兵棋子）/ 闲。一方两步均为「打」（将或捉）即构成该方长打。
+ * 每步分类：将（走后对方被将军）/ 杀（走后对方无论怎么应，下一步都会被将死/困毙）
+ * / 捉（走动子能吃到对方下一步逃走的非将非兵棋子）/ 闲。一方周期内全部为
+ * 「打」（将/杀/捉）即构成该方长打。
  *
  * 判罚（中国棋规简化）：
  *  - 双方长打（含双方长将）→ 不变作和；
  *  - 一方长将、另一方其他长打 → 长将方负（长将优先判负）；
- *  - 单方长打 → 该方负；
+ *  - 单方长打 → 该方负（纯将/纯杀/纯捉/混合对应不同 reason）；
  *  - 双方均闲 → 双方不变作和。
- * 未覆盖：杀（叫杀/长杀）检测，一将一杀等含杀的混合长打暂按闲处理。
+ * 简化边界：将 > 杀 > 捉 的混合优先级（如一将一杀 vs 长杀）未实现，双方均非
+ * 全将时混合双打一律判和；「捉」沿用简化定义（不含兑/献/根保护判定）。
  */
+const MAX_PERIOD = 32 // 长周期扫描上限（半步数，偶数）
 export function checkRepetitionViolation(moves: Move[], positions: Board[]): RepetitionVerdict | null {
   const last = moves.length
   if (last < 8) return null
   const current = positions[last]
   if (!current) return null
-  // 当前局面需第 3 次出现，且间隔恰为周期4（last-4、last-8 与当前相同）
-  if (!boardsEqual(positions[last - 4], current)) return null
-  if (!boardsEqual(positions[last - 8], current)) return null
-
-  // 严格重复：连续两个周期（各 4 个半步）着法完全相同
-  for (let i = 0; i < 4; i++) {
-    const m1 = moves[last - 8 + i]
-    const m2 = moves[last - 4 + i]
-    if (m1.from.row !== m2.from.row || m1.from.col !== m2.from.col ||
-        m1.to.row !== m2.to.row || m1.to.col !== m2.to.col) return null
+  // 扫描最小成立周期：当前局面第 3 次出现（间隔 p 与 2p 处相同），且两周期着法序列完全相同
+  let cycleLen = -1
+  for (let p = 4; p <= MAX_PERIOD && 2 * p <= last; p += 2) {
+    if (!boardsEqual(positions[last - p], current)) continue
+    if (!boardsEqual(positions[last - 2 * p], current)) continue
+    let same = true
+    for (let i = 0; i < p; i++) {
+      const m1 = moves[last - 2 * p + i]
+      const m2 = moves[last - p + i]
+      if (m1.from.row !== m2.from.row || m1.from.col !== m2.from.col ||
+          m1.to.row !== m2.to.row || m1.to.col !== m2.to.col) { same = false; break }
+    }
+    if (same) { cycleLen = p; break }
   }
+  if (cycleLen < 0) return null
 
-  // 对第一个周期的 4 步逐一分类（将/捉/闲）
-  const cycleStart = last - 8
-  type StrikeClass = 'check' | 'chase' | 'idle'
+  // 对第一个周期的 cycleLen 步逐一分类（将/杀/捉/闲）
+  const cycleStart = last - 2 * cycleLen
+  type StrikeClass = 'check' | 'mate' | 'chase' | 'idle'
   const classes: StrikeClass[] = []
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < cycleLen; i++) {
     const m = moves[cycleStart + i]
-    // 对方循环内的下一步（i=3 时绕回周期首步，两周期相同故等价）
-    const next = moves[cycleStart + ((i + 1) % 4)]
+    // 对方循环内的下一步（i=cycleLen-1 时绕回周期首步，两周期相同故等价）
+    const next = moves[cycleStart + ((i + 1) % cycleLen)]
     const boardAfter = positions[cycleStart + i + 1]
     const mover: Side = (cycleStart + i) % 2 === 0 ? 'red' : 'black'
     const opp: Side = mover === 'red' ? 'black' : 'red'
     if (isInCheck(boardAfter, opp)) {
       classes.push('check')
+      continue
+    }
+    // 杀：对方无论怎么应，mover 下一步都能将死/困毙
+    if (isMateThreat(boardAfter, mover)) {
+      classes.push('mate')
       continue
     }
     // 捉：对方下一步逃走的棋子（next.from）即被捉子，走动子能吃到它
@@ -552,21 +585,25 @@ export function checkRepetitionViolation(moves: Move[], positions: Board[]): Rep
     }
   }
 
+  const half = cycleLen / 2
   const sideA: Side = cycleStart % 2 === 0 ? 'red' : 'black'
   const sideB: Side = sideA === 'red' ? 'black' : 'red'
-  // 周期内 sideA 走第 0、2 步，sideB 走第 1、3 步
-  const aCls = [classes[0], classes[2]]
-  const bCls = [classes[1], classes[3]]
+  // 周期内 sideA 走偶数步、sideB 走奇数步
+  const aCls: StrikeClass[] = []
+  const bCls: StrikeClass[] = []
+  for (let i = 0; i < half; i++) { aCls.push(classes[i * 2]); bCls.push(classes[i * 2 + 1]) }
   const isHitting = (cls: StrikeClass[]) => cls.every(c => c !== 'idle')
   const isAllCheck = (cls: StrikeClass[]) => cls.every(c => c === 'check')
+  const isAllMate = (cls: StrikeClass[]) => cls.every(c => c === 'mate')
   const isAllChase = (cls: StrikeClass[]) => cls.every(c => c === 'chase')
-  const reasonOf = (cls: StrikeClass[]): 'perpetual_check' | 'perpetual_chase' | 'perpetual_attack' =>
-    isAllCheck(cls) ? 'perpetual_check' : isAllChase(cls) ? 'perpetual_chase' : 'perpetual_attack'
+  const reasonOf = (cls: StrikeClass[]): 'perpetual_check' | 'perpetual_chase' | 'perpetual_mate' | 'perpetual_attack' =>
+    isAllCheck(cls) ? 'perpetual_check' : isAllMate(cls) ? 'perpetual_mate' :
+    isAllChase(cls) ? 'perpetual_chase' : 'perpetual_attack'
   const aHitting = isHitting(aCls)
   const bHitting = isHitting(bCls)
 
   if (aHitting && bHitting) {
-    // 长将优先：一方长将而另一方非长将 → 长将方负
+    // 长将优先：一方全将而另一方非全将 → 长将方负
     if (isAllCheck(aCls) && !isAllCheck(bCls)) return { type: 'violation', side: sideA, reason: 'perpetual_check' }
     if (isAllCheck(bCls) && !isAllCheck(aCls)) return { type: 'violation', side: sideB, reason: 'perpetual_check' }
     // 双方长打（含双方长将）→ 不变作和

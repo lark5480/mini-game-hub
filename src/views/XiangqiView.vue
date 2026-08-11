@@ -304,7 +304,7 @@ const isCheckmate = ref(false)
 const positions = ref<Board[]>([initialBoard()])
 const playedMoves = ref<Move[]>([])
 const violationSide = ref<Side | null>(null)
-const violationReason = ref<'perpetual_check' | 'perpetual_chase' | 'perpetual_attack' | null>(null)
+const violationReason = ref<'perpetual_check' | 'perpetual_chase' | 'perpetual_mate' | 'perpetual_attack' | null>(null)
 const drawByRepetition = ref<'mutual_attack' | 'mutual_idle' | null>(null)
 const { paused, resume: resumeGame } = useGamePause({
   canPause: () => mode.value !== 'online' && mode.value !== 'ai' && !gameOver.value && result.value === null,
@@ -387,7 +387,8 @@ const resultMessage = computed(() => {
     const who = violationSide.value === 'red' ? '红方' : '黑方'
     const winner = violationSide.value === 'red' ? '黑方' : '红方'
     const why = violationReason.value === 'perpetual_check' ? '长将' :
-      violationReason.value === 'perpetual_chase' ? '长捉' : '长打'
+      violationReason.value === 'perpetual_chase' ? '长捉' :
+      violationReason.value === 'perpetual_mate' ? '长杀' : '长打'
     return `${who}${why}违规判负，${winner}获胜`
   }
   return `${result.value === 'red-win' ? '红方' : '黑方'}在 ${moveCount.value} 步内取胜`
@@ -414,12 +415,12 @@ const hintThinking = ref(false)
 onUnmounted(dispose)
 
 function recentHistoryKeys(): bigint[] {
-  // 最近 8 个半步的历史局面 key（覆盖 checkRepetitionViolation 的 last-8/last-4 判定窗口；
+  // 最近 32 个半步的历史局面 key（与 checkRepetitionViolation 的 MAX_PERIOD=32 判定窗口一致；
   // positions[k] 为走完 k 个半步后的局面，行棋方 = k 偶红先）
   const len = positions.value.length
   if (len <= 1) return []
   const keys: bigint[] = []
-  const start = Math.max(0, len - 9)
+  const start = Math.max(0, len - 33)
   for (let i = start; i < len - 1; i++) {
     keys.push(boardKey(positions.value[i], i % 2 === 0 ? 'red' : 'black'))
   }
@@ -682,7 +683,7 @@ function checkGameState() {
       sound.win()
       haptics.win()
       const who = verdict.side === 'red' ? '红方' : '黑方'
-      const why = verdict.reason === 'perpetual_check' ? '长将' : verdict.reason === 'perpetual_chase' ? '长捉' : '长打'
+      const why = verdict.reason === 'perpetual_check' ? '长将' : verdict.reason === 'perpetual_chase' ? '长捉' : verdict.reason === 'perpetual_mate' ? '长杀' : '长打'
       toast.show(`${who}${why}违规，判负！`, '⚖️')
     }
     gameOverDialog.value = true
