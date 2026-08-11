@@ -469,11 +469,14 @@ function negamax(
   searchNodes++
   tickTimeout()
 
-  // 重复局面规避：路径中已出现 2 次 → 视为循环，给强负分（AI 不主动走进长将/长捉被判负）
+  // 重复局面规避：路径中已出现 2 次 → 视为循环，给强负分（AI 不主动走进长将/长捉被判负）。
+  // 当前节点 key 是「上一步走子者」走出的局面：重复 = 该方走出第 3 次出现（长将/长捉判罚点），
+  // 判罚对象是上一步走子者（= 当前 side 的对方）→ 当前 side 视角返回强正分（对方判负己方胜），
+  // 根着法视角取负后为强负分，AI 因此规避长将线（原实现返回负分导致符号反转，AI 反而偏好长将）
   if (enableRep) {
     let repeats = 0
     for (let i = 0; i < repPath.length; i++) {
-      if (repPath[i] === key && ++repeats >= 2) return -(Math.floor(MATE / 2) - ply)
+      if (repPath[i] === key && ++repeats >= 2) return Math.floor(MATE / 2) - ply
     }
   }
 
@@ -578,7 +581,7 @@ function negamax(
  * @param depth    最大搜索深度（迭代加深的上限）
  * @param timeLimitMs 可选时限：超时后返回已完成深度的最佳着法
  */
-export function findBestMove(board: Board, side: Side, depth = 3, timeLimitMs?: number): Move | null {
+export function findBestMove(board: Board, side: Side, depth = 3, timeLimitMs?: number, historyKeys?: bigint[]): Move | null {
   const rootMoves = generateMoves(board, side)
   if (rootMoves.length === 0) return null
   if (rootMoves.length === 1) return rootMoves[0]
@@ -596,9 +599,12 @@ export function findBestMove(board: Board, side: Side, depth = 3, timeLimitMs?: 
 
   let ordered = orderMoves(board, rootMoves, 0)
   let bestMove: Move = ordered[0]
-  // 重复局面检测路径：以初始局面为根（根着法后若回到初始局面即可检出）
+  // 重复局面检测路径：以初始局面为根（根着法后若回到初始局面即可检出）；
+  // 对局历史 key 并入路径：根着法后新局面若与历史重复 >= 2 次（即规则的第 3 次
+  // 出现，长将/长捉判罚点）→ 搜索第一步即给强负分，AI 不会主动走进长将判负。
+  // 历史 key 由视图层传入（最近 8 个半步，覆盖 checkRepetitionViolation 判定窗口）
   const rootKey = boardKey(board, side)
-  const repPath = [rootKey]
+  const repPath = historyKeys && historyKeys.length > 0 ? [...historyKeys, rootKey] : [rootKey]
 
   for (let d = 1; d <= depth; d++) {
     let alpha = -Infinity

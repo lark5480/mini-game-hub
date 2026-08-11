@@ -1251,6 +1251,58 @@ console.log('\n=== Suite 32: 深搜索稳定性 ===')
 }
 
 // ============================================================
+// Suite 33: 对局历史长将规避（AI 不走进第 3 次重复判负）
+// ============================================================
+console.log('\n=== Suite 33: 对局历史长将规避 ===')
+{
+  const { findBestMove, boardKey } = require(path.join(__dirname, '.tmp-xiangqi', 'ai'))
+  // 封将路局面：红兵 (0,1) 挡在车前阻断吃子线（车无净赚吃子着法）、黑炮 (0,3)(0,5) 封
+  // 黑将避将横路（车 (1,0) 将 (1,4) 时唯一应着 (0,4)）、红帅 (9,3) 移出 col4 避免飞将。
+  // 长将线（车 (0,0)->(1,0) 往返）无子可吃、黑被迫往返，评估为当前局面最优 → 不传历史
+  // 时 AI 复现长将；传历史后根着法撞第 3 次重复被强负分拦截 → AI 改走其他合法着法。
+  const base = [
+    [9, 3, 'king', 'red'], [0, 1, 'pawn', 'red'],
+    [0, 3, 'cannon', 'black'], [0, 5, 'cannon', 'black']
+  ]
+  const mk = (rookR, rookC, kingR, kingC) => {
+    const p = emptyBoard()
+    for (const [r, c, t, s] of base) place(p, r, c, t, s)
+    place(p, rookR, rookC, 'rook', 'red')
+    place(p, kingR, kingC, 'king', 'black')
+    return p
+  }
+  // 手工构造对局历史：车将 → 将避 → 车回将 → 将回 × 2（8 个半步）
+  // A（车 (1,0)，将 (1,4)）在 p1、p5 出现 2 次 → 根着法车 (0,0)->(1,0) 到达 A 为第 3 次
+  const hist = [
+    mk(0, 0, 1, 4), // p0
+    mk(1, 0, 1, 4), // p1 = A（车将）
+    mk(1, 0, 0, 4), // p2（将避）
+    mk(0, 0, 0, 4), // p3（车回将）
+    mk(0, 0, 1, 4), // p4 = 同当前
+    mk(1, 0, 1, 4), // p5 = A
+    mk(1, 0, 0, 4), // p6
+    mk(0, 0, 0, 4), // p7
+    mk(0, 0, 1, 4)  // p8 = 当前局面（红轮到走）
+  ]
+  const cur = hist[8]
+  // 历史 key = positions[0..7]（最近 8 个半步局面，行棋方 k 偶红先，与视图 recentHistoryKeys 一致）
+  const historyKeys = hist.slice(0, 8).map((p, i) => boardKey(p, i % 2 === 0 ? 'red' : 'black'))
+  const isChase = (m) =>
+    m !== null && m.from.row === 0 && m.from.col === 0 && m.to.row === 1 && m.to.col === 0
+  // 不传历史：搜索内循环回到 rootKey 仅 repeats=1 不拦截（第 3 次出现在 8 步视距外）→ 长将线评估最高
+  const mPlain = findBestMove(cur, 'red', 4)
+  assertTrue(isChase(mPlain), '历史盲区：不传历史时 AI 选长将着法（复现连将判负）',
+    mPlain ? mPlain.from.row + ',' + mPlain.from.col + '->' + mPlain.to.row + ',' + mPlain.to.col : 'null')
+  // 传历史：根着法到达 A（历史第 3 次出现）→ 搜索第一步即强负分 → 不选长将
+  const mSafe = findBestMove(cur, 'red', 4, undefined, historyKeys)
+  assertTrue(mSafe !== null, '历史感知：有应着')
+  assertFalse(isChase(mSafe), '历史感知：不选长将着法（规避第 3 次重复判负）',
+    mSafe ? mSafe.from.row + ',' + mSafe.from.col + '->' + mSafe.to.row + ',' + mSafe.to.col : 'null')
+  assertTrue(mSafe && isLegalMove(cur, mSafe.from, mSafe.to), '历史感知：着法合法',
+    mSafe ? mSafe.from.row + ',' + mSafe.from.col + '->' + mSafe.to.row + ',' + mSafe.to.col : 'null')
+}
+
+// ============================================================
 // Summary
 // ============================================================
 console.log('\n' + '='.repeat(50))

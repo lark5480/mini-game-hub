@@ -254,7 +254,7 @@ import XiangqiOnlineView from '@/views/XiangqiOnlineView.vue'
 import type { Board, Position, Move, Side } from '@/engine/xiangqi/types'
 import { cloneBoard } from '@/engine/xiangqi/types'
 import { initialBoard, generateMoves, applyMove, isInCheck, getGameStatus, classifyMove, isPinned, toNotation, checkRepetitionViolation } from '@/engine/xiangqi/rules'
-import { findBestMove } from '@/engine/xiangqi/ai'
+import { findBestMove, boardKey } from '@/engine/xiangqi/ai'
 
 type GameMode = 'local' | 'online' | 'ai'
 type AISide = 'red' | 'black'
@@ -403,14 +403,28 @@ let lastExposeTipAt = 0
 // ---- AI 走子调度 ----
 let aiTimer: ReturnType<typeof setTimeout> | null = null
 
+function recentHistoryKeys(): bigint[] {
+  // 最近 8 个半步的历史局面 key（覆盖 checkRepetitionViolation 的 last-8/last-4 判定窗口；
+  // positions[k] 为走完 k 个半步后的局面，行棋方 = k 偶红先）
+  const len = positions.value.length
+  if (len <= 1) return []
+  const keys: bigint[] = []
+  const start = Math.max(0, len - 9)
+  for (let i = start; i < len - 1; i++) {
+    keys.push(boardKey(positions.value[i], i % 2 === 0 ? 'red' : 'black'))
+  }
+  return keys
+}
+
 function showHint() {
   if (gameOver.value || aiThinking.value || currentSide.value === aiSide.value) return
-  // 提示与 AI 同强度：简单固定深度 2，中等深度 5，困难迭代加深（限 1.2s 保证响应）
+  // 提示与 AI 同强度：简单固定深度 2，中等深度 4，困难迭代加深（限 1.2s 保证响应）
+  // 均传入对局历史 key：提示不走进长将/长捉判负的着法
   const hint = difficulty.value === 'easy'
-    ? findBestMove(board.value, humanSide.value, 2)
+    ? findBestMove(board.value, humanSide.value, 2, undefined, recentHistoryKeys())
     : difficulty.value === 'medium'
-      ? findBestMove(board.value, humanSide.value, 5, 1200)
-      : findBestMove(board.value, humanSide.value, 8, 1200)
+      ? findBestMove(board.value, humanSide.value, 4, 1200, recentHistoryKeys())
+      : findBestMove(board.value, humanSide.value, 8, 1200, recentHistoryKeys())
   if (hint) {
     hintMove.value = hint
     sound.select()
@@ -469,12 +483,13 @@ function scheduleAIMove() {
   if (currentSide.value === aiSide.value) {
     aiThinking.value = true
     aiTimer = setTimeout(() => {
-      // 简单固定深度 2；中等深度 5；困难迭代加深至多 8 层、限 1.8s（超时回退已完成深度的最佳着法）
+      // 简单固定深度 2；中等深度 4、限 1.2s；困难迭代加深至多 8 层、限 2.5s（超时回退已完成深度的最佳着法）
+      // 均传入对局历史 key：AI 不走进长将/长捉判负的着法
       const move = difficulty.value === 'easy'
-        ? findBestMove(board.value, aiSide.value, 2)
+        ? findBestMove(board.value, aiSide.value, 2, undefined, recentHistoryKeys())
         : difficulty.value === 'medium'
-          ? findBestMove(board.value, aiSide.value, 5, 1800)
-          : findBestMove(board.value, aiSide.value, 8, 1800)
+          ? findBestMove(board.value, aiSide.value, 4, 1200, recentHistoryKeys())
+          : findBestMove(board.value, aiSide.value, 8, 2500, recentHistoryKeys())
       aiThinking.value = false
       if (move) {
         executeMove(move.from, move.to)
