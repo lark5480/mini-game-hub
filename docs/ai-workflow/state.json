@@ -1,6 +1,6 @@
 {
-  "current_task": null,
-  "phase": "idle",
-  "round": 0,
+  "current_task": "2026-08-11-xiangqi-replay",
+  "phase": "executing",
+  "round": 1,
   "blocking": []
 }

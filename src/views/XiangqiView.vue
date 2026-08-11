@@ -44,7 +44,7 @@
           :board="board"
           :selected="selected"
           :legalTargets="legalTargets"
-          :interactive="!gameOver && !isCheckmate"
+          :interactive="!gameOver && !isCheckmate && reviewMove === null"
           :lastMove="lastMove"
           :check-side="checkSide"
           :flipped="false"
@@ -54,7 +54,7 @@
         />
 
         <div class="controls-row">
-          <button class="ctrl-btn" :disabled="history.length === 0 || gameOver" @click="undoMove">
+          <button class="ctrl-btn" :disabled="history.length === 0 || gameOver || reviewMove !== null" @click="undoMove">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 10h10a5 5 0 0 1 0 10H9"/>
               <path d="M7 14l-4-4 4-4"/>
@@ -69,12 +69,13 @@
             </svg>
             认输
           </button>
-          <button class="ctrl-btn" :disabled="gameOver" @click="offerDraw">
+          <button class="ctrl-btn" :disabled="gameOver || reviewMove !== null" @click="offerDraw">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 2v20M2 12h20"/>
             </svg>
             求和
           </button>
+          <button class="ctrl-btn" :disabled="notationList.length === 0" @click="openNotation">棋谱</button>
         </div>
 
         <div class="move-count">
@@ -87,6 +88,13 @@
         <div class="notation-header">
           <span class="notation-title">棋谱</span>
           <button class="notation-close" @click="closeNotation">×</button>
+        </div>
+        <div class="notation-controls">
+          <button class="nc-btn" :disabled="reviewMove === null" @click="goToStart">⏮</button>
+          <button class="nc-btn" :disabled="reviewMove === null" @click="stepBack">◀</button>
+          <button class="nc-btn" :disabled="notationList.length === 0" @click="togglePlay">{{ playing ? '⏸' : '▶' }}</button>
+          <button class="nc-btn" :disabled="notationList.length === 0 || (reviewMove !== null && reviewMove >= notationList.length - 1)" @click="stepForward">▶▶</button>
+          <button class="nc-btn" @click="cycleSpeed">{{ playSpeed === 800 ? '慢' : playSpeed === 500 ? '中' : '快' }}</button>
         </div>
         <div class="notation-list">
           <div v-for="(item, i) in notationList" :key="i" class="notation-item" :class="{ active: reviewMove === item.index, red: item.side === 'red', black: item.side === 'black' }" @click="reviewMoveAt(item.index)">
@@ -154,7 +162,7 @@
           :board="board"
           :selected="selected"
           :legalTargets="legalTargets"
-          :interactive="!gameOver && !isCheckmate && !(mode === 'ai' && (aiThinking || currentSide === aiSide))"
+          :interactive="!gameOver && !isCheckmate && !(mode === 'ai' && (aiThinking || currentSide === aiSide)) && reviewMove === null"
           :lastMove="lastMove"
           :check-side="checkSide"
           :flipped="humanSide === 'black'"
@@ -164,7 +172,7 @@
         />
 
         <div class="controls-row">
-          <button class="ctrl-btn" :disabled="history.length === 0 || gameOver || aiThinking" @click="undoMove">
+          <button class="ctrl-btn" :disabled="history.length === 0 || gameOver || aiThinking || reviewMove !== null" @click="undoMove">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 10h10a5 5 0 0 1 0 10H9"/>
               <path d="M7 14l-4-4 4-4"/>
@@ -179,13 +187,14 @@
             </svg>
             认输
           </button>
-          <button class="ctrl-btn" :disabled="currentSide === aiSide || aiThinking || hintThinking || gameOver" :class="{ 'hint-active': hintMove }" @click="showHint">
+          <button class="ctrl-btn" :disabled="currentSide === aiSide || aiThinking || hintThinking || gameOver || reviewMove !== null" :class="{ 'hint-active': hintMove }" @click="showHint">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"/>
               <path d="M12 16v-4M12 8h.01"/>
             </svg>
             提示
           </button>
+          <button class="ctrl-btn" :disabled="notationList.length === 0" @click="openNotation">棋谱</button>
         </div>
 
         <div class="move-count">
@@ -198,6 +207,13 @@
         <div class="notation-header">
           <span class="notation-title">棋谱</span>
           <button class="notation-close" @click="closeNotation">×</button>
+        </div>
+        <div class="notation-controls">
+          <button class="nc-btn" :disabled="reviewMove === null" @click="goToStart">⏮</button>
+          <button class="nc-btn" :disabled="reviewMove === null" @click="stepBack">◀</button>
+          <button class="nc-btn" :disabled="notationList.length === 0" @click="togglePlay">{{ playing ? '⏸' : '▶' }}</button>
+          <button class="nc-btn" :disabled="notationList.length === 0 || (reviewMove !== null && reviewMove >= notationList.length - 1)" @click="stepForward">▶▶</button>
+          <button class="nc-btn" @click="cycleSpeed">{{ playSpeed === 800 ? '慢' : playSpeed === 500 ? '中' : '快' }}</button>
         </div>
         <div class="notation-list">
           <div v-for="(item, i) in notationList" :key="i" class="notation-item" :class="{ active: reviewMove === item.index, red: item.side === 'red', black: item.side === 'black' }" @click="reviewMoveAt(item.index)">
@@ -284,6 +300,10 @@ const toast = useToast()
   const gameRecord = ref<{ moves: Move[]; sides: Side[] }>({ moves: [], sides: [] })
   const notations = ref<string[]>([])
   const reviewMove = ref<number | null>(null)
+  // 复盘演示：播放速度三档 + 播放中标志 + 播放定时器（onUnmounted/resetGame 清理）
+  const playSpeed = ref<800 | 500 | 250>(500)
+  const playing = ref(false)
+  let playTimer: ReturnType<typeof setInterval> | null = null
   const hintMove = ref<Move | null>(null)
   const drawOffered = ref(false)
   const showNotation = ref(false)
@@ -412,7 +432,10 @@ let aiSeq = 0
 // 提示请求序号：递增使旧请求过期（又点提示/走子/取消后旧结果丢弃）
 let hintSeq = 0
 const hintThinking = ref(false)
-onUnmounted(dispose)
+onUnmounted(() => {
+  dispose()
+  stopPlayback()
+})
 
 function recentHistoryKeys(): bigint[] {
   // 最近 32 个半步的历史局面 key（与 checkRepetitionViolation 的 MAX_PERIOD=32 判定窗口一致；
@@ -488,20 +511,107 @@ function respondDraw(accepted: boolean) {
 }
 
 function reviewMoveAt(index: number) {
+  if (index < 0 || index >= gameRecord.value.moves.length) return // 空谱/越界防御
+  stopPlayback()
   reviewMove.value = index
+  // 回放核心：棋盘切到该步走完后的局面快照（positions[k] = 走完 k 步后的局面，moves[i] ↔ positions[i+1]）
+  board.value = positions.value[index + 1]
+  lastMove.value = gameRecord.value.moves[index] ?? null
+  clearSelection()
   sound.select()
   haptics.tap()
+}
+
+// ---- 复盘演示：逐手回放 + 自动播放 ----
+function stopPlayback() {
+  playing.value = false
+  if (playTimer) { clearInterval(playTimer); playTimer = null }
+}
+
+function goToStart() {
+  stopPlayback()
+  reviewMove.value = null
+  board.value = positions.value[0]
+  lastMove.value = null
+  clearSelection()
+}
+
+function stepBack() {
+  if (reviewMove.value === null) return
+  if (reviewMove.value - 1 < 0) goToStart()
+  else reviewMoveAt(reviewMove.value - 1)
+}
+
+function stepForward() {
+  if (reviewMove.value === null) {
+    reviewMoveAt(0)
+    return
+  }
+  if (reviewMove.value + 1 >= gameRecord.value.moves.length) return
+  reviewMoveAt(reviewMove.value + 1)
+}
+
+function togglePlay() {
+  if (playing.value) {
+    stopPlayback()
+    return
+  }
+  // 未选步从首手开始；已在末手则从头播放（此时 playing 仍为 false，reviewMoveAt 内的 stopPlayback 无害）
+  if (reviewMove.value === null) reviewMoveAt(0)
+  else if (reviewMove.value >= gameRecord.value.moves.length - 1) {
+    goToStart()
+    reviewMoveAt(0)
+  }
+  playing.value = true
+  playTimer = setInterval(() => {
+    // 暂停（PauseOverlay）中播放空转不前进，恢复后继续
+    if (paused.value) return
+    if (reviewMove.value === null || reviewMove.value + 1 >= gameRecord.value.moves.length) {
+      stopPlayback()
+      return
+    }
+    reviewMoveAt(reviewMove.value + 1)
+  }, playSpeed.value)
+}
+
+function cycleSpeed() {
+  playSpeed.value = playSpeed.value === 800 ? 500 : playSpeed.value === 500 ? 250 : 800
+  // 播放中切速度：重建定时器（播放中不可能处于末手，togglePlay 不会从头播）
+  if (playing.value) {
+    stopPlayback()
+    togglePlay()
+  }
+}
+
+function exitReview() {
+  stopPlayback()
+  reviewMove.value = null
+  board.value = positions.value[positions.value.length - 1]
+  lastMove.value = gameRecord.value.moves[gameRecord.value.moves.length - 1] ?? null
+  clearSelection()
+  clearHint()
+  // 对局中退出回放：若轮到 AI，恢复 AI 调度（打开棋谱时已取消）
+  if (mode.value === 'ai' && !gameOver.value && currentSide.value === aiSide.value) {
+    scheduleAIMove()
+  }
 }
 
 function openNotation() {
   // 查看棋谱时关闭结算弹窗，避免弹窗遮挡棋谱面板
   gameOverDialog.value = false
+  // 对局中打开棋谱：取消 AI 待执行调度/搜索，防止回放期间 AI 走子（退出回放时恢复）
+  aiSeq++
+  cancel()
+  if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
+  aiThinking.value = false
   showNotation.value = true
   sound.select()
   haptics.tap()
 }
 
 function closeNotation() {
+  // 关闭面板 = 退出回放恢复对局现场（对局中恢复当前局面，终局后恢复终局局面）
+  exitReview()
   showNotation.value = false
   // 棋谱关闭后若对局已结束，恢复结算弹窗（保留「再来一局」入口）
   if (gameOver.value) gameOverDialog.value = true
@@ -565,6 +675,7 @@ function showCheckAlert() {
 }
 
 function handleTap(pos: Position) {
+  if (reviewMove.value !== null) return // 回放中禁走子（与 interactive 双保险）
   if (gameOver.value || (mode.value !== 'local' && mode.value !== 'ai')) return
   if (mode.value === 'ai' && (aiThinking.value || currentSide.value === aiSide.value)) return
 
@@ -761,6 +872,7 @@ function surrender() {
 }
 
 function resetGame() {
+  stopPlayback() // 停止回放播放，避免重开后旧定时器继续推进
   aiSeq++ // 使进行中的 AI 搜索过期（重开旧异步结果丢弃）
   cancel()
   if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
@@ -1150,6 +1262,34 @@ function onRestart() {
 }
 .notation-close:hover {
   color: #fff;
+}
+.notation-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.nc-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.85em;
+  min-width: 34px;
+  height: 30px;
+  padding: 0 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.nc-btn:hover:not(:disabled) {
+  background: rgba(0, 191, 255, 0.15);
+  border-color: rgba(0, 191, 255, 0.4);
+}
+.nc-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 .notation-list {
   max-height: 320px;
