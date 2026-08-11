@@ -160,7 +160,7 @@ const resultMessage = computed(() => {
   }
   if (surrenderByMe.value) return '你选择认输，对手获胜'
   if (result.value === 'draw') return '双方握手言和'
-  return result.value === 'win' ? '你成功将死了对手' : '对手技高一筹'
+  return result.value === 'win' ? '你成功击败了对手' : '对手技高一筹'
 })
 
 const resultIcon = computed<'success' | 'fail' | 'info'>(() => {
@@ -300,7 +300,8 @@ function applyRemoteState(s: any) {
       gameOverDialog.value = true
     } else if (result.value === null && myRole.value) {
       const status = getGameStatus(board.value, myRole.value)
-      if (status === 'checkmate') {
+      if (status === 'checkmate' || status === 'stalemate') {
+        // 将死/困毙：我方无子可走 → 我方负（困毙同样判负，非和棋）
         result.value = 'lose'
       } else {
         result.value = 'draw'
@@ -498,14 +499,21 @@ function checkGame() {
     haptics.win()
     gameOverDialog.value = true
   } else if (status === 'stalemate') {
+    // 困毙（无子可走）：判走子方负、对方胜（与国际象棋不同，非和棋）
     if (amSpectator.value) {
-      spectResult.value = 'draw'
+      spectResult.value = currentTurn.value === 'red' ? 'black-win' : 'red-win'
+      sound.win()
       gameOverDialog.value = true
       return
     }
-    result.value = 'draw'
+    result.value = myTurn.value ? 'lose' : 'win'
+    if (result.value === 'win') {
+      if (achievements.unlock('xiangqi_online_win')) {
+        toast.show('成就解锁：联机先锋 🌐', '🏆')
+      }
+    }
     sound.win()
-    haptics.success()
+    haptics.win()
     gameOverDialog.value = true
   }
 }
