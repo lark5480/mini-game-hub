@@ -44,7 +44,7 @@
           :board="board"
           :selected="selected"
           :legalTargets="legalTargets"
-          :interactive="!gameOver && !isCheckmate"
+          :interactive="!gameOver && !isCheckmate && reviewMove === null"
           :lastMove="lastMove"
           :check-side="checkSide"
           :flipped="false"
@@ -54,7 +54,7 @@
         />
 
         <div class="controls-row">
-          <button class="ctrl-btn" :disabled="history.length === 0 || gameOver" @click="undoMove">
+          <button class="ctrl-btn" :disabled="history.length === 0 || gameOver || reviewMove !== null" @click="undoMove">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 10h10a5 5 0 0 1 0 10H9"/>
               <path d="M7 14l-4-4 4-4"/>
@@ -69,12 +69,13 @@
             </svg>
             认输
           </button>
-          <button class="ctrl-btn" :disabled="gameOver" @click="offerDraw">
+          <button class="ctrl-btn" :disabled="gameOver || reviewMove !== null" @click="offerDraw">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 2v20M2 12h20"/>
             </svg>
             求和
           </button>
+          <button class="ctrl-btn" :disabled="notationList.length === 0" @click="openNotation">棋谱</button>
         </div>
 
         <div class="move-count">
@@ -88,8 +89,15 @@
           <span class="notation-title">棋谱</span>
           <button class="notation-close" @click="closeNotation">×</button>
         </div>
+        <div class="notation-controls">
+          <button class="nc-btn" :disabled="reviewMove === null" @click="goToStart">⏮</button>
+          <button class="nc-btn" :disabled="reviewMove === null" @click="stepBack">◀</button>
+          <button class="nc-btn" :disabled="notationList.length === 0" @click="togglePlay">{{ playing ? '⏸' : '▶' }}</button>
+          <button class="nc-btn" :disabled="notationList.length === 0 || (reviewMove !== null && reviewMove >= notationList.length - 1)" @click="stepForward">▶▶</button>
+          <button class="nc-btn" @click="cycleSpeed">{{ playSpeed === 800 ? '慢' : playSpeed === 500 ? '中' : '快' }}</button>
+        </div>
         <div class="notation-list">
-          <div v-for="(item, i) in notationList" :key="i" class="notation-item" :class="{ active: reviewMove === item.index, red: item.side === 'red', black: item.side === 'black' }" @click="reviewMoveAt(item.index)">
+          <div v-for="(item, i) in notationList" :key="i" class="notation-item" :class="{ active: reviewMove === item.index, red: item.side === 'red', black: item.side === 'black' }" @click="onNotationClick(item.index)">
             <span class="move-num">{{ Math.floor(i / 2) + 1 }}{{ i % 2 === 0 ? '.' : '...' }}</span>
             <span class="move-text">{{ item.notation }}</span>
           </div>
@@ -154,7 +162,7 @@
           :board="board"
           :selected="selected"
           :legalTargets="legalTargets"
-          :interactive="!gameOver && !isCheckmate && !(mode === 'ai' && (aiThinking || currentSide === aiSide))"
+          :interactive="!gameOver && !isCheckmate && !(mode === 'ai' && (aiThinking || currentSide === aiSide)) && reviewMove === null"
           :lastMove="lastMove"
           :check-side="checkSide"
           :flipped="humanSide === 'black'"
@@ -164,7 +172,7 @@
         />
 
         <div class="controls-row">
-          <button class="ctrl-btn" :disabled="history.length === 0 || gameOver || aiThinking" @click="undoMove">
+          <button class="ctrl-btn" :disabled="history.length === 0 || gameOver || aiThinking || reviewMove !== null" @click="undoMove">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M3 10h10a5 5 0 0 1 0 10H9"/>
               <path d="M7 14l-4-4 4-4"/>
@@ -179,13 +187,14 @@
             </svg>
             认输
           </button>
-          <button class="ctrl-btn" :disabled="currentSide === aiSide || aiThinking || gameOver" :class="{ 'hint-active': hintMove }" @click="showHint">
+          <button class="ctrl-btn" :disabled="currentSide === aiSide || aiThinking || hintThinking || gameOver || reviewMove !== null" :class="{ 'hint-active': hintMove }" @click="showHint">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"/>
               <path d="M12 16v-4M12 8h.01"/>
             </svg>
             提示
           </button>
+          <button class="ctrl-btn" :disabled="notationList.length === 0" @click="openNotation">棋谱</button>
         </div>
 
         <div class="move-count">
@@ -199,8 +208,15 @@
           <span class="notation-title">棋谱</span>
           <button class="notation-close" @click="closeNotation">×</button>
         </div>
+        <div class="notation-controls">
+          <button class="nc-btn" :disabled="reviewMove === null" @click="goToStart">⏮</button>
+          <button class="nc-btn" :disabled="reviewMove === null" @click="stepBack">◀</button>
+          <button class="nc-btn" :disabled="notationList.length === 0" @click="togglePlay">{{ playing ? '⏸' : '▶' }}</button>
+          <button class="nc-btn" :disabled="notationList.length === 0 || (reviewMove !== null && reviewMove >= notationList.length - 1)" @click="stepForward">▶▶</button>
+          <button class="nc-btn" @click="cycleSpeed">{{ playSpeed === 800 ? '慢' : playSpeed === 500 ? '中' : '快' }}</button>
+        </div>
         <div class="notation-list">
-          <div v-for="(item, i) in notationList" :key="i" class="notation-item" :class="{ active: reviewMove === item.index, red: item.side === 'red', black: item.side === 'black' }" @click="reviewMoveAt(item.index)">
+          <div v-for="(item, i) in notationList" :key="i" class="notation-item" :class="{ active: reviewMove === item.index, red: item.side === 'red', black: item.side === 'black' }" @click="onNotationClick(item.index)">
             <span class="move-num">{{ Math.floor(i / 2) + 1 }}{{ i % 2 === 0 ? '.' : '...' }}</span>
             <span class="move-text">{{ item.notation }}</span>
           </div>
@@ -238,12 +254,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useSound } from '@/composables/useSound'
 import { useHaptics } from '@/composables/useHaptics'
 import { useGamePause } from '@/composables/useGamePause'
 import { useToast } from '@/composables/useToast'
+import { useXiangqiAI } from '@/composables/useXiangqiAI'
 import { useAchievements } from '@/stores/achievements'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
@@ -254,7 +271,8 @@ import XiangqiOnlineView from '@/views/XiangqiOnlineView.vue'
 import type { Board, Position, Move, Side } from '@/engine/xiangqi/types'
 import { cloneBoard } from '@/engine/xiangqi/types'
 import { initialBoard, generateMoves, applyMove, isInCheck, getGameStatus, classifyMove, isPinned, toNotation, checkRepetitionViolation } from '@/engine/xiangqi/rules'
-import { findBestMove } from '@/engine/xiangqi/ai'
+import { boardKey } from '@/engine/xiangqi/ai'
+import { lookupOpening } from '@/engine/xiangqi/openings'
 
 type GameMode = 'local' | 'online' | 'ai'
 type AISide = 'red' | 'black'
@@ -282,6 +300,10 @@ const toast = useToast()
   const gameRecord = ref<{ moves: Move[]; sides: Side[] }>({ moves: [], sides: [] })
   const notations = ref<string[]>([])
   const reviewMove = ref<number | null>(null)
+  // 复盘演示：播放速度三档 + 播放中标志 + 播放定时器（onUnmounted/resetGame 清理）
+  const playSpeed = ref<800 | 500 | 250>(500)
+  const playing = ref(false)
+  let playTimer: ReturnType<typeof setInterval> | null = null
   const hintMove = ref<Move | null>(null)
   const drawOffered = ref(false)
   const showNotation = ref(false)
@@ -302,7 +324,7 @@ const isCheckmate = ref(false)
 const positions = ref<Board[]>([initialBoard()])
 const playedMoves = ref<Move[]>([])
 const violationSide = ref<Side | null>(null)
-const violationReason = ref<'perpetual_check' | 'perpetual_chase' | 'perpetual_attack' | null>(null)
+const violationReason = ref<'perpetual_check' | 'perpetual_chase' | 'perpetual_mate' | 'perpetual_attack' | null>(null)
 const drawByRepetition = ref<'mutual_attack' | 'mutual_idle' | null>(null)
 const { paused, resume: resumeGame } = useGamePause({
   canPause: () => mode.value !== 'online' && mode.value !== 'ai' && !gameOver.value && result.value === null,
@@ -385,7 +407,8 @@ const resultMessage = computed(() => {
     const who = violationSide.value === 'red' ? '红方' : '黑方'
     const winner = violationSide.value === 'red' ? '黑方' : '红方'
     const why = violationReason.value === 'perpetual_check' ? '长将' :
-      violationReason.value === 'perpetual_chase' ? '长捉' : '长打'
+      violationReason.value === 'perpetual_chase' ? '长捉' :
+      violationReason.value === 'perpetual_mate' ? '长杀' : '长打'
     return `${who}${why}违规判负，${winner}获胜`
   }
   return `${result.value === 'red-win' ? '红方' : '黑方'}在 ${moveCount.value} 步内取胜`
@@ -402,15 +425,56 @@ let lastExposeTipAt = 0
 
 // ---- AI 走子调度 ----
 let aiTimer: ReturnType<typeof setTimeout> | null = null
+// AI 搜索调度器：搜索在 Worker 内运行（主线程零阻塞），cancel 中断引擎内搜索（保留 TT）
+const { requestSearch, cancel, dispose } = useXiangqiAI()
+// AI 回合身份序号：取消点（悔棋/认输/重开/离开）递增，使进行中的 AI 异步回调过期
+let aiSeq = 0
+// 提示请求序号：递增使旧请求过期（又点提示/走子/取消后旧结果丢弃）
+let hintSeq = 0
+const hintThinking = ref(false)
+onUnmounted(() => {
+  dispose()
+  stopPlayback()
+})
 
-function showHint() {
+function recentHistoryKeys(): bigint[] {
+  // 最近 32 个半步的历史局面 key（与 checkRepetitionViolation 的 MAX_PERIOD=32 判定窗口一致；
+  // positions[k] 为走完 k 个半步后的局面，行棋方 = k 偶红先）
+  const len = positions.value.length
+  if (len <= 1) return []
+  const keys: bigint[] = []
+  const start = Math.max(0, len - 33)
+  for (let i = start; i < len - 1; i++) {
+    keys.push(boardKey(positions.value[i], i % 2 === 0 ? 'red' : 'black'))
+  }
+  return keys
+}
+
+async function showHint() {
   if (gameOver.value || aiThinking.value || currentSide.value === aiSide.value) return
-  // 提示与 AI 同强度：简单固定深度 2，中等深度 5，困难迭代加深（限 1.2s 保证响应）
-  const hint = difficulty.value === 'easy'
-    ? findBestMove(board.value, humanSide.value, 2)
-    : difficulty.value === 'medium'
-      ? findBestMove(board.value, humanSide.value, 5, 1200)
-      : findBestMove(board.value, humanSide.value, 8, 1200)
+  const seq = ++hintSeq
+  hintThinking.value = true
+  // 开局库：命中主变直接给提示（零延迟），未命中才进 Worker 搜索
+  const opening = lookupOpening(board.value, humanSide.value)
+  if (opening) {
+    if (seq !== hintSeq) return // 过期（又点/走子/取消），丢弃
+    hintThinking.value = false
+    hintMove.value = opening
+    sound.select()
+    haptics.tap()
+    return
+  }
+  // 提示与 AI 同强度：简单固定深度 2，中等深度 4，困难迭代加深（限 2s 保证响应，异步不阻塞 UI）
+  // 均传入对局历史 key：提示不走进长将/长捉判负的着法
+  const hint = await requestSearch({
+    board: board.value,
+    side: humanSide.value,
+    depth: difficulty.value === 'easy' ? 2 : difficulty.value === 'medium' ? 4 : 8,
+    timeLimitMs: difficulty.value === 'easy' ? undefined : difficulty.value === 'medium' ? 1200 : 2000,
+    historyKeys: recentHistoryKeys(),
+  })
+  if (seq !== hintSeq) return // 过期（又点/走子/取消），丢弃
+  hintThinking.value = false
   if (hint) {
     hintMove.value = hint
     sound.select()
@@ -420,6 +484,9 @@ function showHint() {
 
 function clearHint() {
   hintMove.value = null
+  hintSeq++ // 使进行中的提示请求过期
+  hintThinking.value = false
+  cancel()
 }
 
 function offerDraw() {
@@ -444,20 +511,114 @@ function respondDraw(accepted: boolean) {
 }
 
 function reviewMoveAt(index: number) {
+  if (index < 0 || index >= gameRecord.value.moves.length) return // 空谱/越界防御
   reviewMove.value = index
+  // 回放核心：棋盘切到该步走完后的局面快照（positions[k] = 走完 k 步后的局面，moves[i] ↔ positions[i+1]）
+  board.value = positions.value[index + 1]
+  lastMove.value = gameRecord.value.moves[index] ?? null
+  clearSelection()
   sound.select()
   haptics.tap()
+}
+
+// 手动点击棋谱条目：先停播放再切局面（播放 tick 内部的 reviewMoveAt 不触发停止）
+function onNotationClick(index: number) {
+  stopPlayback()
+  reviewMoveAt(index)
+}
+
+// ---- 复盘演示：逐手回放 + 自动播放 ----
+function stopPlayback() {
+  playing.value = false
+  if (playTimer) { clearInterval(playTimer); playTimer = null }
+}
+
+function goToStart() {
+  stopPlayback()
+  reviewMove.value = null
+  board.value = positions.value[0]
+  lastMove.value = null
+  clearSelection()
+}
+
+function stepBack() {
+  stopPlayback() // 手动步进停止播放
+  if (reviewMove.value === null) return
+  if (reviewMove.value - 1 < 0) goToStart()
+  else reviewMoveAt(reviewMove.value - 1)
+}
+
+function stepForward() {
+  stopPlayback() // 手动步进停止播放
+  if (reviewMove.value === null) {
+    reviewMoveAt(0)
+    return
+  }
+  if (reviewMove.value + 1 >= gameRecord.value.moves.length) return
+  reviewMoveAt(reviewMove.value + 1)
+}
+
+function togglePlay() {
+  if (playing.value) {
+    stopPlayback()
+    return
+  }
+  // 未选步从首手开始；已在末手则从头播放（此时 playing 仍为 false，reviewMoveAt 内的 stopPlayback 无害）
+  if (reviewMove.value === null) reviewMoveAt(0)
+  else if (reviewMove.value >= gameRecord.value.moves.length - 1) {
+    goToStart()
+    reviewMoveAt(0)
+  }
+  playing.value = true
+  playTimer = setInterval(() => {
+    // 暂停（PauseOverlay）中播放空转不前进，恢复后继续
+    if (paused.value) return
+    if (reviewMove.value === null || reviewMove.value + 1 >= gameRecord.value.moves.length) {
+      stopPlayback()
+      return
+    }
+    reviewMoveAt(reviewMove.value + 1)
+  }, playSpeed.value)
+}
+
+function cycleSpeed() {
+  playSpeed.value = playSpeed.value === 800 ? 500 : playSpeed.value === 500 ? 250 : 800
+  // 播放中切速度：重建定时器（播放中不可能处于末手，togglePlay 不会从头播）
+  if (playing.value) {
+    stopPlayback()
+    togglePlay()
+  }
+}
+
+function exitReview() {
+  stopPlayback()
+  reviewMove.value = null
+  board.value = positions.value[positions.value.length - 1]
+  lastMove.value = gameRecord.value.moves[gameRecord.value.moves.length - 1] ?? null
+  clearSelection()
+  clearHint()
+  // 对局中退出回放：若轮到 AI，恢复 AI 调度（打开棋谱时已取消）
+  if (mode.value === 'ai' && !gameOver.value && currentSide.value === aiSide.value) {
+    scheduleAIMove()
+  }
 }
 
 function openNotation() {
   // 查看棋谱时关闭结算弹窗，避免弹窗遮挡棋谱面板
   gameOverDialog.value = false
+  // 对局中打开棋谱：取消 AI 待执行调度/搜索，防止回放期间 AI 走子（退出回放时恢复）
+  aiSeq++
+  cancel()
+  if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
+  aiThinking.value = false
   showNotation.value = true
   sound.select()
   haptics.tap()
 }
 
 function closeNotation() {
+  // 关闭面板 = 退出回放恢复对局现场（对局中恢复当前局面，终局后恢复终局局面）
+  exitReview()
   showNotation.value = false
   // 棋谱关闭后若对局已结束，恢复结算弹窗（保留「再来一局」入口）
   if (gameOver.value) gameOverDialog.value = true
@@ -468,15 +629,32 @@ function scheduleAIMove() {
   if (gameOver.value) return
   if (currentSide.value === aiSide.value) {
     aiThinking.value = true
-    aiTimer = setTimeout(() => {
-      // 简单固定深度 2；中等深度 5；困难迭代加深至多 8 层、限 1.8s（超时回退已完成深度的最佳着法）
-      const move = difficulty.value === 'easy'
-        ? findBestMove(board.value, aiSide.value, 2)
-        : difficulty.value === 'medium'
-          ? findBestMove(board.value, aiSide.value, 5, 1800)
-          : findBestMove(board.value, aiSide.value, 8, 1800)
+    const seq = ++aiSeq
+    aiTimer = setTimeout(async () => {
+      aiTimer = null
+      // 开局库：命中主变直接走（零搜索延迟），未命中才进 Worker 搜索
+      const opening = lookupOpening(board.value, aiSide.value)
+      if (opening) {
+        aiThinking.value = false
+        if (seq !== aiSeq) return
+        if (!gameOver.value && currentSide.value === aiSide.value && mode.value === 'ai') {
+          executeMove(opening.from, opening.to)
+        }
+        return
+      }
+      // 简单固定深度 2；中等深度 4、限 1.2s；困难迭代加深至多 8 层、限 4s（超时回退已完成深度的最佳着法）
+      // 均传入对局历史 key：AI 不走进长将/长捉判负的着法
+      const move = await requestSearch({
+        board: board.value,
+        side: aiSide.value,
+        depth: difficulty.value === 'easy' ? 2 : difficulty.value === 'medium' ? 4 : 8,
+        timeLimitMs: difficulty.value === 'easy' ? undefined : difficulty.value === 'medium' ? 1200 : 4000,
+        historyKeys: recentHistoryKeys(),
+      })
       aiThinking.value = false
-      if (move) {
+      // 过期校验：await 期间可能已悔棋/认输/重开/离开（seq 失效）或轮到玩家
+      if (seq !== aiSeq) return
+      if (move && !gameOver.value && currentSide.value === aiSide.value && mode.value === 'ai') {
         executeMove(move.from, move.to)
       }
     }, 400)
@@ -504,6 +682,7 @@ function showCheckAlert() {
 }
 
 function handleTap(pos: Position) {
+  if (reviewMove.value !== null) return // 回放中禁走子（与 interactive 双保险）
   if (gameOver.value || (mode.value !== 'local' && mode.value !== 'ai')) return
   if (mode.value === 'ai' && (aiThinking.value || currentSide.value === aiSide.value)) return
 
@@ -622,7 +801,7 @@ function checkGameState() {
       sound.win()
       haptics.win()
       const who = verdict.side === 'red' ? '红方' : '黑方'
-      const why = verdict.reason === 'perpetual_check' ? '长将' : verdict.reason === 'perpetual_chase' ? '长捉' : '长打'
+      const why = verdict.reason === 'perpetual_check' ? '长将' : verdict.reason === 'perpetual_chase' ? '长捉' : verdict.reason === 'perpetual_mate' ? '长杀' : '长打'
       toast.show(`${who}${why}违规，判负！`, '⚖️')
     }
     gameOverDialog.value = true
@@ -678,6 +857,8 @@ function undoMove() {
   violationReason.value = null
   drawByRepetition.value = null
   aiThinking.value = false
+  aiSeq++ // 使进行中的 AI 搜索过期
+  cancel()
   if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
   sound.select()
   haptics.light()
@@ -687,7 +868,9 @@ function surrender() {
   if (gameOver.value) return
   gameOver.value = true
   result.value = currentSide.value === 'red' ? 'black-win' : 'red-win'
-  // 清理 AI 定时器，防止认输后 AI 继续走子
+  // 清理 AI 定时器/搜索，防止认输后 AI 继续走子
+  aiSeq++
+  cancel()
   if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
   aiThinking.value = false
   sound.miss()
@@ -696,6 +879,9 @@ function surrender() {
 }
 
 function resetGame() {
+  stopPlayback() // 停止回放播放，避免重开后旧定时器继续推进
+  aiSeq++ // 使进行中的 AI 搜索过期（重开旧异步结果丢弃）
+  cancel()
   if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
   aiThinking.value = false
   gameStarted.value = true
@@ -737,7 +923,9 @@ function newGame() {
 }
 
 function goHome() {
-  // 清理 AI 定时器，防止导航离开后回调在已卸载组件上执行
+  // 清理 AI 定时器/搜索，防止导航离开后回调在已卸载组件上执行
+  aiSeq++
+  cancel()
   if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
   aiThinking.value = false
   router.push('/')
@@ -1081,6 +1269,34 @@ function onRestart() {
 }
 .notation-close:hover {
   color: #fff;
+}
+.notation-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.nc-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.85em;
+  min-width: 34px;
+  height: 30px;
+  padding: 0 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.nc-btn:hover:not(:disabled) {
+  background: rgba(0, 191, 255, 0.15);
+  border-color: rgba(0, 191, 255, 0.4);
+}
+.nc-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 .notation-list {
   max-height: 320px;

@@ -10,6 +10,7 @@ Vue 3 + TypeScript + Vite + Pinia + Vue Router，原生 CSS（CSS 变量驱动�
 App.vue（全局样式 + scanlines 特效）
 └── <router-view>
     ├── HomeView          — 首页游戏选择（11 张卡片）
+    ├── AchievementsView  — 成就展示
     ├── SokobanView       — 推箱子（v-for 网格）
     ├── LinkGameView      — 连连看（v-for 网格 + 键盘光标）
     ├── CatchFruitView    — 接水果（v-for 移动元素）
@@ -18,8 +19,12 @@ App.vue（全局样式 + scanlines 特效）
     ├── BreakoutView      — 弹球打砖块（Canvas 2D）
     ├── Game2048View      — 2048（v-for 网格 + 撤销历史）
     ├── WhackAMoleView    — 打地鼠（setInterval/Timeout 点触）
+    ├── WhackAMoleRaceView — 打地鼠·竞速（在线实时对战）
     ├── SimonView         — 西蒙记忆灯（看灯序复述）
-    └── TicTacToeOnlineView — 井字棋·双人（在线实时对战）
+    ├── TicTacToeView     — 井字棋（单人 AI）
+    ├── TicTacToeOnlineView — 井字棋·双人（在线实时对战）
+    ├── XiangqiView       — 中国象棋（人机/本地双人，Web Worker 搜索）
+    └── XiangqiOnlineView — 中国象棋·联机（在线实时对战）
 ```
 
 ## 共享组件
@@ -35,6 +40,8 @@ App.vue（全局样式 + scanlines 特效）
 | `LeaderboardOverlay` | 提交分数 → 排行榜（Top N + 邻位排名）→ 再来一局，5s 超时 + 重试按钮 + 友好中文错误 + safe-area；提交后展示玩家前后各 range 名的邻位排名 + 推荐未玩过的游戏 |
 | `LeaderboardStrip` | 嵌入各游戏底部和首页卡片，自动监听 `leaderboardVersion` 刷新 |
 | `GameToast` | 顶部成就解锁 Toast，2s 自动消失 + 淡入动画 + safe-area |
+| `XiangqiBoard` | 象棋棋盘 Canvas 渲染 + 点击选子/落子交互 | `flipped` prop 支持黑方视角翻转（联机） |
+| `WhackAMoleBoard` | 打地鼠 3×3 洞位棋盘 | 坐标回调驱动 WhackAMoleView / Race 两视图 |
 
 ## 共享逻辑
 
@@ -43,15 +50,19 @@ App.vue（全局样式 + scanlines 特效）
 | `useGameLoop` | 游戏循环：`interval` / `raf` 两种模式；暂停时 rAF 链自动停止；dt clamp(100ms) 防止 tab 切回瞬移 |
 | `useGameKeyboard` | 键盘绑定，`repeat` 支持长按连发，`isDown()` 查询当前按键状态，blur 时自动清"粘键" |
 | `useAutoPause` | 监听 `visibilitychange`，页面切到后台自动触发暂停回调 |
-| `usePause` | 统一暂停/恢复骨架：封装 P/Esc + 失焦 + PauseOverlay/ResumePrompt 联动 |
+| `useGamePause` | 统一暂停/恢复骨架：封装 P/Esc + 失焦 + PauseOverlay/ResumePrompt 联动 |
 | `useSound` | Web Audio API 合成音效（tone/sweep），23+ 预设，全局 `muted` ref + localStorage 持久化，mute 切换给确认 click |
 | `useHaptics` | 移动端震动反馈（`light / tap / select / pulse / success / error / win`），无振动环境静默 |
 | `useScoreFloats` | 浮动分数堆叠管理，`pop(text, x, y)` 触发新浮动 */
 | `useGameSave` | 存档/读档/继续游戏（localStorage），每 300ms 节流自动保存 |
+| `useAutoSave` | 自动保存（300ms 节流写 localStorage） |
 | `useLeaderboard` | 排行榜 CRUD：`submit()` 含 5s 超时 + 错误友好化映射；全局 `leaderboardVersion` 广播刷新信号；`fetchNearby(score, nickname, range)` 用 COUNT 定全局排名 + range 拉邻位窗口 |
 | `useGameOver` | 游戏结束统一处理：检测新记录 + 写入分数 + 播放音效 + 成就接近提示（分数达 75% 阈值时提示"还差 N 分"，达成时自动解锁成就） |
 | `useToast` | 顶部 Toast 通知（成就解锁用） |
 | `useSwipe` | 移动端滑动手势（2048/贪吃蛇等用） |
+| `useRealtimeRoom` | 联机房间基础：Supabase Realtime 频道 + 房主/客人角色（井字棋/象棋双人复用） |
+| `useRaceRoom` | 打地鼠竞速房间：倒计时同步 + 进度广播 + 结算 |
+| `useXiangqiAI` | 象棋 AI 调度器：Web Worker 搜索（`requestSearch` / `cancel` / `dispose`），自动取消旧搜索、消息 FIFO、postMessage 前 `toPlainBoard` 深拷贝 |
 
 ## PWA（渐进式 Web 应用）
 
@@ -64,13 +75,31 @@ App.vue（全局样式 + scanlines 特效）
 
 ## 游戏注册表（单源）
 
-`src/lib/games.ts` 导出 `GAMES: GameMeta[]` —— 路由配置、`defaultScoreKeys()`、首页卡片列表全部从它派生。新增游戏只需加一条 + 在 router 的 `GAME_COMPONENTS` 加一行映射。
+`src/lib/games.ts` 导出 `GAMES: GameMeta[]` —— 路由配置、`defaultScoreKeys()`、首页卡片列表全部从它派生。新增游戏流程见文末「新增游戏 checklist」（games.ts 加条目 + router 的 `GAME_COMPONENTS` 加视图映射 + HomeView iconMap 加图标）。
+
+## 中国象棋引擎
+
+`src/engine/xiangqi/` 纯 TS 零依赖，浏览器 / Node 测试 / Worker 三端复用：
+
+| 文件 | 职责 |
+|------|------|
+| `types.ts` | `Board` / `Piece` / `Move` / `Side` / `GameStatus` 类型 |
+| `rules.ts` | 走法生成 `generateMoves`、合法性 `isLegalMove`、送将拦截 `classifyMove`、将死/困毙 `getGameStatus`、重复局面裁决 `checkRepetitionViolation`（长将/长捉/长杀/长打，周期 4..32 半步） |
+| `ai.ts` | `findBestMove`：negamax + alpha-beta + 迭代加深 + TT/killer/history + LMR + 空着剪枝 + quiescence（重复拦截 repPath 并入对局历史）；`evaluateBoard` = 子力 + PST + 轻量结构评估（车半/全开放线、连兵/孤兵/叠兵、王翼兵保护，单遍扫描零额外开销） |
+| `openings.ts` | 开局库：UCCI 主变查表直出（命中零延迟，未命中回退搜索），构建期 `generateMoves` 自检棋谱，同局面多着法随机选一 |
+| `notation.ts` | 中国象棋记谱 `toNotation`（车五进三 等） |
+
+- **搜索线程**：`useXiangqiAI` 封装 Worker（`src/workers/xiangqi-ai.worker.ts`），主线程不阻塞；postMessage 前必须 `toPlainBoard` 深拷贝（Vue 响应式 Proxy 无法结构化克隆），Worker 保留 TT 跨调用
+- **难度参数**（XiangqiView 常量）：简单固定深度 2；中等深度 4 + 限 1.2s；困难深度 8 + 限 4s（超时回退已完成深度最佳着法）；提示限 2s
+- **AI 历史窗口**：`recentHistoryKeys` 最近 32 半步并入搜索 repPath，与重复局面裁决窗口一致
+- **复盘演示**：XiangqiView 棋谱面板支持逐手回放/自动播放（三档速度），点击着法把棋盘切到历史局面快照（`positions` 数组，moves[i] ↔ positions[i+1]），回放中禁走子/禁 AI 调度（退出回放恢复）
+- **测试**：`tests/test-xiangqi.cjs`（`node tests/test-xiangqi.cjs` 直接跑，自动 tsc 编译到 tests/.tmp-xiangqi）
 
 ## Store
 
 `useGameStore`（Pinia）：`scores[gameName]` → `GameScore[]`，`addScore()` 自动排序 + 截断 top 10，`watch(deep)` 自动写入 `localStorage`。分数注册表通过 `defaultScoreKeys()` 引用 `GAMES`。
 
-`useAchievements`（Pinia）：元数据 `ACHIEVEMENTS` 数组（10 个）+ `Set<string>` 已解锁 + localStorage 持久化（key: `game-achievements`）；**`unlock()` 内部自动调用 `sound.unlock()` + `haptics.success()`**；其余 9 个成就全解锁时自动解锁 `perfectionist` 元成就。
+`useAchievements`（Pinia）：元数据 `ACHIEVEMENTS` 数组（13 个）+ `Set<string>` 已解锁 + localStorage 持久化（key: `game-achievements`）；**`unlock()` 内部自动调用 `sound.unlock()` + `haptics.success()`**；其余成就全解锁时自动解锁 `perfectionist` 元成就。
 
 ## 数据流
 

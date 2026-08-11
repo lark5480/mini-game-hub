@@ -78,6 +78,16 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 | `useToast` | Toast 通知 | `toast.show(message, icon)` |
 | `useSwipe` | 移动端滑动手势 | `useSwipe({ el, active, onSwipe })` |
 
+## 中国象棋引擎（特殊游戏约定）
+
+- 引擎在 `src/engine/xiangqi/`（纯 TS 零依赖：`types/rules/ai/openings/notation`），**新增引擎能力先改这里 + 在 `tests/test-xiangqi.cjs` 补断言**（`node tests/test-xiangqi.cjs` 直接跑，自动 tsc 编译；测试构造局面必须棋规合法——走子不送将）
+- 搜索必须走 `useXiangqiAI`（Web Worker，主线程不阻塞）；**postMessage 前棋盘必须 `toPlainBoard` 深拷贝**（Vue 响应式 Proxy 无法结构化克隆，历史 P0）；禁止在主线程同步搜索
+- AI 走子/提示统一先查 `lookupOpening`（开局库命中零延迟）→ 未命中才进 Worker 搜索
+- 重复局面裁决 `checkRepetitionViolation`（长将/长捉/长杀/长打，周期 4..32 半步）是胜负判定一环；视图 AI 历史窗口 `recentHistoryKeys` 必须与裁决窗口一致（32 半步），否则 AI 长打规避失效
+- 评估热路径纪律：`evaluateBoard` 每叶子调用，禁止走法生成/二次全盘扫描；结构评估项必须在单遍扫描内顺带收集（参考 R2 性能教训）
+- 棋盘渲染用 `XiangqiBoard`（Canvas 2D），联机黑方视角用 `flipped` prop
+- 引擎接口变更（`rules.ts` / `ai.ts` 导出）需同步测试回归；完整架构事实见 [system_design.md](./docs/system_design.md) 的「中国象棋引擎」段
+
 ## 全局积分排行榜（Supabase）
 
 架构：前端（Supabase JS SDK）→ Supabase PostgreSQL → RLS 安全策略。SQL 建表语句、环境变量、核心文件列表、昵称去重逻辑、部署步骤见 [docs/system_design.md](./docs/system_design.md) 的「部署与基础设施」。

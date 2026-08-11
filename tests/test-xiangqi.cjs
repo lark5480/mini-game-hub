@@ -1251,6 +1251,203 @@ console.log('\n=== Suite 32: 深搜索稳定性 ===')
 }
 
 // ============================================================
+// Suite 33: 对局历史长将规避（AI 不走进第 3 次重复判负）
+// ============================================================
+console.log('\n=== Suite 33: 对局历史长将规避 ===')
+{
+  const { findBestMove, boardKey } = require(path.join(__dirname, '.tmp-xiangqi', 'ai'))
+  // 封将路局面：红兵 (0,1) 挡在车前阻断吃子线（车无净赚吃子着法）、黑炮 (0,3)(0,5) 封
+  // 黑将避将横路（车 (1,0) 将 (1,4) 时唯一应着 (0,4)）、红帅 (9,3) 移出 col4 避免飞将。
+  // 长将线（车 (0,0)->(1,0) 往返）无子可吃、黑被迫往返，评估为当前局面最优 → 不传历史
+  // 时 AI 复现长将；传历史后根着法撞第 3 次重复被强负分拦截 → AI 改走其他合法着法。
+  const base = [
+    [9, 3, 'king', 'red'], [0, 1, 'pawn', 'red'],
+    [0, 3, 'cannon', 'black'], [0, 5, 'cannon', 'black']
+  ]
+  const mk = (rookR, rookC, kingR, kingC) => {
+    const p = emptyBoard()
+    for (const [r, c, t, s] of base) place(p, r, c, t, s)
+    place(p, rookR, rookC, 'rook', 'red')
+    place(p, kingR, kingC, 'king', 'black')
+    return p
+  }
+  // 手工构造对局历史：车将 → 将避 → 车回将 → 将回 × 2（8 个半步）
+  // A（车 (1,0)，将 (1,4)）在 p1、p5 出现 2 次 → 根着法车 (0,0)->(1,0) 到达 A 为第 3 次
+  const hist = [
+    mk(0, 0, 1, 4), // p0
+    mk(1, 0, 1, 4), // p1 = A（车将）
+    mk(1, 0, 0, 4), // p2（将避）
+    mk(0, 0, 0, 4), // p3（车回将）
+    mk(0, 0, 1, 4), // p4 = 同当前
+    mk(1, 0, 1, 4), // p5 = A
+    mk(1, 0, 0, 4), // p6
+    mk(0, 0, 0, 4), // p7
+    mk(0, 0, 1, 4)  // p8 = 当前局面（红轮到走）
+  ]
+  const cur = hist[8]
+  // 历史 key = positions[0..7]（最近 8 个半步局面，行棋方 k 偶红先，与视图 recentHistoryKeys 一致）
+  const historyKeys = hist.slice(0, 8).map((p, i) => boardKey(p, i % 2 === 0 ? 'red' : 'black'))
+  const isChase = (m) =>
+    m !== null && m.from.row === 0 && m.from.col === 0 && m.to.row === 1 && m.to.col === 0
+  // 不传历史：搜索内循环回到 rootKey 仅 repeats=1 不拦截（第 3 次出现在 8 步视距外）→ 长将线评估最高
+  const mPlain = findBestMove(cur, 'red', 4)
+  assertTrue(isChase(mPlain), '历史盲区：不传历史时 AI 选长将着法（复现连将判负）',
+    mPlain ? mPlain.from.row + ',' + mPlain.from.col + '->' + mPlain.to.row + ',' + mPlain.to.col : 'null')
+  // 传历史：根着法到达 A（历史第 3 次出现）→ 搜索第一步即强负分 → 不选长将
+  const mSafe = findBestMove(cur, 'red', 4, undefined, historyKeys)
+  assertTrue(mSafe !== null, '历史感知：有应着')
+  assertFalse(isChase(mSafe), '历史感知：不选长将着法（规避第 3 次重复判负）',
+    mSafe ? mSafe.from.row + ',' + mSafe.from.col + '->' + mSafe.to.row + ',' + mSafe.to.col : 'null')
+  assertTrue(mSafe && isLegalMove(cur, mSafe.from, mSafe.to), '历史感知：着法合法',
+    mSafe ? mSafe.from.row + ',' + mSafe.from.col + '->' + mSafe.to.row + ',' + mSafe.to.col : 'null')
+}
+
+// ============================================================
+// Suite 34: 取消搜索语义（cancelSearch 不破坏后续搜索）
+// ============================================================
+console.log('\n=== Suite 34: 取消搜索语义 ===')
+{
+  const { findBestMove, cancelSearch } = require(path.join(__dirname, '.tmp-xiangqi', 'ai'))
+  const b = initialBoard()
+  // 断言 1：cancel 后正常搜索（标志在入口重置，无残留污染）
+  cancelSearch()
+  const m1 = findBestMove(b, 'red', 2)
+  assertTrue(m1 !== null && isLegalMove(b, m1.from, m1.to), '取消后搜索正常返回合法着法（入口重置标志）',
+    m1 ? m1.from.row + ',' + m1.from.col + '->' + m1.to.row + ',' + m1.to.col : 'null')
+  // 断言 2：重复 cancel 幂等不抛
+  cancelSearch()
+  cancelSearch()
+  assertTrue(true, '重复 cancelSearch 幂等不抛')
+  // 断言 3：连续多次搜索（含 cancel 间隙）结果稳定
+  const m2 = findBestMove(b, 'red', 2)
+  cancelSearch()
+  const m3 = findBestMove(b, 'red', 2)
+  assertTrue(m3 !== null && isLegalMove(b, m3.from, m3.to), 'cancel 间隙后再次搜索正常',
+    m3 ? m3.from.row + ',' + m3.from.col + '->' + m3.to.row + ',' + m3.to.col : 'null')
+  assertEq(JSON.stringify(m2), JSON.stringify(m3), '无取消残留：同局面同深度结果一致')
+}
+
+// ============================================================
+// Suite 35: 开局库（主变查表，命中直出）
+// ============================================================
+console.log('\n=== Suite 35: 开局库 ===')
+{
+  const { lookupOpening } = require(path.join(__dirname, '.tmp-xiangqi', 'openings'))
+  const mk = (r1, c1, r2, c2) => ({ from: { row: r1, col: c1 }, to: { row: r2, col: c2 } })
+  // 断言 1：初始局面命中且合法（红方有库着法）
+  const o1 = lookupOpening(initialBoard(), 'red')
+  assertTrue(o1 !== null && isLegalMove(initialBoard(), o1.from, o1.to), '初始局面命中开局库且着法合法',
+    o1 ? o1.from.row + ',' + o1.from.col + '->' + o1.to.row + ',' + o1.to.col : 'null')
+  // 断言 2：红方库着法后黑方有应着（随机变着同样覆盖黑方）
+  const b1 = applyMove(initialBoard(), o1)
+  const o2 = lookupOpening(b1, 'black')
+  assertTrue(o2 !== null && isLegalMove(b1, o2.from, o2.to), '黑方应着命中且合法',
+    o2 ? o2.from.row + ',' + o2.from.col + '->' + o2.to.row + ',' + o2.to.col : 'null')
+  // 断言 3：沿中炮直车对屏风马主变逐步走，每步查表均命中且合法
+  // （谱：炮二平五 马8进7 马二进三 车9平8 车一平二 马2进3）
+  const line = [mk(7, 7, 7, 4), mk(0, 7, 2, 6), mk(9, 7, 7, 6), mk(0, 8, 0, 7), mk(9, 8, 9, 7), mk(0, 1, 2, 2)]
+  let b3 = initialBoard()
+  let side3 = 'red'
+  for (let i = 0; i < line.length; i++) {
+    const m = lookupOpening(b3, side3)
+    assertTrue(m !== null && isLegalMove(b3, m.from, m.to), '主变第 ' + (i + 1) + ' 步命中且合法',
+      m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
+    b3 = applyMove(b3, line[i])
+    side3 = side3 === 'red' ? 'black' : 'red'
+  }
+  // 断言 4：走完主变后乱走一步（红车九平八），黑方查表返回 null（超出库覆盖）
+  b3 = applyMove(b3, mk(9, 0, 9, 1))
+  assertTrue(lookupOpening(b3, 'black') === null, '主变外乱走一步后查表返回 null')
+  // 断言 5：中盘乱走 20 步后查表返回 null
+  let b5 = initialBoard()
+  let side5 = 'red'
+  for (let i = 0; i < 20; i++) {
+    const ms = generateMoves(b5, side5)
+    if (ms.length === 0) break
+    b5 = applyMove(b5, ms[Math.floor(Math.random() * ms.length)])
+    side5 = side5 === 'red' ? 'black' : 'red'
+  }
+  assertTrue(lookupOpening(b5, side5) === null, '中盘乱走 20 步后查表返回 null')
+  // 随机性（仅记录不硬断言，避免 flaky）：初始局面查 5 次统计变着数
+  const seen = new Set()
+  for (let i = 0; i < 5; i++) {
+    const m = lookupOpening(initialBoard(), 'red')
+    if (m) seen.add(m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col)
+  }
+  console.log('  INFO: 初始局面 5 次查表变着数 = ' + seen.size)
+}
+
+// ============================================================
+// Suite 36: 结构评估（车半开放线 + 兵形 + 王翼保护）
+// 构造原则：每个断言比较两个「仅目标特征不同」的局面，其余特征与子力抵消；
+// 无王局面（断言 2-6）隔离王翼项，断言 7 单独带王验证王翼保护。
+// ============================================================
+console.log('\n=== Suite 36: 结构评估 ===')
+{
+  const { evaluateBoard } = require(path.join(__dirname, '.tmp-xiangqi', 'ai'))
+  // 断言 1：初始局面红黑对称 eval === 0
+  assertEq(evaluateBoard(initialBoard()), 0, '初始局面 eval = 0（红黑对称）')
+
+  // 断言 2：车半开放线——列内无己方兵 +25（红兵(6,0) vs (6,1) 仅移动己方兵，子力/PST 相同）
+  {
+    const a1 = emptyBoard(); place(a1, 5, 0, 'rook', 'red'); place(a1, 6, 0, 'pawn', 'red'); place(a1, 3, 2, 'pawn', 'black')
+    const a2 = emptyBoard(); place(a2, 5, 0, 'rook', 'red'); place(a2, 6, 1, 'pawn', 'red'); place(a2, 3, 2, 'pawn', 'black')
+    const diff = evaluateBoard(a2) - evaluateBoard(a1)
+    assertTrue(diff >= 25, '车半开放线：列内无己方兵时红车 +25', 'diff=' + diff)
+  }
+
+  // 断言 3：全开放线——列内无任何兵再 +15（黑兵(3,1) vs (3,0) 仅移动黑兵，PST 镜像相同）
+  {
+    const c1 = emptyBoard(); place(c1, 5, 0, 'rook', 'red'); place(c1, 3, 1, 'pawn', 'black')
+    const c2 = emptyBoard(); place(c2, 5, 0, 'rook', 'red'); place(c2, 3, 0, 'pawn', 'black')
+    const diff = evaluateBoard(c1) - evaluateBoard(c2)
+    assertTrue(diff >= 15, '车全开放线：列内无任何兵再 +15', 'diff=' + diff)
+  }
+
+  // 断言 4：孤兵——左右邻列无己方兵 -12（孤立 vs 连兵对）
+  {
+    const e1 = emptyBoard(); place(e1, 5, 2, 'pawn', 'red'); place(e1, 1, 8, 'pawn', 'red')
+    const e2 = emptyBoard(); place(e2, 5, 2, 'pawn', 'red'); place(e2, 5, 3, 'pawn', 'red')
+    const diff = evaluateBoard(e2) - evaluateBoard(e1)
+    assertTrue(diff >= 12, '孤兵：孤立兵受 -12 惩罚（连兵对照）', 'diff=' + diff)
+  }
+
+  // 断言 5：连兵——邻列行差 <= 1 的兵对 +8/兵（行差 0 vs 行差 4）
+  {
+    const g1 = emptyBoard(); place(g1, 5, 4, 'pawn', 'red'); place(g1, 5, 5, 'pawn', 'red')
+    const g2 = emptyBoard(); place(g2, 5, 4, 'pawn', 'red'); place(g2, 1, 5, 'pawn', 'red')
+    const diff = evaluateBoard(g1) - evaluateBoard(g2)
+    assertTrue(diff >= 8, '连兵：邻列行差 <= 1 得奖励', 'diff=' + diff)
+  }
+
+  // 断言 6：叠兵——同列多兵每多余 -8（同列双兵 vs 邻列分兵）
+  {
+    const f1 = emptyBoard(); place(f1, 5, 4, 'pawn', 'red'); place(f1, 6, 4, 'pawn', 'red')
+    const f2 = emptyBoard(); place(f2, 5, 4, 'pawn', 'red'); place(f2, 6, 3, 'pawn', 'red')
+    const diff = evaluateBoard(f1) - evaluateBoard(f2)
+    assertTrue(diff <= -8, '叠兵：同列双兵受 -8 惩罚', 'diff=' + diff)
+  }
+
+  // 断言 7：王翼兵保护——王所在列 +/-1 内每己方兵 +6（兵(6,3) vs (6,6) 仅移出王翼）
+  {
+    const h1 = emptyBoard(); place(h1, 9, 4, 'king', 'red'); place(h1, 6, 3, 'pawn', 'red')
+    const h2 = emptyBoard(); place(h2, 9, 4, 'king', 'red'); place(h2, 6, 6, 'pawn', 'red')
+    const diff = evaluateBoard(h1) - evaluateBoard(h2)
+    assertTrue(diff >= 6, '王翼兵保护：王翼内己方兵 +6', 'diff=' + diff)
+  }
+
+  // 断言 8：红黑镜像局面 eval === 0（含王翼项，验证黑方结构取负后对称）
+  {
+    const b = emptyBoard()
+    place(b, 5, 4, 'rook', 'red'); place(b, 4, 4, 'rook', 'black')
+    place(b, 6, 0, 'pawn', 'red'); place(b, 3, 8, 'pawn', 'black')
+    place(b, 9, 4, 'king', 'red'); place(b, 0, 4, 'king', 'black')
+    assertEq(evaluateBoard(b), 0, '红黑镜像局面 eval = 0')
+  }
+}
+
+
+// ============================================================
 // Summary
 // ============================================================
 console.log('\n' + '='.repeat(50))
