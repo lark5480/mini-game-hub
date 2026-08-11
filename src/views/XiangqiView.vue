@@ -245,10 +245,6 @@
     <!-- 联机模式 -->
     <XiangqiOnlineView v-else ref="onlineRef" />
 
-    <template #controls>
-      <button v-if="(mode === 'local' || mode === 'ai') && !gameOver && !aiThinking" class="submit-score-btn" @click="resetGame">重新开始</button>
-    </template>
-
     <PauseOverlay :visible="paused" @resume="continueGame" />
   </GameLayout>
 </template>
@@ -1111,20 +1107,6 @@ function onRestart() {
 .dialog-btn:hover {
   transform: scale(1.05);
   box-shadow: 0 8px 25px rgba(255, 77, 77, 0.4);
-}
-
-.submit-score-btn {
-  background: rgba(255, 77, 77, 0.15);
-  border: 1px solid rgba(255, 77, 77, 0.4);
-  color: #fff;
-  padding: 10px 20px;
-  border-radius: 14px;
-  font-size: 0.95em;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.submit-score-btn:hover {
-  background: rgba(255, 77, 77, 0.25);
 }
 
 @media (max-width: 640px) {
