@@ -1303,6 +1303,31 @@ console.log('\n=== Suite 33: 对局历史长将规避 ===')
 }
 
 // ============================================================
+// Suite 34: 取消搜索语义（cancelSearch 不破坏后续搜索）
+// ============================================================
+console.log('\n=== Suite 34: 取消搜索语义 ===')
+{
+  const { findBestMove, cancelSearch } = require(path.join(__dirname, '.tmp-xiangqi', 'ai'))
+  const b = initialBoard()
+  // 断言 1：cancel 后正常搜索（标志在入口重置，无残留污染）
+  cancelSearch()
+  const m1 = findBestMove(b, 'red', 2)
+  assertTrue(m1 !== null && isLegalMove(b, m1.from, m1.to), '取消后搜索正常返回合法着法（入口重置标志）',
+    m1 ? m1.from.row + ',' + m1.from.col + '->' + m1.to.row + ',' + m1.to.col : 'null')
+  // 断言 2：重复 cancel 幂等不抛
+  cancelSearch()
+  cancelSearch()
+  assertTrue(true, '重复 cancelSearch 幂等不抛')
+  // 断言 3：连续多次搜索（含 cancel 间隙）结果稳定
+  const m2 = findBestMove(b, 'red', 2)
+  cancelSearch()
+  const m3 = findBestMove(b, 'red', 2)
+  assertTrue(m3 !== null && isLegalMove(b, m3.from, m3.to), 'cancel 间隙后再次搜索正常',
+    m3 ? m3.from.row + ',' + m3.from.col + '->' + m3.to.row + ',' + m3.to.col : 'null')
+  assertEq(JSON.stringify(m2), JSON.stringify(m3), '无取消残留：同局面同深度结果一致')
+}
+
+// ============================================================
 // Summary
 // ============================================================
 console.log('\n' + '='.repeat(50))

@@ -192,6 +192,10 @@ export function nextKey(key: bigint, board: Board, move: Move, side: Side): bigi
 // ---- 搜索状态（模块级，单次 findBestMove 内共享）----
 let searchNodes = 0
 let searchDeadline = Infinity
+// 取消标志：Worker 环境收到 cancel 消息后置位，tickTimeout 检查中断当前搜索
+// （复用 SearchTimeout 超时路径，findBestMove 入口重置；不用 terminate 以免丢 TT）
+let cancelRequested = false
+export function cancelSearch(): void { cancelRequested = true }
 
 class SearchTimeout extends Error {
   constructor() {
@@ -201,7 +205,7 @@ class SearchTimeout extends Error {
 
 function tickTimeout(): void {
   // 每 4096 节点检查一次时间，降低 Date.now() 开销
-  if ((searchNodes & 4095) === 0 && Date.now() > searchDeadline) {
+  if ((searchNodes & 4095) === 0 && (cancelRequested || Date.now() > searchDeadline)) {
     throw new SearchTimeout()
   }
 }
@@ -596,6 +600,7 @@ export function findBestMove(board: Board, side: Side, depth = 3, timeLimitMs?: 
   }
   searchDeadline = timeLimitMs !== undefined ? Date.now() + timeLimitMs : Infinity
   searchNodes = 0
+  cancelRequested = false // 入口重置取消标志（防止上一次 cancel 残留污染本次搜索）
 
   let ordered = orderMoves(board, rootMoves, 0)
   let bestMove: Move = ordered[0]

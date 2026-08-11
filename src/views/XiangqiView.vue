@@ -179,7 +179,7 @@
             </svg>
             认输
           </button>
-          <button class="ctrl-btn" :disabled="currentSide === aiSide || aiThinking || gameOver" :class="{ 'hint-active': hintMove }" @click="showHint">
+          <button class="ctrl-btn" :disabled="currentSide === aiSide || aiThinking || hintThinking || gameOver" :class="{ 'hint-active': hintMove }" @click="showHint">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"/>
               <path d="M12 16v-4M12 8h.01"/>
@@ -238,12 +238,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useSound } from '@/composables/useSound'
 import { useHaptics } from '@/composables/useHaptics'
 import { useGamePause } from '@/composables/useGamePause'
 import { useToast } from '@/composables/useToast'
+import { useXiangqiAI } from '@/composables/useXiangqiAI'
 import { useAchievements } from '@/stores/achievements'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
@@ -254,7 +255,7 @@ import XiangqiOnlineView from '@/views/XiangqiOnlineView.vue'
 import type { Board, Position, Move, Side } from '@/engine/xiangqi/types'
 import { cloneBoard } from '@/engine/xiangqi/types'
 import { initialBoard, generateMoves, applyMove, isInCheck, getGameStatus, classifyMove, isPinned, toNotation, checkRepetitionViolation } from '@/engine/xiangqi/rules'
-import { findBestMove, boardKey } from '@/engine/xiangqi/ai'
+import { boardKey } from '@/engine/xiangqi/ai'
 
 type GameMode = 'local' | 'online' | 'ai'
 type AISide = 'red' | 'black'
@@ -402,6 +403,14 @@ let lastExposeTipAt = 0
 
 // ---- AI 走子调度 ----
 let aiTimer: ReturnType<typeof setTimeout> | null = null
+// AI 搜索调度器：搜索在 Worker 内运行（主线程零阻塞），cancel 中断引擎内搜索（保留 TT）
+const { requestSearch, cancel, dispose } = useXiangqiAI()
+// AI 回合身份序号：取消点（悔棋/认输/重开/离开）递增，使进行中的 AI 异步回调过期
+let aiSeq = 0
+// 提示请求序号：递增使旧请求过期（又点提示/走子/取消后旧结果丢弃）
+let hintSeq = 0
+const hintThinking = ref(false)
+onUnmounted(dispose)
 
 function recentHistoryKeys(): bigint[] {
   // 最近 8 个半步的历史局面 key（覆盖 checkRepetitionViolation 的 last-8/last-4 判定窗口；
@@ -416,15 +425,21 @@ function recentHistoryKeys(): bigint[] {
   return keys
 }
 
-function showHint() {
+async function showHint() {
   if (gameOver.value || aiThinking.value || currentSide.value === aiSide.value) return
-  // 提示与 AI 同强度：简单固定深度 2，中等深度 4，困难迭代加深（限 1.2s 保证响应）
+  const seq = ++hintSeq
+  hintThinking.value = true
+  // 提示与 AI 同强度：简单固定深度 2，中等深度 4，困难迭代加深（限 2s 保证响应，异步不阻塞 UI）
   // 均传入对局历史 key：提示不走进长将/长捉判负的着法
-  const hint = difficulty.value === 'easy'
-    ? findBestMove(board.value, humanSide.value, 2, undefined, recentHistoryKeys())
-    : difficulty.value === 'medium'
-      ? findBestMove(board.value, humanSide.value, 4, 1200, recentHistoryKeys())
-      : findBestMove(board.value, humanSide.value, 8, 1200, recentHistoryKeys())
+  const hint = await requestSearch({
+    board: board.value,
+    side: humanSide.value,
+    depth: difficulty.value === 'easy' ? 2 : difficulty.value === 'medium' ? 4 : 8,
+    timeLimitMs: difficulty.value === 'easy' ? undefined : difficulty.value === 'medium' ? 1200 : 2000,
+    historyKeys: recentHistoryKeys(),
+  })
+  if (seq !== hintSeq) return // 过期（又点/走子/取消），丢弃
+  hintThinking.value = false
   if (hint) {
     hintMove.value = hint
     sound.select()
@@ -434,6 +449,9 @@ function showHint() {
 
 function clearHint() {
   hintMove.value = null
+  hintSeq++ // 使进行中的提示请求过期
+  hintThinking.value = false
+  cancel()
 }
 
 function offerDraw() {
@@ -482,16 +500,22 @@ function scheduleAIMove() {
   if (gameOver.value) return
   if (currentSide.value === aiSide.value) {
     aiThinking.value = true
-    aiTimer = setTimeout(() => {
-      // 简单固定深度 2；中等深度 4、限 1.2s；困难迭代加深至多 8 层、限 2.5s（超时回退已完成深度的最佳着法）
+    const seq = ++aiSeq
+    aiTimer = setTimeout(async () => {
+      aiTimer = null
+      // 简单固定深度 2；中等深度 4、限 1.2s；困难迭代加深至多 8 层、限 4s（超时回退已完成深度的最佳着法）
       // 均传入对局历史 key：AI 不走进长将/长捉判负的着法
-      const move = difficulty.value === 'easy'
-        ? findBestMove(board.value, aiSide.value, 2, undefined, recentHistoryKeys())
-        : difficulty.value === 'medium'
-          ? findBestMove(board.value, aiSide.value, 4, 1200, recentHistoryKeys())
-          : findBestMove(board.value, aiSide.value, 8, 2500, recentHistoryKeys())
+      const move = await requestSearch({
+        board: board.value,
+        side: aiSide.value,
+        depth: difficulty.value === 'easy' ? 2 : difficulty.value === 'medium' ? 4 : 8,
+        timeLimitMs: difficulty.value === 'easy' ? undefined : difficulty.value === 'medium' ? 1200 : 4000,
+        historyKeys: recentHistoryKeys(),
+      })
       aiThinking.value = false
-      if (move) {
+      // 过期校验：await 期间可能已悔棋/认输/重开/离开（seq 失效）或轮到玩家
+      if (seq !== aiSeq) return
+      if (move && !gameOver.value && currentSide.value === aiSide.value && mode.value === 'ai') {
         executeMove(move.from, move.to)
       }
     }, 400)
@@ -693,6 +717,8 @@ function undoMove() {
   violationReason.value = null
   drawByRepetition.value = null
   aiThinking.value = false
+  aiSeq++ // 使进行中的 AI 搜索过期
+  cancel()
   if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
   sound.select()
   haptics.light()
@@ -702,7 +728,9 @@ function surrender() {
   if (gameOver.value) return
   gameOver.value = true
   result.value = currentSide.value === 'red' ? 'black-win' : 'red-win'
-  // 清理 AI 定时器，防止认输后 AI 继续走子
+  // 清理 AI 定时器/搜索，防止认输后 AI 继续走子
+  aiSeq++
+  cancel()
   if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
   aiThinking.value = false
   sound.miss()
@@ -711,6 +739,8 @@ function surrender() {
 }
 
 function resetGame() {
+  aiSeq++ // 使进行中的 AI 搜索过期（重开旧异步结果丢弃）
+  cancel()
   if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
   aiThinking.value = false
   gameStarted.value = true
@@ -752,7 +782,9 @@ function newGame() {
 }
 
 function goHome() {
-  // 清理 AI 定时器，防止导航离开后回调在已卸载组件上执行
+  // 清理 AI 定时器/搜索，防止导航离开后回调在已卸载组件上执行
+  aiSeq++
+  cancel()
   if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
   aiThinking.value = false
   router.push('/')
