@@ -10,6 +10,8 @@ export interface SearchParams {
   depth: number
   timeLimitMs?: number
   historyKeys: bigint[]
+  /** 深度下限：超时回退前必须完成该层（慢设备保底强度），可选 */
+  minDepth?: number
 }
 
 // 棋盘转纯对象：Vue 响应式代理（Proxy）无法被结构化克隆，postMessage 前必须

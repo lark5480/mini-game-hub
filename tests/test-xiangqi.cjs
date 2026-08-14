@@ -1396,9 +1396,10 @@ console.log('\n=== Suite 36: 结构评估 ===')
     assertTrue(diff >= 25, '车半开放线：列内无己方兵时红车 +25', 'diff=' + diff)
   }
 
-  // 断言 3：全开放线——列内无任何兵再 +15（黑兵(3,1) vs (3,0) 仅移动黑兵，PST 镜像相同）
+  // 断言 3：全开放线——列内无任何兵再 +15（黑兵(3,8) vs (3,0)：新兵表两列 PST 同为 25 抵消，
+  // 且两位置同为孤兵，结构项亦抵消，仅开放线特征不同）
   {
-    const c1 = emptyBoard(); place(c1, 5, 0, 'rook', 'red'); place(c1, 3, 1, 'pawn', 'black')
+    const c1 = emptyBoard(); place(c1, 5, 0, 'rook', 'red'); place(c1, 3, 8, 'pawn', 'black')
     const c2 = emptyBoard(); place(c2, 5, 0, 'rook', 'red'); place(c2, 3, 0, 'pawn', 'black')
     const diff = evaluateBoard(c1) - evaluateBoard(c2)
     assertTrue(diff >= 15, '车全开放线：列内无任何兵再 +15', 'diff=' + diff)
@@ -1412,10 +1413,11 @@ console.log('\n=== Suite 36: 结构评估 ===')
     assertTrue(diff >= 12, '孤兵：孤立兵受 -12 惩罚（连兵对照）', 'diff=' + diff)
   }
 
-  // 断言 5：连兵——邻列行差 <= 1 的兵对 +8/兵（行差 0 vs 行差 4）
+  // 断言 5：连兵——邻列行差 <= 1 的兵对 +8/兵（相邻列 (5,5) vs 列距 2 的 (5,6)：
+  // 新兵表同列行 PST 相同抵消；不相邻双兵孤立 -24 亦计入，净差仍 ≥ 8 下限）
   {
     const g1 = emptyBoard(); place(g1, 5, 4, 'pawn', 'red'); place(g1, 5, 5, 'pawn', 'red')
-    const g2 = emptyBoard(); place(g2, 5, 4, 'pawn', 'red'); place(g2, 1, 5, 'pawn', 'red')
+    const g2 = emptyBoard(); place(g2, 5, 4, 'pawn', 'red'); place(g2, 5, 6, 'pawn', 'red')
     const diff = evaluateBoard(g1) - evaluateBoard(g2)
     assertTrue(diff >= 8, '连兵：邻列行差 <= 1 得奖励', 'diff=' + diff)
   }
@@ -1446,6 +1448,75 @@ console.log('\n=== Suite 36: 结构评估 ===')
   }
 }
 
+
+// ============================================================
+// Suite 37: 兵（卒）位置价值方向（过河/纵深奖励）
+// 回归背景：旧兵表方向写反（在家 row 6 最高分、过河反而贬值、row 7-8 不可达
+// 却给最高分），AI 全难度不愿挺兵过河且轻视对方过河兵威胁；因红黑镜像对称
+// 反转，Suite 36 的初始 eval=0 / 镜像 eval=0 无法捕获，需方向性断言。
+// ============================================================
+console.log('\n=== Suite 37: 兵位置价值方向 ===')
+{
+  const { evaluateBoard } = require(path.join(__dirname, '.tmp-xiangqi', 'ai'))
+
+  // 断言 1：红兵过河 (4,4) 比在家 (6,4) 更有价值（黑卒固定在家 (3,4) 作镜像对照）
+  {
+    const home = emptyBoard()
+    place(home, 9, 4, 'king', 'red'); place(home, 0, 4, 'king', 'black')
+    place(home, 6, 4, 'pawn', 'red'); place(home, 3, 4, 'pawn', 'black')
+    const crossed = emptyBoard()
+    place(crossed, 9, 4, 'king', 'red'); place(crossed, 0, 4, 'king', 'black')
+    place(crossed, 4, 4, 'pawn', 'red'); place(crossed, 3, 4, 'pawn', 'black')
+    assertTrue(evaluateBoard(crossed) > evaluateBoard(home),
+      '红兵过河价值 > 在家价值',
+      'crossed=' + evaluateBoard(crossed) + ' home=' + evaluateBoard(home))
+  }
+
+  // 断言 2：黑卒过河 (5,4) 对红方评估更差于在家 (3,4)（红兵固定在家 (6,4) 对照）
+  {
+    const home = emptyBoard()
+    place(home, 9, 4, 'king', 'red'); place(home, 0, 4, 'king', 'black')
+    place(home, 6, 4, 'pawn', 'red'); place(home, 3, 4, 'pawn', 'black')
+    const crossed = emptyBoard()
+    place(crossed, 9, 4, 'king', 'red'); place(crossed, 0, 4, 'king', 'black')
+    place(crossed, 6, 4, 'pawn', 'red'); place(crossed, 5, 4, 'pawn', 'black')
+    assertTrue(evaluateBoard(crossed) < evaluateBoard(home),
+      '黑卒过河对红方评估更差（威胁更大）',
+      'crossed=' + evaluateBoard(crossed) + ' home=' + evaluateBoard(home))
+  }
+
+  // 断言 3：纵深递增——红兵 row 2 比 row 4 更有价值
+  {
+    const r4 = emptyBoard()
+    place(r4, 9, 4, 'king', 'red'); place(r4, 0, 4, 'king', 'black')
+    place(r4, 4, 4, 'pawn', 'red'); place(r4, 3, 4, 'pawn', 'black')
+    const r2 = emptyBoard()
+    place(r2, 9, 4, 'king', 'red'); place(r2, 0, 4, 'king', 'black')
+    place(r2, 2, 4, 'pawn', 'red'); place(r2, 3, 4, 'pawn', 'black')
+    assertTrue(evaluateBoard(r2) > evaluateBoard(r4), '红兵纵深递增：row 2 > row 4',
+      'r2=' + evaluateBoard(r2) + ' r4=' + evaluateBoard(r4))
+  }
+
+  // 断言 4：新表镜像对称回归——初始局面与红黑镜像兵局面 eval 仍 = 0
+  assertEq(evaluateBoard(initialBoard()), 0, '初始局面 eval = 0（新兵表对称性回归）')
+  {
+    const b = emptyBoard()
+    place(b, 9, 4, 'king', 'red'); place(b, 0, 4, 'king', 'black')
+    place(b, 4, 4, 'pawn', 'red'); place(b, 5, 4, 'pawn', 'black')
+    assertEq(evaluateBoard(b), 0, '红黑镜像兵局面 eval = 0')
+  }
+
+  // 断言 5：战术回归——新兵表不翻转 Suite 29.4（开局深度 2 不贪炮打马）
+  {
+    const { findBestMove } = require(path.join(__dirname, '.tmp-xiangqi', 'ai'))
+    const m = findBestMove(initialBoard(), 'red', 2)
+    const isGreedyCannon = m && m.from.row === 7 &&
+      ((m.from.col === 1 && m.to.row === 0 && m.to.col === 1) ||
+       (m.from.col === 7 && m.to.row === 0 && m.to.col === 7))
+    assertFalse(isGreedyCannon, '新兵表回归：开局不贪炮打马',
+      m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
+  }
+}
 
 // ============================================================
 // Summary

@@ -466,20 +466,23 @@ async function showHint() {
     return
   }
   // 提示与 AI 同强度：简单固定深度 2，中等深度 4，困难迭代加深（限 2s 保证响应，异步不阻塞 UI）
-  // 均传入对局历史 key：提示不走进长将/长捉判负的着法
+  // 中/困难加深度下限 3（提示与走子强度的慢设备保底）；均传入对局历史 key：提示不走进长将/长捉判负的着法
   const hint = await requestSearch({
     board: board.value,
     side: humanSide.value,
     depth: difficulty.value === 'easy' ? 2 : difficulty.value === 'medium' ? 4 : 8,
     timeLimitMs: difficulty.value === 'easy' ? undefined : difficulty.value === 'medium' ? 1200 : 2000,
+    minDepth: difficulty.value === 'easy' ? undefined : 3,
     historyKeys: recentHistoryKeys(),
-  })
+  }).catch(() => null) // 搜索异常兜底：不悬挂 Promise、不永久锁死「提示中」
   if (seq !== hintSeq) return // 过期（又点/走子/取消），丢弃
   hintThinking.value = false
   if (hint) {
     hintMove.value = hint
     sound.select()
     haptics.tap()
+  } else {
+    toast.show('提示不可用，请稍后重试', '⚠️')
   }
 }
 
@@ -643,19 +646,26 @@ function scheduleAIMove() {
         }
         return
       }
-      // 简单固定深度 2；中等深度 4、限 1.2s；困难迭代加深至多 8 层、限 4s（超时回退已完成深度的最佳着法）
+      // 简单固定深度 2；中等深度 4、限 1.2s、深度下限 3；困难迭代加深至多 8 层、限 4s、
+      // 深度下限 4（慢设备保底强度，超时前必须完成下限层，总时长硬上限 2×时限）
       // 均传入对局历史 key：AI 不走进长将/长捉判负的着法
       const move = await requestSearch({
         board: board.value,
         side: aiSide.value,
         depth: difficulty.value === 'easy' ? 2 : difficulty.value === 'medium' ? 4 : 8,
         timeLimitMs: difficulty.value === 'easy' ? undefined : difficulty.value === 'medium' ? 1200 : 4000,
+        minDepth: difficulty.value === 'easy' ? undefined : difficulty.value === 'medium' ? 3 : 4,
         historyKeys: recentHistoryKeys(),
-      })
+      }).catch(() => null) // 搜索异常兜底：不悬挂 Promise、不永久锁死「AI 思考中」
       aiThinking.value = false
       // 过期校验：await 期间可能已悔棋/认输/重开/离开（seq 失效）或轮到玩家
       if (seq !== aiSeq) return
-      if (move && !gameOver.value && currentSide.value === aiSide.value && mode.value === 'ai') {
+      if (!move) {
+        // 无结果（Worker 异常/被取消）：复位状态并提示，避免无声锁死
+        toast.show('AI 走子出错，请悔棋或重试', '⚠️')
+        return
+      }
+      if (!gameOver.value && currentSide.value === aiSide.value && mode.value === 'ai') {
         executeMove(move.from, move.to)
       }
     }, 400)
@@ -848,6 +858,7 @@ function undoMove() {
   if (history.value.length === 0 || gameOver.value) return
   // 人机模式：撤销 AI 一步 + 玩家一步，确保回到玩家回合
   const stepsToUndo = mode.value === 'ai' ? 2 : 1
+  let popped = 0
   for (let i = 0; i < stepsToUndo && history.value.length > 0; i++) {
     const prev = history.value.pop()!
     board.value = prev.board
@@ -857,6 +868,13 @@ function undoMove() {
     playedMoves.value.pop()
     positions.value.pop()
     notations.value.pop()
+    popped++
+  }
+  // 棋谱记录同步（修复：悔棋后棋谱保留已撤销着法，点旧条目 board=undefined 渲染崩溃）
+  if (popped > 0) {
+    gameRecord.value.moves.splice(gameRecord.value.moves.length - popped, popped)
+    gameRecord.value.sides.splice(gameRecord.value.sides.length - popped, popped)
+    localStorage.setItem('xiangqi_record', JSON.stringify({ ...gameRecord.value, timestamp: Date.now() }))
   }
   clearSelection()
   reviewMove.value = null
@@ -868,6 +886,10 @@ function undoMove() {
   aiSeq++ // 使进行中的 AI 搜索过期
   cancel()
   if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
+  // 修复：悔棋后若轮到 AI（AI 执红时开局后悔棋即触发），重新调度，避免棋盘冻结在「AI 回合」
+  if (mode.value === 'ai' && !gameOver.value && currentSide.value === aiSide.value) {
+    scheduleAIMove()
+  }
   sound.select()
   haptics.light()
 }
