@@ -1600,6 +1600,103 @@ console.log('\n=== Suite 38: 提前出手 ===')
 }
 
 // ============================================================
+// Suite 39: 重复局面罚分强度与归属（AI 不主动走进长将判负）
+// 回归背景（用户实测：连将→将不死→触发规则判负）：旧实现有三个叠加缺陷——
+// ① 罚分 MATE - ply 随层数衰减，败局中可高于「下一步被将死」的分数；
+// ② 一律归责最后走子方：前置局面（应由方走出）先于将军局面到达第 3 次出现时，
+//    罚分误归应将方、反而奖励将军方；
+// ③ 连将与送杀同分时排序可恰好选中连将走满周期。
+// 修复：罚分 2*MATE - ply + 按「当前方是否被将」归属 + 被将局面的第 2 次重复
+// 即惩罚将军方（再一轮即触发视图判负，提前阻断）。
+// ============================================================
+console.log('\n=== Suite 39: 重复局面罚分强度 ===')
+{
+  const { findBestMove, boardKey } = require(path.join(__dirname, '.tmp-xiangqi', 'ai'))
+  function posOf(pieces) {
+    const b = emptyBoard()
+    for (const [r, c, t, s] of pieces) place(b, r, c, t, s)
+    return b
+  }
+
+  // 构造（红=AI）：帅(9,3)、仕(8,3)、车(0,0)；黑：将(1,4)、卒(2,4)、车(8,5)+车(5,4)、马(7,1)。
+  // 红帅被完全封锁（(9,2) 黑马控、(9,4) 黑车控、(8,3) 己方仕占）→ 仅红车能动；
+  // 红车任何非将军着法后黑 R(8,5)->(9,5)# 一步杀；
+  // 长将循环（两将军均真实成立）：车(0,0)->(1,0)+ 将(1,4)->(0,4) 车(1,0)->(0,0)+ 将(0,4)->(1,4)。
+  const COMMON = [
+    [9, 3, 'king', 'red'], [8, 3, 'advisor', 'red'],
+    [2, 4, 'pawn', 'black'], [8, 5, 'rook', 'black'], [5, 4, 'rook', 'black'], [7, 1, 'horse', 'black']
+  ]
+  const P0 = posOf([...COMMON, [0, 0, 'rook', 'red'], [1, 4, 'king', 'black']]) // 红行棋（当前根）
+  const P1 = posOf([...COMMON, [1, 0, 'rook', 'red'], [1, 4, 'king', 'black']]) // 黑行棋（被将）
+  const P2 = posOf([...COMMON, [1, 0, 'rook', 'red'], [0, 4, 'king', 'black']]) // 红行棋
+  const P3 = posOf([...COMMON, [0, 0, 'rook', 'red'], [0, 4, 'king', 'black']]) // 黑行棋（被将）
+  const hist = [boardKey(P0, 'red'), boardKey(P1, 'black'), boardKey(P2, 'red'), boardKey(P3, 'black')]
+  const isPerpetual = (m) => !!m && m.from.row === 0 && m.from.col === 0 && m.to.row === 1 && m.to.col === 0
+
+  // --- 39.1 败局违规偏好回归：修复前 AI 选长将（前置局面先达第 3 次出现、罚分误归应将方），修复后必须避开 ---
+  {
+    const m = findBestMove(P0, 'red', 6, undefined, hist)
+    assertTrue(m !== null, '败局长将：AI 有应着')
+    assertTrue(!!m && isLegalMove(P0, m.from, m.to), '败局长将：着法合法',
+      m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
+    assertFalse(isPerpetual(m), '败局长将：不选违规长将着法（宁可正常被将死）',
+      m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
+  }
+
+  // --- 39.2 forced 边界：唯一合法着法必走（rootMoves.length===1 提前返回，被迫违规时引擎不崩） ---
+  {
+    const b = posOf([
+      [9, 4, 'king', 'red'], [0, 4, 'king', 'black'],
+      [5, 4, 'rook', 'black'], [5, 5, 'rook', 'black']
+    ])
+    // 红帅被 R(5,4) 将军：(9,5) 被 R(5,5) 控、(8,4) 在车线上、仅 (9,3) 唯一合法
+    const m = findBestMove(b, 'red', 4)
+    assertTrue(!!m && m.from.row === 9 && m.from.col === 4 && m.to.row === 9 && m.to.col === 3,
+      '唯一合法着法：被迫必走 (9,4)->(9,3)',
+      m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
+  }
+
+  // --- 39.3 全流程模拟：AI 连将 + 人类强制应着，20 手内不触发长将判负（用户实测场景回归） ---
+  {
+    // 红=AI（findBestMove + 历史 key）；黑=人类脚本（被将走唯一应将，否则尝试 (8,5)->(9,5)+ 杀着）
+    let board = P0
+    const moves = []
+    const positions = [P0]
+    let side = 'red'
+    let verdict = null
+    let gameEnded = false
+    for (let ply = 0; ply < 20 && !verdict && !gameEnded; ply++) {
+      const len = positions.length
+      const histKeys = []
+      for (let i = Math.max(0, len - 33); i < len - 1; i++) {
+        histKeys.push(boardKey(positions[i], i % 2 === 0 ? 'red' : 'black'))
+      }
+      let m = null
+      if (side === 'red') {
+        m = findBestMove(board, 'red', 6, undefined, histKeys)
+      } else {
+        const ms = generateMoves(board, 'black')
+        m = isInCheck(board, 'black')
+          ? ms[0] // 本构造中应将唯一合法
+          : (ms.find(x => x.from.row === 8 && x.from.col === 5 && x.to.row === 9 && x.to.col === 5) || ms[0])
+      }
+      if (!m) break // 无子可走（终局）
+      board = applyMove(board, m)
+      moves.push(m)
+      positions.push(board)
+      side = side === 'red' ? 'black' : 'red'
+      verdict = checkRepetitionViolation(moves, positions)
+      if (!verdict) {
+        const st = getGameStatus(board, side)
+        if (st === 'checkmate' || st === 'stalemate') gameEnded = true
+      }
+    }
+    assertEq(verdict, null, '全流程模拟：AI 连将场景 20 手内不触发长将判负',
+      verdict ? JSON.stringify(verdict) : '')
+  }
+}
+
+// ============================================================
 // Summary
 // ============================================================
 console.log('\n' + '='.repeat(50))

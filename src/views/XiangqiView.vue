@@ -87,7 +87,10 @@
       <div v-if="showNotation" class="notation-panel">
         <div class="notation-header">
           <span class="notation-title">棋谱</span>
-          <button class="notation-close" @click="closeNotation">×</button>
+          <div class="notation-actions">
+            <button class="nc-btn" :disabled="notationList.length === 0" @click="copyNotation">复制</button>
+            <button class="notation-close" @click="closeNotation">×</button>
+          </div>
         </div>
         <div class="notation-controls">
           <button class="nc-btn" :disabled="reviewMove === null" @click="goToStart">⏮</button>
@@ -206,7 +209,10 @@
       <div v-if="showNotation" class="notation-panel">
         <div class="notation-header">
           <span class="notation-title">棋谱</span>
-          <button class="notation-close" @click="closeNotation">×</button>
+          <div class="notation-actions">
+            <button class="nc-btn" :disabled="notationList.length === 0" @click="copyNotation">复制</button>
+            <button class="notation-close" @click="closeNotation">×</button>
+          </div>
         </div>
         <div class="notation-controls">
           <button class="nc-btn" :disabled="reviewMove === null" @click="goToStart">⏮</button>
@@ -269,6 +275,7 @@ import { cloneBoard } from '@/engine/xiangqi/types'
 import { initialBoard, generateMoves, applyMove, isInCheck, getGameStatus, classifyMove, isPinned, toNotation, checkRepetitionViolation } from '@/engine/xiangqi/rules'
 import { boardKey } from '@/engine/xiangqi/ai'
 import { lookupOpening } from '@/engine/xiangqi/openings'
+import { copyText } from '@/lib/clipboard'
 
 type GameMode = 'local' | 'online' | 'ai'
 type AISide = 'red' | 'black'
@@ -626,6 +633,21 @@ function closeNotation() {
   showNotation.value = false
   // 棋谱关闭后若对局已结束，恢复结算弹窗（保留「再来一局」入口）
   if (gameOver.value) gameOverDialog.value = true
+}
+
+// 复制棋谱：按回合组包中文记谱（红方中文数字、黑方阿拉伯数字均由 toNotation 保证）
+async function copyNotation() {
+  if (notationList.value.length === 0) return
+  const rounds: string[] = []
+  for (let i = 0; i < notationList.value.length; i += 2) {
+    const round = Math.floor(i / 2) + 1
+    const red = notationList.value[i]?.notation || ''
+    const black = notationList.value[i + 1]?.notation || ''
+    rounds.push(`${round}. ${red}${black ? ' ' + black : ''}`)
+  }
+  const ok = await copyText(rounds.join('\n'))
+  toast.show(ok ? '棋谱已复制到剪贴板' : '复制失败，请手动选择复制', ok ? '📋' : '⚠️')
+  if (ok) haptics.tap()
 }
 
 function scheduleAIMove() {
@@ -1273,6 +1295,11 @@ function onRestart() {
   font-size: 0.95em;
   font-weight: 600;
   color: #fff;
+}
+.notation-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .notation-close {
   background: none;
