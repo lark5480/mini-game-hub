@@ -1519,6 +1519,87 @@ console.log('\n=== Suite 37: 兵位置价值方向 ===')
 }
 
 // ============================================================
+// Suite 38: 提前出手（early exit）——大局已定/着法稳定时提前终止
+// 背景：困难中局 8 层在 4s 时限内到不了（实测 5 层 2.5s / 7 层 6.2s / 8 层 8.5s），
+// 迭代加深几乎必然耗尽时限；决定性优势（默认 900 分 @4 层）与着法稳定
+// （默认连续 3 层 @5 层 + |分|>=150）提前终止改善响应，焦灼局面仍搜满。
+// 测试用放宽阈值在第 1 层触发退出，机制断言确定性、无计时断言防 flaky。
+// ============================================================
+console.log('\n=== Suite 38: 提前出手 ===')
+{
+  const { findBestMove, resetSearchState } = require(path.join(__dirname, '.tmp-xiangqi', 'ai'))
+  const same = (a, b) => !!a && !!b &&
+    a.from.row === b.from.row && a.from.col === b.from.col &&
+    a.to.row === b.to.row && a.to.col === b.to.col
+
+  // 冻结局面：16 手随机谱（红方行棋），冷态实测 d1 最佳 (9,0)->(9,1) ≠ d3 最佳 (8,1)->(1,1)。
+  // 注意：跨调用 TT 复用会让浅层搜索命中先前深搜的 TT 条目而返回不同着法，
+  // 因此每个测量前 resetSearchState() 清空搜索状态，保证冷态对冷态、断言确定。
+  const FROZEN_SEQ = [[7, 1, 4, 1], [2, 7, 6, 7], [9, 6, 7, 4], [6, 7, 3, 7], [9, 7, 7, 8], [2, 1, 9, 1],
+    [6, 4, 5, 4], [3, 7, 6, 7], [4, 1, 3, 1], [3, 2, 4, 2], [9, 8, 8, 8], [3, 4, 4, 4],
+    [8, 8, 8, 1], [0, 2, 2, 0], [3, 1, 3, 2], [3, 6, 4, 6]]
+  let fb = initialBoard()
+  for (const [fr, fc, tr, tc] of FROZEN_SEQ) {
+    fb = applyMove(fb, { from: { row: fr, col: fc }, to: { row: tr, col: tc } })
+  }
+  // 测试内现测冷态 m1/m3（前置条件：二者不同，机制断言才可观察；若属性失效此处响亮失败便于换局面）
+  resetSearchState()
+  const m1 = findBestMove(fb, 'red', 1)
+  resetSearchState()
+  const m3 = findBestMove(fb, 'red', 3)
+  assertTrue(!!m1 && !!m3 && !same(m1, m3), '前置条件：冻结局面 d1 与 d3 最佳着法不同',
+    'm1=' + (m1 ? m1.from.row + ',' + m1.from.col + '->' + m1.to.row + ',' + m1.to.col : 'null') +
+    ' m3=' + (m3 ? m3.from.row + ',' + m3.from.col + '->' + m3.to.row + ',' + m3.to.col : 'null'))
+
+  // --- 38.1 决定性门槛机制：极小阈值 + minDepth 1 → 第 1 层即退出 ---
+  {
+    resetSearchState()
+    const r = findBestMove(fb, 'red', 3, undefined, undefined, undefined,
+      { decisive: { score: -1000000000, minDepth: 1 } })
+    assertTrue(!!r && same(r, m1), '决定性门槛：第 1 层触发退出返回 m1',
+      r ? r.from.row + ',' + r.from.col + '->' + r.to.row + ',' + r.to.col : 'null')
+    assertTrue(!!r && !same(r, m3), '决定性门槛：未继续加深到 m3')
+  }
+
+  // --- 38.2 稳定性门槛机制：runs 1 / minDepth 1 / 无分数护栏 → 第 1 层即退出 ---
+  {
+    resetSearchState()
+    const r = findBestMove(fb, 'red', 3, undefined, undefined, undefined,
+      { decisive: null, stable: { runs: 1, minDepth: 1, minAbsScore: null } })
+    assertTrue(!!r && same(r, m1), '稳定性门槛：第 1 层触发退出返回 m1',
+      r ? r.from.row + ',' + r.from.col + '->' + r.to.row + ',' + r.to.col : 'null')
+    assertTrue(!!r && !same(r, m3), '稳定性门槛：未继续加深到 m3')
+  }
+
+  // --- 38.3 默认参数回归：默认阈值在 d3 不触发（decisive 需 d>=4、stable 需 d>=5）→ 返回 m3 ---
+  {
+    resetSearchState()
+    const r1 = findBestMove(fb, 'red', 3)
+    assertTrue(!!r1 && same(r1, m3), '默认参数：不带 earlyExit 深度 3 返回 m3',
+      r1 ? r1.from.row + ',' + r1.from.col + '->' + r1.to.row + ',' + r1.to.col : 'null')
+    resetSearchState()
+    const r2 = findBestMove(fb, 'red', 3, undefined, undefined, undefined, {})
+    assertTrue(!!r2 && same(r2, r1), '默认参数：传空对象与不传结果一致',
+      r2 ? r2.from.row + ',' + r2.from.col + '->' + r2.to.row + ',' + r2.to.col : 'null')
+  }
+
+  // --- 38.4 真实阈值路径：去掉黑一车（决定性大优），decisive {400, 1} 第 1 层退出 ---
+  {
+    const db = initialBoard()
+    db[0][8] = null // 移除黑方 (0,8) 车：红净多一车
+    resetSearchState()
+    const dm1 = findBestMove(db, 'red', 1)
+    resetSearchState()
+    const r = findBestMove(db, 'red', 3, undefined, undefined, undefined,
+      { decisive: { score: 400, minDepth: 1 } })
+    assertTrue(!!r && isLegalMove(db, r.from, r.to), '决定性局面：返回着法合法',
+      r ? r.from.row + ',' + r.from.col + '->' + r.to.row + ',' + r.to.col : 'null')
+    assertTrue(!!r && same(r, dm1), '决定性局面：score>=400 第 1 层退出，返回 d1 结果',
+      r ? r.from.row + ',' + r.from.col + '->' + r.to.row + ',' + r.to.col : 'null')
+  }
+}
+
+// ============================================================
 // Summary
 // ============================================================
 console.log('\n' + '='.repeat(50))

@@ -210,6 +210,16 @@ let searchDeadline = Infinity
 let cancelRequested = false
 export function cancelSearch(): void { cancelRequested = true }
 
+// 测试导出：清空搜索状态（置换表 / killer / history）。
+// 跨调用状态复用是性能设计（同对局内搜更深），但会让测试的「冷态参照值」
+// 被先前搜索的 TT 污染（浅层直接命中深层 TT 条目返回不同着法）；测试在每个
+// 测量前重置以获得确定性的冷态对照。生产路径不调用。
+export function resetSearchState(): void {
+  tt.clear()
+  killerMoves = Array.from({ length: MAX_PLY }, () => [null, null])
+  historyTable = new Int32Array(2 * ROWS * COLS * ROWS * COLS)
+}
+
 class SearchTimeout extends Error {
   constructor() {
     super('search timeout')
@@ -653,6 +663,18 @@ function negamax(
   return best
 }
 
+// ---- 提前出手（early exit）配置 ----
+// 中局 8 层在时限内到不了（实测 5 层 2.5s / 7 层 6.2s / 8 层 8.5s），迭代加深几乎必然耗尽时限；
+// 对大局已定 / 最佳着法多轮稳定的局面继续加深收益趋零，提前终止显著改善响应体验，
+// 焦灼局面（分数接近、着法不稳）不受影响，仍搜满时限保强度。
+export interface EarlyExitOptions {
+  /** 决定性优势：根分 ≥ score 且完成 ≥ minDepth 层即终止；null 关闭。默认 { score: 900, minDepth: 4 } */
+  decisive?: { score: number; minDepth: number } | null
+  /** 着法稳定：连续 runs 层同一最佳着法、完成 ≥ minDepth 层且 |根分| ≥ minAbsScore 即终止；
+   *  minAbsScore 缺省 150、null 表示无分数护栏；null 关闭。默认 { runs: 3, minDepth: 5, minAbsScore: 150 } */
+  stable?: { runs: number; minDepth: number; minAbsScore?: number | null } | null
+}
+
 /**
  * 选择最佳走法（公共接口，兼容旧签名）。
  * @param depth    最大搜索深度（迭代加深的上限）
@@ -660,8 +682,9 @@ function negamax(
  * @param historyKeys 对局历史局面 key（最近 32 半步，重复局面规避用）
  * @param minDepth 可选深度下限：超时回退前必须已完成该层（慢设备保底强度；
  *                 未达标则延长一个时限周期重试，总时长硬上限 2×timeLimitMs）
+ * @param earlyExit 可选提前出手配置（默认开启；见 EarlyExitOptions）
  */
-export function findBestMove(board: Board, side: Side, depth = 3, timeLimitMs?: number, historyKeys?: bigint[], minDepth = 0): Move | null {
+export function findBestMove(board: Board, side: Side, depth = 3, timeLimitMs?: number, historyKeys?: bigint[], minDepth = 0, earlyExit?: EarlyExitOptions): Move | null {
   const rootMoves = generateMoves(board, side)
   if (rootMoves.length === 0) return null
   if (rootMoves.length === 1) return rootMoves[0]
@@ -691,6 +714,11 @@ export function findBestMove(board: Board, side: Side, depth = 3, timeLimitMs?: 
   // 深度下限：未达标时延长搜索重试当前层；绝对硬截止 = 2×timeLimitMs（取消/超硬截止即中断，
   // 下限为硬截止内的尽力保证，避免慢设备无限等待）
   const hardDeadline = timeLimitMs !== undefined ? Date.now() + 2 * timeLimitMs : Infinity
+  // 提前出手配置：undefined 用默认值，null 关闭该退出项
+  const decisiveCfg = earlyExit?.decisive === null ? null : (earlyExit?.decisive ?? { score: 900, minDepth: 4 })
+  const stableCfg = earlyExit?.stable === null ? null : (earlyExit?.stable ?? { runs: 3, minDepth: 5, minAbsScore: 150 })
+  let prevBest: Move | null = null
+  let stableRuns = 0
   let d = 1
   while (d <= depth) {
     let alpha = -Infinity
@@ -731,12 +759,19 @@ export function findBestMove(board: Board, side: Side, depth = 3, timeLimitMs?: 
     }
 
     if (bestAtDepth) {
+      stableRuns = prevBest && sameMove(prevBest, bestAtDepth) ? stableRuns + 1 : 1
+      prevBest = bestAtDepth
       bestMove = bestAtDepth
       // 上一层最佳着法置顶，提升下一层剪枝效率
       ordered = [bestMove, ...ordered.filter(m => !sameMove(m, bestMove))]
     }
     // 已找到杀棋（或必败），无需再加深
     if (bestScore >= MATE - 1000 || bestScore <= -(MATE - 1000)) break
+    // 提前出手：决定性优势（只在大优时退出；大劣保持深搜寻找翻盘机会）
+    if (decisiveCfg && d >= decisiveCfg.minDepth && bestScore >= decisiveCfg.score) break
+    // 提前出手：最佳着法连续多轮稳定且局面非极均势
+    if (stableCfg && d >= stableCfg.minDepth && stableRuns >= stableCfg.runs &&
+      (stableCfg.minAbsScore == null || Math.abs(bestScore) >= stableCfg.minAbsScore)) break
     d++
   }
 

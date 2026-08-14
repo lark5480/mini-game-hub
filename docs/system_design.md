@@ -91,6 +91,7 @@ App.vue（全局样式 + scanlines 特效）
 
 - **搜索线程**：`useXiangqiAI` 封装 Worker（`src/workers/xiangqi-ai.worker.ts`），主线程不阻塞；postMessage 前必须 `toPlainBoard` 深拷贝（Vue 响应式 Proxy 无法结构化克隆），Worker 保留 TT 跨调用
 - **难度参数**（XiangqiView 常量）：简单固定深度 2；中等深度 4 + 限 1.2s + 深度下限 3；困难深度 8 + 限 4s + 深度下限 4（超时回退已完成深度最佳着法；未达下限时延长搜索，硬截止 2×时限，保证慢设备保底强度）；提示限 2s + 深度下限 3
+- **提前出手**（`findBestMove` 第 8 参 `earlyExit`，默认开启）：根分 ≥ 900（约净多一车）且完成 ≥ 4 层、或最佳着法连续 3 层不变且完成 ≥ 5 层且 |根分| ≥ 150 → 提前终止（大劣不提前，保留翻盘深搜）；实际只作用于困难/困难提示（简单深度 2、中等深度 4 低于下限），焦灼局面仍搜满时限保强度
 - **AI 历史窗口**：`recentHistoryKeys` 最近 32 半步并入搜索 repPath，与重复局面裁决窗口一致
 - **复盘演示**：XiangqiView 棋谱面板支持逐手回放/自动播放（三档速度），点击着法把棋盘切到历史局面快照（`positions` 数组，moves[i] ↔ positions[i+1]），回放中禁走子/禁 AI 调度（退出回放恢复）
 - **测试**：`tests/test-xiangqi.cjs`（`node tests/test-xiangqi.cjs` 直接跑，自动 tsc 编译到 tests/.tmp-xiangqi）

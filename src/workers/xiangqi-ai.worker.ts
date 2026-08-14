@@ -13,8 +13,8 @@ onmessage = (e: MessageEvent) => {
     return
   }
   if (msg.type === 'search') {
-    const { id, board, side, depth, timeLimitMs, historyKeys, minDepth } = msg
-    const move = findBestMove(board, side, depth, timeLimitMs, historyKeys, minDepth)
+    const { id, board, side, depth, timeLimitMs, historyKeys, minDepth, earlyExit } = msg
+    const move = findBestMove(board, side, depth, timeLimitMs, historyKeys, minDepth, earlyExit)
     postMessage({ type: 'result', id, move })
   }
 }
