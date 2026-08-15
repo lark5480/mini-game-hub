@@ -2,11 +2,18 @@ import { useGameStore } from '@/stores/game'
 import { useSound } from '@/composables/useSound'
 import { useAchievements } from '@/stores/achievements'
 
+export interface GameStat {
+  label: string
+  value: string
+}
+
 export interface GameOverResult {
   /** 是否打破个人最佳 */
   isNewRecord: boolean
   /** 成就接近提示（如"还差 50 分解锁蛇王"），null 表示无 */
   achievementHint: string | null
+  /** 本局亮点统计（可选） */
+  stats?: GameStat[]
 }
 
 interface ProximityRule {
@@ -35,7 +42,7 @@ export function useGameOver() {
    * 处理游戏结束：检测新记录 + 写入分数 + 播放音效。
    * 返回元数据供 UI 层展示。
    */
-  function checkGameOver(gameName: string, score: number): GameOverResult {
+  function checkGameOver(gameName: string, score: number, stats?: GameStat[]): GameOverResult {
     const prevBest = gameStore.getTopScore(gameName)
     const isNewRecord = score > 0 && score > prevBest
 
@@ -54,7 +61,7 @@ export function useGameOver() {
     // 成就接近提示
     const achievementHint = getAchievementHint(gameName, score)
 
-    return { isNewRecord, achievementHint }
+    return { isNewRecord, achievementHint, stats }
   }
 
   /** 检查是否接近某个未解锁的成就 */

@@ -8,6 +8,7 @@
     :infoItems="[{ label: '关卡', value: levelIndex + 1 }, { label: '步数', value: steps }, { label: '总分', value: totalScore }]"
     :confirmRestart="levelIndex > 0 || totalScore > 0"
     tutorial="把所有箱子推到目标点上。注意：箱子只能推不能拉，别把箱子推进死角！"
+        mood="green"
     @back="router.push('/')"
     @restart="restartGame"
   >
@@ -63,6 +64,7 @@
       @action="handleDialogAction"
       :newRecord="newRecord"
       :achievementHint="achievementHint"
+      :stats="gameStats"
     />
     <LeaderboardOverlay
       :visible="showLeaderboard"
@@ -87,7 +89,7 @@ import { useGameSave } from '@/composables/useGameSave'
 import { useAutoSave } from '@/composables/useAutoSave'
 import { useHaptics } from '@/composables/useHaptics'
 import { useGamePause } from '@/composables/useGamePause'
-import { useGameOver } from '@/composables/useGameOver'
+import { useGameOver, type GameStat } from '@/composables/useGameOver'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
@@ -236,6 +238,7 @@ const gameComplete = ref(false)
 const newRecord = ref(false)
 const achievementHint = ref<string | null>(null)
 const hasCheckedThisRun = ref(false)
+const gameStats = ref<GameStat[]>()
 
 // 存档
 const save = useGameSave('sokoban')
@@ -385,9 +388,13 @@ function checkWin() {
   // levelIndex 从 0 开始，通过第5关时 levelIndex === 4
   if (levelIndex.value >= 4) {
     if (!hasCheckedThisRun.value) {
-      const { isNewRecord, achievementHint: hint } = checkGameOver('sokoban', totalScore.value)
+      const { isNewRecord, achievementHint: hint, stats } = checkGameOver('sokoban', totalScore.value, [
+        { label: '步数', value: String(steps.value) },
+        { label: '总分', value: String(totalScore.value) }
+      ])
       newRecord.value = isNewRecord
       achievementHint.value = hint
+      gameStats.value = stats
       hasCheckedThisRun.value = true
     }
     if (achievements.unlock('sokoban_master')) {
@@ -416,9 +423,13 @@ function submitScore() {
   showLeaderboard.value = true
   clearSave()
   if (!hasCheckedThisRun.value) {
-    const { isNewRecord, achievementHint: hint } = checkGameOver('sokoban', totalScore.value)
+    const { isNewRecord, achievementHint: hint, stats } = checkGameOver('sokoban', totalScore.value, [
+      { label: '步数', value: String(steps.value) },
+      { label: '总分', value: String(totalScore.value) }
+    ])
     newRecord.value = isNewRecord
     achievementHint.value = hint
+    gameStats.value = stats
     hasCheckedThisRun.value = true
   }
 }

@@ -8,6 +8,7 @@
     :infoItems="[{ label: '分数', value: score }]"
     :confirmRestart="score > 0"
     tutorial="控制蛇吃食物变长，别撞墙或咬到自己！"
+        mood="green"
     @back="handleBack"
     @restart="startGame"
   >
@@ -49,6 +50,7 @@
       :actionText="newRecord ? '提交新纪录' : '提交分数'"
       :newRecord="newRecord"
       :achievementHint="achievementHint"
+      :stats="gameStats"
       @action="openLeaderboard"
     />
     <LeaderboardOverlay
@@ -77,7 +79,7 @@ import { useSwipe } from '@/composables/useSwipe'
 import { useGamePause } from '@/composables/useGamePause'
 import { useHaptics } from '@/composables/useHaptics'
 import { useScoreFloats } from '@/composables/useScoreFloats'
-import { useGameOver } from '@/composables/useGameOver'
+import { useGameOver, type GameStat } from '@/composables/useGameOver'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
@@ -97,6 +99,7 @@ const { checkGameOver } = useGameOver()
 const showLeaderboard = ref(false)
 const newRecord = ref(false)
 const achievementHint = ref<string | null>(null)
+const gameStats = ref<GameStat[]>()
 
 const GRID_WIDTH = 20, GRID_HEIGHT = 15
 const grid = ref<number[][]>([])
@@ -166,7 +169,9 @@ const isPlayingActive = computed(() => isPlaying.value && !gameOver.value && !pa
 useSwipe({
   el: () => boardEl.value,
   active: () => isPlayingActive.value,
-  onSwipe: (dir) => changeDir(dir)
+  onSwipe: (dir) => changeDir(dir),
+  lockDirection: true,
+  lockDuration: 150
 })
 
 useGameKeyboard({
@@ -308,9 +313,13 @@ function endGame() {
   isPlaying.value = false; gameOver.value = true
   gameLoop.stop()
   lastScore.value = score.value
-  const { isNewRecord: isNewRecordResult, achievementHint: hint } = checkGameOver('snake', score.value)
+  const { isNewRecord: isNewRecordResult, achievementHint: hint, stats } = checkGameOver('snake', score.value, [
+    { label: '蛇长', value: snake.value.length + ' 格' },
+    { label: '得分', value: String(score.value) }
+  ])
   newRecord.value = isNewRecordResult
   achievementHint.value = hint
+  gameStats.value = stats
   if (achievements.isUnlocked('snake_king')) {
     // 已解锁则无需提示
   }

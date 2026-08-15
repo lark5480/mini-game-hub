@@ -1,10 +1,13 @@
 <template>
   <Transition name="pause">
     <div v-if="visible" class="pause-overlay">
-      <div class="pause-box">
+      <div v-if="countingDown" class="pause-box countdown-box">
+        <div class="countdown-num" :key="countdownNum">{{ countdownNum }}</div>
+      </div>
+      <div v-else class="pause-box">
         <div class="pause-icon">⏸</div>
         <h3>已暂停</h3>
-        <button class="resume-btn" @click="$emit('resume')">继续游戏</button>
+        <button class="resume-btn" @click="startCountdown">继续游戏</button>
         <p class="hint">按 P 或 Esc 继续</p>
       </div>
     </div>
@@ -12,8 +15,58 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{ visible: boolean }>()
-defineEmits<{ resume: [] }>()
+import { ref, watch, onUnmounted } from 'vue'
+import { usePauseCountdown } from '@/composables/useGamePause'
+
+const props = defineProps<{ visible: boolean }>()
+const emit = defineEmits<{ resume: [] }>()
+
+const countingDown = ref(false)
+const countdownNum = ref(3)
+let timer: ReturnType<typeof setTimeout> | null = null
+
+// 注册取消回调给 useGamePause（P/Esc 可中断倒计时）
+const { setCounting } = usePauseCountdown(cancelCountdown)
+
+function cancelCountdown() {
+  if (timer !== null) {
+    clearTimeout(timer)
+    timer = null
+  }
+  countingDown.value = false
+  countdownNum.value = 3
+  setCounting(false)
+}
+
+function startCountdown() {
+  countingDown.value = true
+  countdownNum.value = 3
+  setCounting(true)
+  tick()
+}
+
+function tick() {
+  timer = setTimeout(() => {
+    if (countdownNum.value > 1) {
+      countdownNum.value--
+      tick()
+    } else {
+      // 倒计时结束
+      countingDown.value = false
+      countdownNum.value = 3
+      timer = null
+      setCounting(false)
+      emit('resume')
+    }
+  }, 1000)
+}
+
+// visible 变 false 时（外部关闭）清理倒计时
+watch(() => props.visible, (v) => {
+  if (!v) cancelCountdown()
+})
+
+onUnmounted(() => cancelCountdown())
 </script>
 
 <style scoped>
@@ -83,5 +136,22 @@ defineEmits<{ resume: [] }>()
   color: var(--game-text-info);
   margin-top: 14px;
   font-size: 0.85em;
+}
+
+/* ---- 倒计时数字 ---- */
+.countdown-box {
+  padding: 50px 60px;
+  min-width: 180px;
+}
+
+.countdown-num {
+  font-size: 5em;
+  font-weight: 800;
+  color: var(--game-accent, #00FFFF);
+  text-shadow:
+    0 0 30px color-mix(in srgb, var(--game-accent, #00FFFF) 60%, transparent),
+    0 0 60px color-mix(in srgb, var(--game-accent, #00FFFF) 30%, transparent);
+  animation: countdownTick 0.85s ease-out;
+  line-height: 1;
 }
 </style>

@@ -29,3 +29,21 @@
   --game-btn-radius: 12px;
   --game-cell-border: rgba(255, 255, 255, 0.05);
 }
+
+/* ===== 游戏区 mood 氛围色 ===== */
+/* 暖色调（象棋/打地鼠/接水果/打砖块） */
+[data-mood="warm"] {
+  --game-mood-bg: linear-gradient(180deg, #1A0D0D 0%, #2E1A1A 50%, #1A0D0D 100%);
+}
+/* 冷色调（俄罗斯方块/西蒙灯/井字棋） */
+[data-mood="cool"] {
+  --game-mood-bg: linear-gradient(180deg, #0D0D1A 0%, #1A1A3E 50%, #0D0D1A 100%);
+}
+/* 自然色调（推箱子/贪吃蛇） */
+[data-mood="green"] {
+  --game-mood-bg: linear-gradient(180deg, #0D1A0D 0%, #1A2E1A 50%, #0D1A0D 100%);
+}
+/* 金色调（2048） */
+[data-mood="gold"] {
+  --game-mood-bg: linear-gradient(180deg, #1A1508 0%, #2E2510 50%, #1A1508 100%);
+}

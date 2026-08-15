@@ -1,5 +1,5 @@
 <template>
-  <div class="game-view" :style="{ '--game-accent': accentColor }">
+  <div class="game-view" :style="{ '--game-accent': accentColor }" :data-mood="mood">
     <div class="game-header">
       <button class="back-btn" @click="$emit('back')">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -79,6 +79,7 @@ const props = defineProps<{
   confirmRestart?: boolean
   tutorial?: string
   entrance?: string
+  mood?: string
 }>()
 
 defineEmits<{
@@ -303,6 +304,8 @@ function dismissTutorial() {
   max-width: 600px;
   margin: 0 auto;
   position: relative;
+  /* mood 氛围底色：不传 mood 时回退默认深色渐变 */
+  background: var(--game-mood-bg, linear-gradient(180deg, var(--game-bg-dark) 0%, var(--game-bg-mid) 50%, var(--game-bg-dark) 100%));
   /* accent 渗透：游戏区一圈主题色柔光 + 细描边，不挤压内容布局 */
   box-shadow:
     0 0 0 1px color-mix(in srgb, var(--game-accent) 20%, transparent),

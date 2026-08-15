@@ -14,20 +14,22 @@ export interface GameMeta {
   color: string
   /** 路由 path（如 '/snake'） */
   path: string
+  /** 氛围色相（warm/cool/green/gold），影响游戏区背景色温 */
+  mood?: string
 }
 
 export const GAMES: GameMeta[] = [
-  { name: 'sokoban',       title: '推箱子',     desc: '经典仓库搬运工',     color: '#7CFF3D', path: '/sokoban' },
+  { name: 'sokoban',       title: '推箱子',     desc: '经典仓库搬运工',     color: '#7CFF3D', path: '/sokoban',       mood: 'green' },
   { name: 'link',          title: '连连看',     desc: '消除配对乐趣',       color: '#FF006E', path: '/link' },
-  { name: 'catch-fruit',   title: '接水果',     desc: '眼疾手快',           color: '#05FFA1', path: '/catch-fruit' },
-  { name: 'snake',         title: '贪吃蛇',     desc: '童年经典回忆',       color: '#B967FF', path: '/snake' },
-  { name: 'tetris',        title: '俄罗斯方块', desc: '经典益智游戏',       color: '#2D7DFF', path: '/tetris' },
-  { name: 'breakout',      title: '弹球打砖块', desc: '经典街机游戏',       color: '#FF5A36', path: '/breakout' },
-  { name: '2048',          title: '2048',       desc: '数字合成挑战',       color: '#FFD700', path: '/2048' },
-  { name: 'whackamole',    title: '打地鼠',     desc: '反应力大考验',       color: '#FF7A3D', path: '/whackamole' },
-  { name: 'tic-tac-toe',   title: '井字棋',     desc: '单人AI · 双人在线', color: '#FF4DFF', path: '/tic-tac-toe' },
-  { name: 'simon',         title: '西蒙记忆灯', desc: '看灯序挑战记忆',     color: '#00CFFF', path: '/simon' },
-  { name: 'xiangqi',        title: '中国象棋',   desc: '本地双人 · 联机',     color: '#FF4D4D', path: '/xiangqi' },
+  { name: 'catch-fruit',   title: '接水果',     desc: '眼疾手快',           color: '#05FFA1', path: '/catch-fruit',   mood: 'warm' },
+  { name: 'snake',         title: '贪吃蛇',     desc: '童年经典回忆',       color: '#B967FF', path: '/snake',         mood: 'green' },
+  { name: 'tetris',        title: '俄罗斯方块', desc: '经典益智游戏',       color: '#2D7DFF', path: '/tetris',        mood: 'cool' },
+  { name: 'breakout',      title: '弹球打砖块', desc: '经典街机游戏',       color: '#FF5A36', path: '/breakout',      mood: 'warm' },
+  { name: '2048',          title: '2048',       desc: '数字合成挑战',       color: '#FFD700', path: '/2048',          mood: 'gold' },
+  { name: 'whackamole',    title: '打地鼠',     desc: '反应力大考验',       color: '#FF7A3D', path: '/whackamole',    mood: 'warm' },
+  { name: 'tic-tac-toe',   title: '井字棋',     desc: '单人AI · 双人在线', color: '#FF4DFF', path: '/tic-tac-toe',   mood: 'cool' },
+  { name: 'simon',         title: '西蒙记忆灯', desc: '看灯序挑战记忆',     color: '#00CFFF', path: '/simon',         mood: 'cool' },
+  { name: 'xiangqi',       title: '中国象棋',   desc: '本地双人 · 联机',     color: '#FF4D4D', path: '/xiangqi',       mood: 'warm' },
 ]
 
 /** 默认空分数字段（store 初始化） */

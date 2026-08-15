@@ -73,6 +73,7 @@
       @action="submitScore"
       :newRecord="newRecord"
       :achievementHint="achievementHintNew"
+      :stats="gameStats"
     />
     <GameDialog
       v-model:visible="levelClearDialog"
@@ -121,7 +122,7 @@ import { useGameSave } from '@/composables/useGameSave'
 import { useAutoSave } from '@/composables/useAutoSave'
 import { useHaptics } from '@/composables/useHaptics'
 import { useScoreFloats } from '@/composables/useScoreFloats'
-import { useGameOver } from '@/composables/useGameOver'
+import { useGameOver, type GameStat } from '@/composables/useGameOver'
 import { useGamePause } from '@/composables/useGamePause'
 import { useGameLoop } from '@/composables/useGameLoop'
 import { DIFFS, DIFF_LABELS, levelToDifficulty, type DiffKey, type LinkMode } from '@/lib/linkGame'
@@ -174,6 +175,7 @@ const newRecord = ref(false)
 const achievementHintNew = ref<string | null>(null)
 const lastScore = ref(0)
 const timeLeft = ref(0)
+const gameStats = ref<GameStat[]>()
 
 const currentGameKey = computed(() => (mode.value === 'campaign' ? 'link-campaign' : 'link'))
 const currentGameName = computed(() => (mode.value === 'campaign' ? '连连看·闯关' : '连连看'))
@@ -395,8 +397,11 @@ function newGame() {
 function submitScore() {
   if (mode.value === 'campaign') { submitCampaign(); return }
   lastScore.value = score.value
-  const { achievementHint } = checkGameOver('link', score.value)
+  const { achievementHint, stats } = checkGameOver('link', score.value, [
+    { label: '得分', value: String(score.value) }
+  ])
   achievementHintNew.value = achievementHint
+  gameStats.value = stats
   winDialog.value = false
   showLeaderboard.value = true
   clearSave()

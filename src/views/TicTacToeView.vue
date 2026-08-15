@@ -7,6 +7,7 @@
     :hints="layoutHints"
     :infoItems="layoutInfoItems"
     :tutorial="layoutTutorial"
+        mood="cool"
     @back="goHome"
     @restart="onRestart"
   >
@@ -94,6 +95,7 @@
         :title="resultTitle"
         :message="resultMessage"
         :actionText="lastScore > 0 ? '提交分数' : undefined"
+        :stats="gameStats"
         @action="openLeaderboardFromDialog"
       >
         <template v-if="lastScore === 0" #action>
@@ -130,7 +132,7 @@ import { useHaptics } from '@/composables/useHaptics'
 import { useGamePause } from '@/composables/useGamePause'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
-import { useGameOver } from '@/composables/useGameOver'
+import { useGameOver, type GameStat } from '@/composables/useGameOver'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
 import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 import ResumePrompt from '@/components/ResumePrompt.vue'
@@ -175,6 +177,7 @@ const achievementHint = ref<string | null>(null)
 const showLeaderboard = ref(false)
 const lastScore = ref(0)
 const stats = ref({ wins: 0, draws: 0, losses: 0 })
+const gameStats = ref<GameStat[]>()
 
 // 难度：困难=纯 minimax 最优（永不输、最多逼平）；简单=保留随机失误（可取胜）
 type Difficulty = 'easy' | 'hard'
@@ -313,9 +316,13 @@ function endGame(res: Exclude<Result, null>, line: number[]) {
     haptics.error()
   }
   lastScore.value = score
-  const { isNewRecord: isNewRecordResult, achievementHint: hint } = checkGameOver('tic-tac-toe', score)
+  const resultLabel = res === 'win' ? '胜利' : res === 'draw' ? '平局' : '失败'
+  const { isNewRecord: isNewRecordResult, achievementHint: hint, stats: resultStats } = checkGameOver('tic-tac-toe', score, [
+    { label: '结果', value: resultLabel }
+  ])
   newRecord.value = isNewRecordResult
   achievementHint.value = hint
+  gameStats.value = resultStats
   clearSave()
   gameOverDialog.value = true
 }

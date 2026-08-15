@@ -8,6 +8,7 @@
     :infoItems="[{ label: '分数', value: score }, { label: '行数', value: lines }]"
     :confirmRestart="score > 0"
     tutorial="旋转并放置下落的方块，填满整行即可消除。同时消除多行得分更高！"
+    mood="cool"
     @back="handleBack"
     @restart="startGame"
   >
@@ -84,6 +85,7 @@
       :actionText="newRecord ? '提交新纪录' : '提交分数'"
       :newRecord="newRecord"
       :achievementHint="achievementHint"
+      :stats="gameStats"
       @action="openLeaderboard"
       @update:visible="onDialogClose"
     />
@@ -113,7 +115,7 @@ import { useAutoSave } from '@/composables/useAutoSave'
 import { useGamePause } from '@/composables/useGamePause'
 import { useHaptics } from '@/composables/useHaptics'
 import { useScoreFloats } from '@/composables/useScoreFloats'
-import { useGameOver } from '@/composables/useGameOver'
+import { useGameOver, type GameStat } from '@/composables/useGameOver'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
@@ -155,6 +157,7 @@ const showLeaderboard = ref(false)
 const newRecord = ref(false)
 const achievementHint = ref<string | null>(null)
 const lastScore = ref(0)
+const gameStats = ref<GameStat[]>()
 
 // 存档
 const save = useGameSave('tetris')
@@ -436,9 +439,13 @@ function endGame() {
   isPlaying.value = false; gameOver.value = true
   gameLoop.stop()
   lastScore.value = score.value
-  const { isNewRecord: isNewRecordResult, achievementHint: hint } = checkGameOver('tetris', score.value)
+  const { isNewRecord: isNewRecordResult, achievementHint: hint, stats } = checkGameOver('tetris', score.value, [
+    { label: '消除行数', value: lines.value + ' 行' },
+    { label: '得分', value: String(score.value) }
+  ])
   newRecord.value = isNewRecordResult
   achievementHint.value = hint
+  gameStats.value = stats
 }
 
 function openLeaderboard() {
