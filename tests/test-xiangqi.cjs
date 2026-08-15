@@ -1770,6 +1770,51 @@ console.log('\n=== Suite 40: 用户棋谱回归 ===')
     assertFalse(isShuttle, '引擎规避：第 2 次连将前不选 車四退一（修复前红）',
       m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
   }
+
+  // ============================================================
+  // 第二局用户棋谱（70 手）：黑车在 9 路横线隔两格将军，红帅被迫往返应将，
+  // 覆盖与第一局不同的连将几何（车与帅不在相邻格）。
+  // ============================================================
+  const RECORD2 = ['炮二平五', '炮二平五', '馬二進三', '馬八進九', '炮五進四', '炮五進四', '馬三進五', '車九進一',
+    '炮八進二', '炮八進二', '炮五退一', '將五進一', '車一進一', '炮八退二', '車一平四', '將五平四',
+    '炮八平五', '士四進五', '馬五進七', '車九平八', '馬七進六', '炮八平四', '車九進一', '車八進三',
+    '炮五平四', '車八進二', '車九平八', '車八平七', '車八進七', '將四退一', '炮五平六', '車七平五',
+    '仕四進五', '炮四進三', '炮四平二', '車五平三', '馬六進四', '士五進六', '車四進六', '將四平五',
+    '帥五平四', '士六進五', '車四進一', '士五進六', '炮二進四', '馬九退八', '車四退一', '炮四退五',
+    '車四平二', '馬八進九', '車二平四', '車三進三', '馬八進九', '車三退四', '兵九進一', '車三平七',
+    '相三進一', '車七進二', '馬九進八', '車七平九', '馬八進六', '車九進二', '帥四進一', '車九退一',
+    '帥四退一', '車九進一', '帥四進一', '車九退一', '帥四退一', '車九進一']
+
+  // --- 40.3 数据语义：第二局棋谱本身是长将判负场景 ---
+  {
+    const { moves, positions } = replay(RECORD2)
+    const v = checkRepetitionViolation(moves, positions)
+    assertTrue(v !== null, '棋谱2数据：末手触发重复局面裁决')
+    assertEq(v && v.type, 'violation', '棋谱2数据：裁决类型 violation')
+    assertEq(v && v.side, 'black', '棋谱2数据：违规方黑（AI）')
+    assertEq(v && v.reason, 'perpetual_check', '棋谱2数据：长将判负')
+  }
+
+  // --- 40.4 引擎规避：第 33 回合（第 2 次连将前）黑 AI 不选 車九進一（修复前红） ---
+  {
+    const { positions } = replay(RECORD2)
+    const root = positions[65] // 第 33 回合黑方行棋局面（ply 65 奇数 = 黑）
+    const histKeys = []
+    const len = positions.length
+    for (let i = Math.max(0, len - 33); i < len - 1; i++) {
+      histKeys.push(boardKey(positions[i], i % 2 === 0 ? 'red' : 'black'))
+    }
+    const shuttle = generateMoves(root, 'black').find(x => toNotation(x, root) === '車九進一')
+    assertTrue(!!shuttle, '棋谱2局面：車九進一 是合法着法（连将场景成立）')
+    const m = findBestMove(root, 'black', 8, 4000, histKeys, 4)
+    assertTrue(m !== null, '引擎规避2：黑 AI 有应着')
+    assertTrue(!!m && isLegalMove(root, m.from, m.to), '引擎规避2：着法合法',
+      m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
+    const isShuttle = !!m && !!shuttle && m.from.row === shuttle.from.row && m.from.col === shuttle.from.col &&
+      m.to.row === shuttle.to.row && m.to.col === shuttle.to.col
+    assertFalse(isShuttle, '引擎规避2：第 2 次连将前不选 車九進一（修复前红）',
+      m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
+  }
 }
 
 // ============================================================

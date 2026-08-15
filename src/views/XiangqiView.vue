@@ -29,7 +29,7 @@
           <span class="mode-desc">与电脑对战</span>
         </button>
       </div>
-      <p class="mode-tip">联机需配置 Supabase（见 .env.example）；未配置会提示。</p>
+      <p class="mode-tip">联机需配置 Supabase（见 .env.example）；未配置会提示。<br/>AI 引擎 {{ XQ_BUILD_TAG }}</p>
     </div>
 
     <!-- 本地双人 -->
@@ -364,6 +364,9 @@ const { paused, resume: resumeGame } = useGamePause({
 })
 
 // ---- 模式相关 UI ----
+// 构建标记：每次引擎/视图逻辑改动递增。显示在模式屏与 AI 对局标题栏，
+// 用于核对运行版本（排查「旧构建仍在生效」类问题）。
+const XQ_BUILD_TAG = 'v9'
 const layoutTitle = computed(() => mode.value === 'online' ? '中国象棋·联机' : '中国象棋')
 const layoutAccent = computed(() => mode.value === 'online' ? '#FF9E00' : '#FF4D4D')
 const layoutGradient = computed(() => mode.value === 'online' ? '#B967FF' : '#FF6B6B')
@@ -377,7 +380,7 @@ const layoutHints = computed(() => {
 const layoutInfoItems = computed(() => {
   if (mode.value === 'local') return [{ label: '步数', value: moveCount.value }]
   if (mode.value === 'online') return [{ label: '模式', value: '联机对战' }]
-  if (mode.value === 'ai') return [{ label: '难度', value: difficulty.value === 'easy' ? '简单' : difficulty.value === 'medium' ? '中等' : '困难' }, { label: 'AI', value: aiSide.value === 'red' ? 'AI 先手' : '你先手' }]
+  if (mode.value === 'ai') return [{ label: '难度', value: difficulty.value === 'easy' ? '简单' : difficulty.value === 'medium' ? '中等' : '困难' }, { label: 'AI', value: aiSide.value === 'red' ? 'AI 先手' : '你先手' }, { label: '引擎', value: XQ_BUILD_TAG }]
   return [{ label: '模式', value: '选择中' }]
 })
 const layoutTutorial = computed(() =>
