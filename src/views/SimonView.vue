@@ -8,6 +8,7 @@
     :infoItems="[{ label: '分数', value: score }, { label: '关卡', value: level }]"
     :confirmRestart="phase !== 'idle'"
     tutorial="记住灯亮的顺序，然后照原样点出来。每过一关序列变长，看你能记到第几关！"
+    mood="cool"
     @back="router.push('/')"
     @restart="startGame"
   >
@@ -49,6 +50,7 @@
       :actionText="newRecord ? '提交新纪录' : '提交分数'"
       :newRecord="newRecord"
       :achievementHint="achievementHint"
+      :stats="gameStats"
       @action="openLeaderboard"
     />
     <LeaderboardOverlay
@@ -69,7 +71,7 @@ import { useSound } from '@/composables/useSound'
 import { useHaptics } from '@/composables/useHaptics'
 import { useGamePause } from '@/composables/useGamePause'
 import { useScoreFloats } from '@/composables/useScoreFloats'
-import { useGameOver } from '@/composables/useGameOver'
+import { useGameOver, type GameStat } from '@/composables/useGameOver'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
@@ -104,6 +106,7 @@ const gameOverDialog = ref(false)
 const newRecord = ref(false)
 const achievementHint = ref<string | null>(null)
 const showLeaderboard = ref(false)
+const gameStats = ref<GameStat[]>()
 
 const { popups, pop } = useScoreFloats()
 const { checkGameOver } = useGameOver()
@@ -210,9 +213,12 @@ function onPadClick(i: number) {
 function gameOver() {
   phase.value = 'over'
   statusText.value = '记错啦，游戏结束'
-  const { isNewRecord, achievementHint: hint } = checkGameOver('simon', score.value)
+  const { isNewRecord, achievementHint: hint, stats } = checkGameOver('simon', score.value, [
+    { label: '最高轮次', value: '第 ' + score.value + ' 关' }
+  ])
   newRecord.value = isNewRecord
   achievementHint.value = hint
+  gameStats.value = stats
   gameOverDialog.value = true
 }
 

@@ -8,6 +8,7 @@
     :infoItems="layoutInfoItems"
     :tutorial="layoutTutorial"
     :confirmRestart="mode !== 'online'"
+    mood="warm"
     @back="goHome"
     @restart="onRestart"
   >
@@ -121,6 +122,7 @@
         :icon="resultIcon"
         :title="resultTitle"
         :message="resultMessage"
+        :stats="gameStats"
       >
         <template #action>
           <div class="dialog-actions">
@@ -167,6 +169,9 @@
           <span class="turn-dot" :class="{ red: currentSide === 'red', black: currentSide === 'black' }"></span>
           <span class="turn-label">{{ turnLabel }}</span>
           <span v-if="mode === 'ai' && aiThinking" class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                    <span v-if="mode === 'ai' && aiThinking && aiProgress" class="thinking-progress">
+                      深度 <span class="progress-depth">{{ aiProgress.depth }}</span> · 已搜索 {{ formatNodes(aiProgress.nodes) }}
+                    </span>
         </div>
 
         <XiangqiBoard
@@ -251,6 +256,7 @@
         :icon="resultIcon"
         :title="resultTitle"
         :message="resultMessage"
+        :stats="gameStats"
       >
         <template #action>
           <div class="dialog-actions">
@@ -419,6 +425,13 @@ const highlightPositions = computed(() => {
   return { from: move.from, to: move.to }
 })
 
+// 节点数格式化：简洁显示（1.2k / 15.3k / 102k）
+function formatNodes(n: number): string {
+  if (n < 1000) return n.toString()
+  if (n < 10000) return (n / 1000).toFixed(1) + 'k'
+  return Math.round(n / 1000) + 'k'
+}
+
 const turnLabel = computed(() => {
   if (gameOver.value) {
     if (result.value === 'red-win') return '红方获胜！'
@@ -470,6 +483,15 @@ const resultIcon = computed<'success' | 'fail' | 'info'>(() => {
   return 'success'
 })
 
+const gameStats = computed(() => {
+  if (!gameOver.value) return undefined
+  const resultLabel = result.value === 'red-win' ? '红胜' : result.value === 'black-win' ? '黑胜' : '和棋'
+  return [
+    { label: '结果', value: resultLabel },
+    { label: '步数', value: String(moveCount.value) }
+  ]
+})
+
 // ---- 交互逻辑 ----
 // 送将提示节流：2 秒内不重复弹，避免连点刷屏
 let lastExposeTipAt = 0
@@ -477,7 +499,7 @@ let lastExposeTipAt = 0
 // ---- AI 走子调度 ----
 let aiTimer: ReturnType<typeof setTimeout> | null = null
 // AI 搜索调度器：搜索在 Worker 内运行（主线程零阻塞），cancel 中断引擎内搜索（保留 TT）
-const { requestSearch, cancel, dispose } = useXiangqiAI()
+const { requestSearch, cancel, dispose, aiProgress } = useXiangqiAI()
 // AI 回合身份序号：取消点（悔棋/认输/重开/离开）递增，使进行中的 AI 异步回调过期
 let aiSeq = 0
 // 提示请求序号：递增使旧请求过期（又点提示/走子/取消后旧结果丢弃）
@@ -1181,6 +1203,17 @@ function onRestart() {
 }
 .thinking-dots i:nth-child(2) { animation-delay: 0.2s }
 .thinking-dots i:nth-child(3) { animation-delay: 0.4s }
+.thinking-progress {
+  font-size: 0.85em;
+  color: var(--game-text-muted, rgba(255, 255, 255, 0.6));
+  margin-left: 6px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.thinking-progress .progress-depth {
+  color: var(--game-accent, #FFD700);
+  font-weight: 600;
+}
 .turn-indicator.black-turn {
   background: rgba(44, 62, 80, 0.15);
   border-color: rgba(44, 62, 80, 0.5);

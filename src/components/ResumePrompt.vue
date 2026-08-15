@@ -1,12 +1,15 @@
 <template>
   <Transition name="resume">
     <div v-if="visible" class="resume-overlay">
-      <div class="resume-box">
+      <div v-if="countingDown" class="resume-box countdown-box">
+        <div class="countdown-num" :key="countdownNum">{{ countdownNum }}</div>
+      </div>
+      <div v-else class="resume-box">
         <div class="resume-icon">🔄</div>
         <h3>发现上局进度</h3>
         <p>要继续上一局，还是开始新游戏？</p>
         <div class="resume-actions">
-          <button class="continue-btn" @click="$emit('continue')">继续上局</button>
+          <button class="continue-btn" @click="startCountdown">继续上局</button>
           <button class="new-btn" @click="$emit('new-game')">重新开始</button>
         </div>
       </div>
@@ -15,8 +18,58 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{ visible: boolean }>()
-defineEmits<{ continue: []; 'new-game': [] }>()
+import { ref, watch, onUnmounted } from 'vue'
+import { usePauseCountdown } from '@/composables/useGamePause'
+
+const props = defineProps<{ visible: boolean }>()
+const emit = defineEmits<{ continue: []; 'new-game': [] }>()
+
+const countingDown = ref(false)
+const countdownNum = ref(3)
+let timer: ReturnType<typeof setTimeout> | null = null
+
+// 注册取消回调给 useGamePause（P/Esc 可中断倒计时）
+const { setCounting } = usePauseCountdown(cancelCountdown)
+
+function cancelCountdown() {
+  if (timer !== null) {
+    clearTimeout(timer)
+    timer = null
+  }
+  countingDown.value = false
+  countdownNum.value = 3
+  setCounting(false)
+}
+
+function startCountdown() {
+  countingDown.value = true
+  countdownNum.value = 3
+  setCounting(true)
+  tick()
+}
+
+function tick() {
+  timer = setTimeout(() => {
+    if (countdownNum.value > 1) {
+      countdownNum.value--
+      tick()
+    } else {
+      // 倒计时结束
+      countingDown.value = false
+      countdownNum.value = 3
+      timer = null
+      setCounting(false)
+      emit('continue')
+    }
+  }, 1000)
+}
+
+// visible 变 false 时（外部关闭）清理倒计时
+watch(() => props.visible, (v) => {
+  if (!v) cancelCountdown()
+})
+
+onUnmounted(() => cancelCountdown())
 </script>
 
 <style scoped>
@@ -108,5 +161,22 @@ defineEmits<{ continue: []; 'new-game': [] }>()
 .new-btn:hover {
   background: rgba(255, 255, 255, 0.06);
   border-color: var(--game-accent, #00FFFF);
+}
+
+/* ---- 倒计时数字 ---- */
+.countdown-box {
+  padding: 50px 60px;
+  min-width: 180px;
+}
+
+.countdown-num {
+  font-size: 5em;
+  font-weight: 800;
+  color: var(--game-accent, #00FFFF);
+  text-shadow:
+    0 0 30px color-mix(in srgb, var(--game-accent, #00FFFF) 60%, transparent),
+    0 0 60px color-mix(in srgb, var(--game-accent, #00FFFF) 30%, transparent);
+  animation: countdownTick 0.85s ease-out;
+  line-height: 1;
 }
 </style>

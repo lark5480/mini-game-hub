@@ -210,6 +210,13 @@ let searchDeadline = Infinity
 let cancelRequested = false
 export function cancelSearch(): void { cancelRequested = true }
 
+// 搜索进度回调：每层迭代完成后调用（Worker 端设置为 postMessage 通知主线程）
+// 参数：(depth, nodes, bestScore)；bestScore 为当前最佳评估值（红方视角）
+let onProgress: ((depth: number, nodes: number, bestScore: number) => void) | null = null
+export function setProgressCallback(cb: ((depth: number, nodes: number, bestScore: number) => void) | null): void {
+  onProgress = cb
+}
+
 // 测试导出：清空搜索状态（置换表 / killer / history）。
 // 跨调用状态复用是性能设计（同对局内搜更深），但会让测试的「冷态参照值」
 // 被先前搜索的 TT 污染（浅层直接命中深层 TT 条目返回不同着法）；测试在每个
@@ -774,6 +781,8 @@ export function findBestMove(board: Board, side: Side, depth = 3, timeLimitMs?: 
       // 上一层最佳着法置顶，提升下一层剪枝效率
       ordered = [bestMove, ...ordered.filter(m => !sameMove(m, bestMove))]
     }
+    // 进度通知：每层迭代完成后上报深度、节点数、最佳分数（Worker 端转发给主线程）
+    if (onProgress) onProgress(d, searchNodes, bestScore)
     // 已找到杀棋（或必败），无需再加深
     if (bestScore >= MATE - 1000 || bestScore <= -(MATE - 1000)) break
     // 提前出手：决定性优势（只在大优时退出；大劣保持深搜寻找翻盘机会）

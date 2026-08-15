@@ -8,6 +8,7 @@
     :infoItems="[{ label: '分数', value: score }, { label: '生命', value: lives }]"
     :confirmRestart="score > 0"
     tutorial="移动挡板反弹球，打碎所有砖块即可过关。球不能落地！"
+    mood="warm"
     @back="handleBack"
     @restart="restart"
   >
@@ -35,6 +36,7 @@
       :actionText="newRecord ? '提交新纪录' : '提交分数'"
       :newRecord="newRecord"
       :achievementHint="achievementHint"
+      :stats="gameStats"
       @action="openLeaderboard"
     />
     <GameDialog
@@ -46,6 +48,7 @@
       :actionText="newRecord ? '提交新纪录' : '提交分数'"
       :newRecord="newRecord"
       :achievementHint="achievementHint"
+      :stats="gameStats"
       @action="openLeaderboard"
     />
     <LeaderboardOverlay
@@ -72,7 +75,7 @@ import { useToast } from '@/composables/useToast'
 import { useGamePause } from '@/composables/useGamePause'
 import { useHaptics } from '@/composables/useHaptics'
 import { useScoreFloats } from '@/composables/useScoreFloats'
-import { useGameOver } from '@/composables/useGameOver'
+import { useGameOver, type GameStat } from '@/composables/useGameOver'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
@@ -99,6 +102,7 @@ const lastScore = ref(0)
 const victory = ref(false)
 const newRecord = ref(false)
 const achievementHint = ref<string | null>(null)
+const gameStats = ref<GameStat[]>()
 const { paused, toggle } = useGamePause({
   canPause: () => !gameOver.value && !victory.value
 })
@@ -295,9 +299,13 @@ function gameUpdate(dt: number) {
       launched = false
       haptics.error()
       lastScore.value = score.value
-      const result = checkGameOver('breakout', score.value)
+      const result = checkGameOver('breakout', score.value, [
+        { label: '击碎', value: Math.floor(score.value / 10) + ' 块' },
+        { label: '得分', value: String(score.value) }
+      ])
       newRecord.value = result.isNewRecord
       achievementHint.value = result.achievementHint
+      gameStats.value = result.stats
     } else {
       ballX = paddleX + PADDLE_WIDTH / 2
       ballY = CANVAS_H - 50

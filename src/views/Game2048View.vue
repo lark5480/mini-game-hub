@@ -8,6 +8,7 @@
     :infoItems="infoItems"
     :confirmRestart="score > 0"
     tutorial="滑动合并相同数字的方块，目标达到2048！每次滑动会随机出现新方块。"
+        mood="gold"
     @back="router.push('/')"
     @restart="restart"
   >
@@ -67,6 +68,7 @@
       @action="winDialog = false"
       :newRecord="newRecord"
       :achievementHint="achievementHint"
+      :stats="gameStats"
     />
     <GameDialog
       v-model:visible="gameOverDialog"
@@ -77,6 +79,7 @@
       :actionText="newRecord ? '提交新纪录' : '提交分数'"
       :newRecord="newRecord"
       :achievementHint="achievementHint"
+      :stats="gameStats"
       @action="openLeaderboard"
     />
     <LeaderboardOverlay
@@ -105,7 +108,7 @@ import { useAutoSave } from '@/composables/useAutoSave'
 import { useHaptics } from '@/composables/useHaptics'
 import { useGamePause } from '@/composables/useGamePause'
 import { useScoreFloats } from '@/composables/useScoreFloats'
-import { useGameOver } from '@/composables/useGameOver'
+import { useGameOver, type GameStat } from '@/composables/useGameOver'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import DirectionPad from '@/components/DirectionPad.vue'
@@ -153,6 +156,7 @@ const showLeaderboard = ref(false)
 const lastScore = ref(0)
 const won = ref(false)
 const history = ref<History[]>([])
+const gameStats = ref<GameStat[]>()
 
 const largestTile = computed(() => {
   let m = 0
@@ -261,7 +265,8 @@ const boardEl = ref<HTMLElement | null>(null)
 useSwipe({
   el: () => boardEl.value,
   active: () => gameActive(),
-  onSwipe: (dir) => move(dir)
+  onSwipe: (dir) => move(dir),
+  lockDirection: true
 })
 
 function createEmptyGrid(): Grid {
@@ -392,9 +397,13 @@ function handleMove(dir: Direction, silent = false) {
     won.value = true
     winDialog.value = true
     lastScore.value = score.value
-    const { isNewRecord: isNewRecordResult, achievementHint: hint } = checkGameOver('2048', score.value)
+    const { isNewRecord: isNewRecordResult, achievementHint: hint, stats } = checkGameOver('2048', score.value, [
+      { label: '最大方块', value: String(largestTile.value) },
+      { label: '步数', value: String(moves.value) }
+    ])
     newRecord.value = isNewRecordResult
     achievementHint.value = hint
+    gameStats.value = stats
     return
   }
 
@@ -404,9 +413,13 @@ function handleMove(dir: Direction, silent = false) {
 
   if (!canMove(grid.value)) {
     lastScore.value = score.value
-    const { isNewRecord: isNewRecordResult, achievementHint: hint } = checkGameOver('2048', score.value)
+    const { isNewRecord: isNewRecordResult, achievementHint: hint, stats } = checkGameOver('2048', score.value, [
+      { label: '最大方块', value: String(largestTile.value) },
+      { label: '步数', value: String(moves.value) }
+    ])
     newRecord.value = isNewRecordResult
     achievementHint.value = hint
+    gameStats.value = stats
     gameOverDialog.value = true
   }
 }

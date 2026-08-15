@@ -30,6 +30,11 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
           {{ getTopScore(game.name) }}
         </div>
+        <div v-if="getTopScore(game.name) > 0" class="crown-badge" title="已挑战">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2 20h20L19 9l-5 5-2-7-2 7-5-5z"/>
+          </svg>
+        </div>
         <button class="card-leaderboard-btn" @click.stop="leaderboardGame = { name: game.name, title: game.title }" title="查看排行榜">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20 17 22M18 2H6v7a6 6 0 0 0 12 0V2z"/></svg>
         </button>
@@ -50,7 +55,7 @@
 </template>
 
 <script setup lang="ts">
-import { h, ref, computed } from 'vue'
+import { h, ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useGameStore } from '@/stores/game'
 import { useAchievements } from '@/stores/achievements'
@@ -157,6 +162,47 @@ function goToGame(path: string) {
 function getTopScore(name: string): number {
   return gameStore.getTopScore(name)
 }
+
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+
+onMounted(() => {
+  const grid = document.querySelector('.game-grid')
+  if (!grid) return
+
+  // Set --glow-color natively so Vue :style doesn't interfere with transform
+  grid.querySelectorAll<HTMLElement>('.game-card').forEach((card, i) => {
+    if (games.value[i]) {
+      card.style.setProperty('--glow-color', games.value[i].color)
+    }
+  })
+
+  // Event delegation for 3D tilt — completely bypasses Vue reactivity
+  const onMove = (e: Event) => {
+    if (reducedMotion.matches) return
+    const me = e as MouseEvent
+    const card = (me.target as HTMLElement).closest('.game-card') as HTMLElement
+    if (!card || !grid.contains(card)) return
+    const rect = card.getBoundingClientRect()
+    const px = (me.clientX - rect.left) / rect.width - 0.5
+    const py = (me.clientY - rect.top) / rect.height - 0.5
+    const transform = `perspective(600px) rotateX(${py * -25}deg) rotateY(${px * 25}deg) translateY(-6px) scale(1.06)`
+    card.style.transform = transform
+  }
+
+  const onLeave = (e: Event) => {
+    const card = (e.target as HTMLElement).closest('.game-card') as HTMLElement
+    if (!card || !grid.contains(card)) return
+    card.style.transform = ''
+  }
+
+  grid.addEventListener('mousemove', onMove)
+  grid.addEventListener('mouseleave', onLeave)
+
+  onUnmounted(() => {
+    grid.removeEventListener('mousemove', onMove)
+    grid.removeEventListener('mouseleave', onLeave)
+  })
+})
 </script>
 
 <style scoped>
@@ -213,14 +259,44 @@ function getTopScore(name: string): number {
   text-align: center;
   cursor: pointer;
   position: relative;
-  transition: all 0.3s ease;
-  overflow: hidden;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
-.game-card:hover {
-  transform: translateY(-4px);
-  border-color: var(--glow-color);
-  box-shadow: 0 0 22px color-mix(in srgb, var(--glow-color) 35%, transparent);
+@media (hover: hover) {
+  .game-card:hover {
+    border-color: var(--glow-color);
+    box-shadow: 0 0 22px color-mix(in srgb, var(--glow-color) 35%, transparent);
+  }
+}
+
+.crown-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 4px;
+  background: rgba(255, 215, 0, 0.08);
+  border: 1px solid rgba(255, 215, 0, 0.15);
+  border-radius: 6px;
+  box-shadow: none;
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0.6;
+  transition: opacity 0.3s ease;
+}
+
+.crown-badge svg {
+  width: 100%;
+  height: 100%;
+  fill: rgba(255, 215, 0, 0.5);
+}
+
+.game-card:hover .crown-badge {
+  opacity: 0.9;
 }
 
 .game-card:hover .card-glow {

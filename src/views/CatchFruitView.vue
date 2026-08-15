@@ -8,6 +8,7 @@
     :infoItems="[{ label: '分数', value: score }, { label: '生命', value: lives }]"
     :confirmRestart="score > 0"
     tutorial="移动篮子接住掉落的水果，漏接会失去生命。生命耗尽游戏结束！"
+    mood="warm"
     @back="handleBack"
     @restart="startGame"
   >
@@ -53,6 +54,7 @@
       :actionText="newRecord ? '提交新纪录' : '提交分数'"
       :newRecord="newRecord"
       :achievementHint="achievementHint"
+      :stats="gameStats"
       @action="openLeaderboard"
     />
     <LeaderboardOverlay
@@ -76,7 +78,7 @@ import { useSound } from '@/composables/useSound'
 import { useGamePause } from '@/composables/useGamePause'
 import { useHaptics } from '@/composables/useHaptics'
 import { useScoreFloats } from '@/composables/useScoreFloats'
-import { useGameOver } from '@/composables/useGameOver'
+import { useGameOver, type GameStat } from '@/composables/useGameOver'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import LeaderboardOverlay from '@/components/LeaderboardOverlay.vue'
@@ -99,6 +101,7 @@ const showLeaderboard = ref(false)
 const newRecord = ref(false)
 const achievementHint = ref<string | null>(null)
 const lastScore = ref(0)
+const gameStats = ref<GameStat[]>()
 
 const fruitEmojis = ['🍎','🍊','🍋','🍇','🍓','🍉','🍑','🍒']
 
@@ -196,9 +199,13 @@ function endGame() {
   isPlaying.value = false; gameOver.value = true
   gameLoop.stop()
   lastScore.value = score.value
-  const { isNewRecord: isNewRecordResult, achievementHint: hint } = checkGameOver('catch-fruit', score.value)
+  const { isNewRecord: isNewRecordResult, achievementHint: hint, stats } = checkGameOver('catch-fruit', score.value, [
+    { label: '接住', value: Math.floor(score.value / 5) + ' 个' },
+    { label: '得分', value: String(score.value) }
+  ])
   newRecord.value = isNewRecordResult
   achievementHint.value = hint
+  gameStats.value = stats
 }
 
 function openLeaderboard() {

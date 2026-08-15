@@ -8,6 +8,7 @@
     :infoItems="layoutInfoItems"
     :confirmRestart="confirmRestart"
     :tutorial="layoutTutorial"
+    mood="warm"
     @back="goHome"
     v-on="mode === 'single' ? { restart: onRestart } : {}"
   >
@@ -60,6 +61,7 @@
         :actionText="newRecord ? '提交新纪录' : '提交分数'"
         :newRecord="newRecord"
         :achievementHint="achievementHint"
+        :stats="gameStats"
         @action="openLeaderboard"
       />
       <LeaderboardOverlay
@@ -115,7 +117,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAchievements } from '@/stores/achievements'
 import { useToast } from '@/composables/useToast'
 import { useGamePause } from '@/composables/useGamePause'
-import { useGameOver } from '@/composables/useGameOver'
+import { useGameOver, type GameStat } from '@/composables/useGameOver'
 import GameLayout from '@/components/GameLayout.vue'
 import GameDialog from '@/components/GameDialog.vue'
 import PauseOverlay from '@/components/PauseOverlay.vue'
@@ -157,6 +159,7 @@ const showLeaderboard = ref(false)
 const joinCode = ref('')
 const joinError = ref('')
 const lastScore = ref(0)
+const gameStats = ref<GameStat[]>()
 
 const confirmRestart = computed(() => gameStarted.value && !gameOverDialog.value)
 
@@ -206,9 +209,12 @@ function restartGame() {
 function onGameOver(score: number) {
   gameStarted.value = false
   lastScore.value = score
-  const { isNewRecord: isNewRecordResult, achievementHint: hint } = checkGameOver('whackamole', score)
+  const { isNewRecord: isNewRecordResult, achievementHint: hint, stats } = checkGameOver('whackamole', score, [
+    { label: '得分', value: String(score) }
+  ])
   newRecord.value = isNewRecordResult
   achievementHint.value = hint
+  gameStats.value = stats
   if (score >= 300) {
     if (achievements.unlock('whack_master')) {
       toast.show('成就解锁：神速', '🔨')

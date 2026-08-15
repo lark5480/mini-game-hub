@@ -27,6 +27,11 @@
         <!-- 成就接近提示 -->
         <p v-if="achievementHint" class="achievement-hint">{{ achievementHint }}</p>
 
+        <!-- 本局亮点统计 -->
+        <p v-if="stats && stats.length" class="game-stats">
+          <template v-for="(s, i) in stats" :key="i">{{ i > 0 ? ' · ' : '' }}{{ s.label }} {{ s.value }}</template>
+        </p>
+
         <slot name="action">
           <button v-if="actionText" @click="$emit('action')">{{ actionText }}</button>
         </slot>
@@ -43,10 +48,12 @@ defineProps<{
   title?: string
   message?: string
   actionText?: string
-  /** 是否打破个人最佳：显示金色"新记录"徽章 */
+  /** 是否打破个人最佳：显示金色“新记录”徽章 */
   newRecord?: boolean
-  /** 成就接近提示文案（如"还差 50 分解锁蛇王"） */
+  /** 成就接近提示文案（如“还差 50 分解锁蛇王”） */
   achievementHint?: string | null
+  /** 本局亮点统计（可选） */
+  stats?: { label: string; value: string }[]
 }>()
 
 defineEmits<{
@@ -130,6 +137,14 @@ defineEmits<{
   margin-top: -15px;
   margin-bottom: 20px;
   opacity: 0.9;
+}
+
+.game-stats {
+  color: var(--game-text-info, #818CF8);
+  font-size: 0.85em;
+  margin-top: -15px;
+  margin-bottom: 20px;
+  opacity: 0.85;
 }
 
 .dialog button {
