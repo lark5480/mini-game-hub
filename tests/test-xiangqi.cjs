@@ -1697,6 +1697,82 @@ console.log('\n=== Suite 39: 重复局面罚分强度 ===')
 }
 
 // ============================================================
+// Suite 40: 用户实测棋谱回归（单车底线往返连将判负场景）
+// 背景：用户提供真实对局棋谱（红方视角 40 手）：黑 AI 车在底线往返将军、
+// 红帅被迫往返应将，走满周期后黑方 perpetual_check 判负。修复后引擎应在
+// 第 19 回合（第 2 次连将前）即避开；本套件冻结该棋谱防止回归。
+// ============================================================
+console.log('\n=== Suite 40: 用户棋谱回归 ===')
+{
+  const { findBestMove, boardKey } = require(path.join(__dirname, '.tmp-xiangqi', 'ai'))
+  const RECORD = ['炮二平五', '馬二進三', '馬二進三', '炮八平六', '車一平二', '馬八進七',
+    '兵七進一', '炮六進一', '兵三進一', '炮二進三', '炮八平六', '炮二平七', '馬八進七', '車一平二',
+    '車九進一', '車九平八', '車二進九', '炮七進四', '仕四進五', '馬七退八', '馬七進六', '車二進九',
+    '馬六進七', '炮六平三', '相七進九', '炮七退一', '仕五退四', '炮七平二', '兵七進一', '炮三平四',
+    '兵七進一', '車二平四', '帥五進一', '車四退一', '帥五退一', '車四進一', '帥五進一', '車四退一',
+    '帥五退一', '車四進一']
+
+  // 棋谱解析：toNotation 匹配唯一合法着法（自校验棋谱合法性，解析失败即抛错使测试响亮失败）
+  function replay(rec) {
+    let b = initialBoard()
+    let side = 'red'
+    const moves = []
+    const positions = [initialBoard()]
+    for (const s of rec) {
+      const m = generateMoves(b, side).find(x => toNotation(x, b) === s)
+      if (!m) throw new Error('棋谱解析失败: ' + s + ' (' + side + ')')
+      b = applyMove(b, m)
+      moves.push(m)
+      positions.push(b)
+      side = side === 'red' ? 'black' : 'red'
+    }
+    return { moves, positions }
+  }
+
+  // --- 40.1 数据语义：棋谱续走一轮后触发裁决 = 黑方 perpetual_check（用户描述固化） ---
+  {
+    const { moves, positions } = replay(RECORD)
+    let b = positions[positions.length - 1]
+    for (const s of ['帥五進一', '車四退一']) {
+      // 续走方固定：红帥五進一 → 黑車四退一（与棋谱红先交替一致）
+      const sideNow = moves.length % 2 === 0 ? 'red' : 'black'
+      const mm = generateMoves(b, sideNow).find(x => toNotation(x, b) === s)
+      assertTrue(!!mm, '棋谱续走：' + s + ' 合法（' + sideNow + '）')
+      if (!mm) break
+      b = applyMove(b, mm)
+      moves.push(mm)
+      positions.push(b)
+    }
+    const v = checkRepetitionViolation(moves, positions)
+    assertTrue(v !== null, '棋谱数据：续走一轮触发重复局面裁决')
+    assertEq(v && v.type, 'violation', '棋谱数据：裁决类型 violation')
+    assertEq(v && v.side, 'black', '棋谱数据：违规方黑（AI）')
+    assertEq(v && v.reason, 'perpetual_check', '棋谱数据：长将判负')
+  }
+
+  // --- 40.2 引擎规避：第 19 回合（第 2 次连将前）黑 AI 不选 車四退一（修复前红） ---
+  {
+    const { positions } = replay(RECORD)
+    const root = positions[37] // 第 19 回合黑方行棋局面（ply 37 奇数 = 黑）
+    const histKeys = []
+    const len = positions.length
+    for (let i = Math.max(0, len - 33); i < len - 1; i++) {
+      histKeys.push(boardKey(positions[i], i % 2 === 0 ? 'red' : 'black'))
+    }
+    const shuttle = generateMoves(root, 'black').find(x => toNotation(x, root) === '車四退一')
+    assertTrue(!!shuttle, '棋谱局面：車四退一 是合法着法（连将场景成立）')
+    const m = findBestMove(root, 'black', 8, 4000, histKeys, 4)
+    assertTrue(m !== null, '引擎规避：黑 AI 有应着')
+    assertTrue(!!m && isLegalMove(root, m.from, m.to), '引擎规避：着法合法',
+      m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
+    const isShuttle = !!m && !!shuttle && m.from.row === shuttle.from.row && m.from.col === shuttle.from.col &&
+      m.to.row === shuttle.to.row && m.to.col === shuttle.to.col
+    assertFalse(isShuttle, '引擎规避：第 2 次连将前不选 車四退一（修复前红）',
+      m ? m.from.row + ',' + m.from.col + '->' + m.to.row + ',' + m.to.col : 'null')
+  }
+}
+
+// ============================================================
 // Summary
 // ============================================================
 console.log('\n' + '='.repeat(50))

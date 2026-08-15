@@ -690,6 +690,16 @@ async function copyNotation() {
   if (ok) haptics.tap()
 }
 
+// AI 着法裁决预演（最后防线）：着法若立即触发重复局面裁决（长将/长捉等）返回裁决，否则 null。
+// applyMove 深拷贝新棋盘、cloneBoard 生成快照，不污染 playedMoves/positions 真实状态。
+function verdictForMove(move: Move) {
+  const after = applyMove(board.value, move)
+  return checkRepetitionViolation(
+    [...playedMoves.value, move],
+    [...positions.value, cloneBoard(after)]
+  )
+}
+
 function scheduleAIMove() {
   if (mode.value !== 'ai') return
   if (gameOver.value) return
@@ -711,14 +721,15 @@ function scheduleAIMove() {
       // 简单固定深度 2；中等深度 4、限 1.2s、深度下限 3；困难迭代加深至多 8 层、限 4s、
       // 深度下限 4（慢设备保底强度，超时前必须完成下限层，总时长硬上限 2×时限）
       // 均传入对局历史 key：AI 不走进长将/长捉判负的着法
-      const move = await requestSearch({
+      const searchParams = {
         board: board.value,
         side: aiSide.value,
         depth: difficulty.value === 'easy' ? 2 : difficulty.value === 'medium' ? 4 : 8,
         timeLimitMs: difficulty.value === 'easy' ? undefined : difficulty.value === 'medium' ? 1200 : 4000,
         minDepth: difficulty.value === 'easy' ? undefined : difficulty.value === 'medium' ? 3 : 4,
         historyKeys: recentHistoryKeys(),
-      }).catch(() => null) // 搜索异常兜底：不悬挂 Promise、不永久锁死「AI 思考中」
+      }
+      let move = await requestSearch(searchParams).catch(() => null) // 搜索异常兜底：不悬挂 Promise、不永久锁死「AI 思考中」
       aiThinking.value = false
       // 过期校验：await 期间可能已悔棋/认输/重开/离开（seq 失效）或轮到玩家
       if (seq !== aiSeq) return
@@ -728,6 +739,25 @@ function scheduleAIMove() {
         return
       }
       if (!gameOver.value && currentSide.value === aiSide.value && mode.value === 'ai') {
+        // 最后防线：着法若会立即触发重复局面裁决，把该局面 key 并入历史重搜一次
+        // （搜索内第 3 次重复分支必然惩罚），杜绝引擎回归时 AI 主动犯规
+        if (verdictForMove(move) !== null) {
+          const after = applyMove(board.value, move)
+          const violationKey = boardKey(after, aiSide.value === 'red' ? 'black' : 'red')
+          move = await requestSearch({
+            ...searchParams,
+            historyKeys: [...searchParams.historyKeys, violationKey],
+          }).catch(() => null)
+          aiThinking.value = false
+          if (seq !== aiSeq) return
+          if (!move) {
+            toast.show('AI 走子出错，请悔棋或重试', '⚠️')
+            return
+          }
+          if (verdictForMove(move) !== null) {
+            toast.show('AI 避让失败，按规则判负', '⚠️')
+          }
+        }
         executeMove(move.from, move.to)
       }
     }, 250)
