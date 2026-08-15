@@ -4,7 +4,8 @@
 // - MVV-LVA 走法排序（吃子按 被害子价值*10 - 攻击子价值 排序）提升剪枝效率
 // - 静态搜索（Quiescence）：叶子节点沿吃子线延伸，消除水平线效应
 //   （避免"吃子后立刻被反吃"的误判；被将时延伸所有应将着法）
-// - 迭代加深 + 可选时限：在时限内逐层加深，超时保留上一层结果
+// - 迭代加深 + 可选时限：在时限内逐层加深，超时保留上一层结果；minDepth 深度下限保证
+//   慢设备上的保底强度（未达下限时延长一个时限周期重试，总时长硬上限 2×时限）
 // - 杀棋距离分：越快将死分越高，避免拖延取胜
 // - 置换表（Transposition Table）：缓存已搜索局面，层间复用，同等时限搜更深
 // - Killer moves + History heuristic：非吃子着法排序增强，提升剪枝效率
@@ -35,15 +36,17 @@ const PIECE_VALUE: Record<PieceType, number> = {
 // 位置加成表（红方视角，黑方镜像）
 const POSITION_BONUS: Record<PieceType, number[][]> = {
   pawn: [
+    // 红方视角正确梯度：越往前（过河→纵深）越值钱；row 7-9 红兵不可达恒为 0。
+    // 修复 P0：旧表方向写反（在家 row 6 最高分、过河反而贬值），导致 AI 全难度不愿挺兵过河。
+    [60, 80, 90, 100, 100, 100, 90, 80, 60],
+    [50, 70, 80, 90, 90, 90, 80, 70, 50],
+    [40, 60, 70, 80, 80, 80, 70, 60, 40],
+    [25, 40, 50, 60, 60, 60, 50, 40, 25],
+    [15, 25, 35, 45, 45, 45, 35, 25, 15],
+    [5, 15, 20, 25, 25, 25, 20, 15, 5],
+    [0, 5, 10, 10, 10, 10, 10, 5, 0],
     [0, 0, 0, 0, 0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [10, 10, 20, 30, 30, 30, 20, 10, 10],
-    [20, 20, 30, 40, 40, 40, 30, 20, 20],
-    [30, 30, 40, 50, 50, 50, 40, 30, 30],
-    [40, 40, 50, 60, 60, 60, 50, 40, 40],
-    [50, 50, 60, 70, 70, 70, 60, 50, 50],
-    [60, 60, 70, 80, 80, 80, 70, 60, 60],
     [0, 0, 0, 0, 0, 0, 0, 0, 0]
   ],
   horse: [
@@ -206,6 +209,16 @@ let searchDeadline = Infinity
 // （复用 SearchTimeout 超时路径，findBestMove 入口重置；不用 terminate 以免丢 TT）
 let cancelRequested = false
 export function cancelSearch(): void { cancelRequested = true }
+
+// 测试导出：清空搜索状态（置换表 / killer / history）。
+// 跨调用状态复用是性能设计（同对局内搜更深），但会让测试的「冷态参照值」
+// 被先前搜索的 TT 污染（浅层直接命中深层 TT 条目返回不同着法）；测试在每个
+// 测量前重置以获得确定性的冷态对照。生产路径不调用。
+export function resetSearchState(): void {
+  tt.clear()
+  killerMoves = Array.from({ length: MAX_PLY }, () => [null, null])
+  historyTable = new Int32Array(2 * ROWS * COLS * ROWS * COLS)
+}
 
 class SearchTimeout extends Error {
   constructor() {
@@ -542,15 +555,24 @@ function negamax(
   searchNodes++
   tickTimeout()
 
-  // 重复局面规避：路径中已出现 2 次 → 视为循环，给判负级强分（AI 不主动走进长将/长捉被判负）。
-  // 当前节点 key 是「上一步走子者」走出的局面：重复 = 该方走出第 3 次出现（长将/长捉判罚点），
-  // 判罚对象是上一步走子者（= 当前 side 的对方）→ 当前 side 视角返回强正分（对方判负己方胜），
-  // 根着法视角取负后为判负级强负分，AI 因此规避长将线（原实现返回负分导致符号反转，AI 反而偏好长将；
-  // 判负分用 MATE 而非 MATE/2：折中分时 AI 必败倾向长将拖延——长将线 -50 万优于被杀线 -100 万）
+  // 重复局面规避（AI 不主动走进长将/长捉被判负）：
+  // 罚分 2*MATE - ply 严格劣于任何真实将杀分（MATE - ply 随层数衰减，败局中可能高于
+  // 「下一步被将死」，AI 会理性选择违规拖延）。
+  // 归属判定按「当前方是否被将」区分长将循环的两种局面（4 步循环含两个交替局面）：
+  // - 被将节点（应将局面，由将军方走出）：违规方 = 将军方 → 当前方得强正分（对方判负）；
+  // - 未被将节点（前置局面，由应将方走出）：违规方 = 当前方 → 强负分。
+  // 旧实现一律归责最后走子方：根局面已在历史中时，前置局面先于将军局面到达第 3 次出现，
+  // 罚分误归应将方、反而奖励将军方；且「连将与送杀同分」时排序可恰好选中连将走满周期。
+  // 因此在被将局面的第 2 次重复即惩罚将军方（再一轮即触发视图长将判负，提前阻断）。
+  // TT 杀棋分校正阈值 |score| >= MATE - MAX_PLY 自动覆盖双倍分（存储剥离/恢复 ply 仍一致）。
   if (enableRep) {
     let repeats = 0
     for (let i = 0; i < repPath.length; i++) {
-      if (repPath[i] === key && ++repeats >= 2) return MATE - ply
+      if (repPath[i] !== key) continue
+      if (++repeats >= 2) {
+        return isInCheckLight(board, side) ? 2 * MATE - ply : -(2 * MATE - ply)
+      }
+      if (isInCheckLight(board, side)) return 2 * MATE - ply
     }
   }
 
@@ -650,15 +672,32 @@ function negamax(
   return best
 }
 
+// ---- 提前出手（early exit）配置 ----
+// 中局 8 层在时限内到不了（实测 5 层 2.5s / 7 层 6.2s / 8 层 8.5s），迭代加深几乎必然耗尽时限；
+// 对大局已定 / 最佳着法多轮稳定的局面继续加深收益趋零，提前终止显著改善响应体验，
+// 焦灼局面（分数接近、着法不稳）不受影响，仍搜满时限保强度。
+export interface EarlyExitOptions {
+  /** 决定性优势：根分 ≥ score 且完成 ≥ minDepth 层即终止；null 关闭。默认 { score: 900, minDepth: 4 } */
+  decisive?: { score: number; minDepth: number } | null
+  /** 着法稳定：连续 runs 层同一最佳着法、完成 ≥ minDepth 层且 |根分| ≥ minAbsScore 即终止；
+   *  minAbsScore 缺省 150、null 表示无分数护栏；null 关闭。默认 { runs: 3, minDepth: 5, minAbsScore: 150 } */
+  stable?: { runs: number; minDepth: number; minAbsScore?: number | null } | null
+}
+
 /**
  * 选择最佳走法（公共接口，兼容旧签名）。
  * @param depth    最大搜索深度（迭代加深的上限）
  * @param timeLimitMs 可选时限：超时后返回已完成深度的最佳着法
+ * @param historyKeys 对局历史局面 key（最近 32 半步，重复局面规避用）
+ * @param minDepth 可选深度下限：超时回退前必须已完成该层（慢设备保底强度；
+ *                 未达标则延长一个时限周期重试，总时长硬上限 2×timeLimitMs）
+ * @param earlyExit 可选提前出手配置（默认开启；见 EarlyExitOptions）
  */
-export function findBestMove(board: Board, side: Side, depth = 3, timeLimitMs?: number, historyKeys?: bigint[]): Move | null {
+export function findBestMove(board: Board, side: Side, depth = 3, timeLimitMs?: number, historyKeys?: bigint[], minDepth = 0, earlyExit?: EarlyExitOptions): Move | null {
   const rootMoves = generateMoves(board, side)
   if (rootMoves.length === 0) return null
   if (rootMoves.length === 1) return rootMoves[0]
+  minDepth = Math.max(0, Math.min(minDepth, depth))
 
   // 搜索状态重置（置换表 / killer / history 跨着法保留复用，同对局内搜更深；
   // 仅当置换表过大时删半清理，避免内存无限增长 + 瞬时性能抖动）
@@ -677,11 +716,20 @@ export function findBestMove(board: Board, side: Side, depth = 3, timeLimitMs?: 
   // 重复局面检测路径：以初始局面为根（根着法后若回到初始局面即可检出）；
   // 对局历史 key 并入路径：根着法后新局面若与历史重复 >= 2 次（即规则的第 3 次
   // 出现，长将/长捉判罚点）→ 搜索第一步即给强负分，AI 不会主动走进长将判负。
-  // 历史 key 由视图层传入（最近 8 个半步，覆盖 checkRepetitionViolation 判定窗口）
+  // 历史 key 由视图层传入（最近 32 个半步，与 checkRepetitionViolation 的 MAX_PERIOD=32 判定窗口一致）
   const rootKey = boardKey(board, side)
   const repPath = historyKeys && historyKeys.length > 0 ? [...historyKeys, rootKey] : [rootKey]
 
-  for (let d = 1; d <= depth; d++) {
+  // 深度下限：未达标时延长搜索重试当前层；绝对硬截止 = 2×timeLimitMs（取消/超硬截止即中断，
+  // 下限为硬截止内的尽力保证，避免慢设备无限等待）
+  const hardDeadline = timeLimitMs !== undefined ? Date.now() + 2 * timeLimitMs : Infinity
+  // 提前出手配置：undefined 用默认值，null 关闭该退出项
+  const decisiveCfg = earlyExit?.decisive === null ? null : (earlyExit?.decisive ?? { score: 900, minDepth: 4 })
+  const stableCfg = earlyExit?.stable === null ? null : (earlyExit?.stable ?? { runs: 3, minDepth: 5, minAbsScore: 150 })
+  let prevBest: Move | null = null
+  let stableRuns = 0
+  let d = 1
+  while (d <= depth) {
     let alpha = -Infinity
     let bestAtDepth: Move | null = null
     let bestScore = -Infinity
@@ -708,17 +756,32 @@ export function findBestMove(board: Board, side: Side, depth = 3, timeLimitMs?: 
         if (score > alpha) alpha = score
       }
     } catch (e) {
-      if (e instanceof SearchTimeout) break // 本层未完成，保留上一层结果
+      if (e instanceof SearchTimeout) {
+        // 已完成深度不足 minDepth 且非取消（取消必须立即中断）且未到硬截止 → 延长一个时限周期重试本层
+        if (d - 1 < minDepth && !cancelRequested && timeLimitMs !== undefined && Date.now() < hardDeadline) {
+          searchDeadline = Math.min(Date.now() + timeLimitMs, hardDeadline)
+          continue
+        }
+        break // 本层未完成，保留上一层结果
+      }
       throw e
     }
 
     if (bestAtDepth) {
+      stableRuns = prevBest && sameMove(prevBest, bestAtDepth) ? stableRuns + 1 : 1
+      prevBest = bestAtDepth
       bestMove = bestAtDepth
       // 上一层最佳着法置顶，提升下一层剪枝效率
       ordered = [bestMove, ...ordered.filter(m => !sameMove(m, bestMove))]
     }
     // 已找到杀棋（或必败），无需再加深
     if (bestScore >= MATE - 1000 || bestScore <= -(MATE - 1000)) break
+    // 提前出手：决定性优势（只在大优时退出；大劣保持深搜寻找翻盘机会）
+    if (decisiveCfg && d >= decisiveCfg.minDepth && bestScore >= decisiveCfg.score) break
+    // 提前出手：最佳着法连续多轮稳定且局面非极均势
+    if (stableCfg && d >= stableCfg.minDepth && stableRuns >= stableCfg.runs &&
+      (stableCfg.minAbsScore == null || Math.abs(bestScore) >= stableCfg.minAbsScore)) break
+    d++
   }
 
   return bestMove

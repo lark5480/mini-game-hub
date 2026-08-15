@@ -3,6 +3,7 @@
 // - cancel：置位引擎内取消标志（不 terminate，保留 TT/killer/history 跨调用状态）
 // - dispose：组件卸载时释放 Worker
 import type { Board, Side, Move } from '@/engine/xiangqi/types'
+import type { EarlyExitOptions } from '@/engine/xiangqi/ai'
 
 export interface SearchParams {
   board: Board
@@ -10,6 +11,10 @@ export interface SearchParams {
   depth: number
   timeLimitMs?: number
   historyKeys: bigint[]
+  /** 深度下限：超时回退前必须完成该层（慢设备保底强度），可选 */
+  minDepth?: number
+  /** 提前出手配置：大局已定/着法稳定时提前终止（默认开启），可选 */
+  earlyExit?: EarlyExitOptions
 }
 
 // 棋盘转纯对象：Vue 响应式代理（Proxy）无法被结构化克隆，postMessage 前必须

@@ -29,7 +29,7 @@
           <span class="mode-desc">与电脑对战</span>
         </button>
       </div>
-      <p class="mode-tip">联机需配置 Supabase（见 .env.example）；未配置会提示。</p>
+      <p class="mode-tip">联机需配置 Supabase（见 .env.example）；未配置会提示。<br/>AI 引擎 {{ XQ_BUILD_TAG }}</p>
     </div>
 
     <!-- 本地双人 -->
@@ -82,12 +82,22 @@
           <span class="count-label">步数</span>
           <span class="count-value">{{ moveCount }}</span>
         </div>
+
+        <div class="captured-row">
+          <span class="count-label">红吃</span>
+          <span class="captured-pieces black-side">{{ capturedByRed }}</span>
+          <span class="count-label">黑吃</span>
+          <span class="captured-pieces red-side">{{ capturedByBlack }}</span>
+        </div>
       </div>
 
       <div v-if="showNotation" class="notation-panel">
         <div class="notation-header">
           <span class="notation-title">棋谱</span>
-          <button class="notation-close" @click="closeNotation">×</button>
+          <div class="notation-actions">
+            <button class="nc-btn" :disabled="notationList.length === 0" @click="copyNotation">复制</button>
+            <button class="notation-close" @click="closeNotation">×</button>
+          </div>
         </div>
         <div class="notation-controls">
           <button class="nc-btn" :disabled="reviewMove === null" @click="goToStart">⏮</button>
@@ -153,9 +163,10 @@
           <button class="start-ai-btn" @click="startAIGame">开始对局</button>
         </div>
 
-        <div class="turn-indicator" :class="{ 'red-turn': currentSide === 'red', 'black-turn': currentSide === 'black' }">
+        <div class="turn-indicator" :class="{ 'red-turn': currentSide === 'red', 'black-turn': currentSide === 'black', thinking: mode === 'ai' && aiThinking }">
           <span class="turn-dot" :class="{ red: currentSide === 'red', black: currentSide === 'black' }"></span>
-          {{ turnLabel }}
+          <span class="turn-label">{{ turnLabel }}</span>
+          <span v-if="mode === 'ai' && aiThinking" class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span>
         </div>
 
         <XiangqiBoard
@@ -201,12 +212,22 @@
           <span class="count-label">步数</span>
           <span class="count-value">{{ moveCount }}</span>
         </div>
+
+        <div class="captured-row">
+          <span class="count-label">红吃</span>
+          <span class="captured-pieces black-side">{{ capturedByRed }}</span>
+          <span class="count-label">黑吃</span>
+          <span class="captured-pieces red-side">{{ capturedByBlack }}</span>
+        </div>
       </div>
 
       <div v-if="showNotation" class="notation-panel">
         <div class="notation-header">
           <span class="notation-title">棋谱</span>
-          <button class="notation-close" @click="closeNotation">×</button>
+          <div class="notation-actions">
+            <button class="nc-btn" :disabled="notationList.length === 0" @click="copyNotation">复制</button>
+            <button class="notation-close" @click="closeNotation">×</button>
+          </div>
         </div>
         <div class="notation-controls">
           <button class="nc-btn" :disabled="reviewMove === null" @click="goToStart">⏮</button>
@@ -264,11 +285,12 @@ import PauseOverlay from '@/components/PauseOverlay.vue'
 import ResumePrompt from '@/components/ResumePrompt.vue'
 import XiangqiBoard from '@/components/XiangqiBoard.vue'
 import XiangqiOnlineView from '@/views/XiangqiOnlineView.vue'
-import type { Board, Position, Move, Side } from '@/engine/xiangqi/types'
+import type { Board, Position, Move, Side, PieceType } from '@/engine/xiangqi/types'
 import { cloneBoard } from '@/engine/xiangqi/types'
 import { initialBoard, generateMoves, applyMove, isInCheck, getGameStatus, classifyMove, isPinned, toNotation, checkRepetitionViolation } from '@/engine/xiangqi/rules'
 import { boardKey } from '@/engine/xiangqi/ai'
 import { lookupOpening } from '@/engine/xiangqi/openings'
+import { copyText } from '@/lib/clipboard'
 
 type GameMode = 'local' | 'online' | 'ai'
 type AISide = 'red' | 'black'
@@ -324,10 +346,27 @@ const violationReason = ref<'perpetual_check' | 'perpetual_chase' | 'perpetual_m
 const drawByRepetition = ref<'mutual_attack' | 'mutual_idle' | null>(null)
 const staleMated = ref(false) // 困毙（无子可走）判负标志：区别于将死，用于结果文案
 const { paused, resume: resumeGame } = useGamePause({
-  canPause: () => mode.value !== 'online' && mode.value !== 'ai' && !gameOver.value && result.value === null,
+  // AI 模式同样支持暂停（失焦/P/Esc）：手机切后台或来电话时暂停 AI 思考与对局
+  canPause: () => mode.value !== 'online' && !gameOver.value && result.value === null,
+  // 暂停：取消进行中的 AI 搜索/待执行调度（恢复时按需重新调度）
+  onPause: () => {
+    aiSeq++
+    cancel()
+    if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
+    aiThinking.value = false
+  },
+  // 恢复：轮到 AI 时重新调度（玩家回合无需动作）
+  onResume: () => {
+    if (mode.value === 'ai' && !gameOver.value && currentSide.value === aiSide.value) {
+      scheduleAIMove()
+    }
+  },
 })
 
 // ---- 模式相关 UI ----
+// 构建标记：每次引擎/视图逻辑改动递增。显示在模式屏与 AI 对局标题栏，
+// 用于核对运行版本（排查「旧构建仍在生效」类问题）。
+const XQ_BUILD_TAG = 'v9'
 const layoutTitle = computed(() => mode.value === 'online' ? '中国象棋·联机' : '中国象棋')
 const layoutAccent = computed(() => mode.value === 'online' ? '#FF9E00' : '#FF4D4D')
 const layoutGradient = computed(() => mode.value === 'online' ? '#B967FF' : '#FF6B6B')
@@ -341,7 +380,7 @@ const layoutHints = computed(() => {
 const layoutInfoItems = computed(() => {
   if (mode.value === 'local') return [{ label: '步数', value: moveCount.value }]
   if (mode.value === 'online') return [{ label: '模式', value: '联机对战' }]
-  if (mode.value === 'ai') return [{ label: '难度', value: difficulty.value === 'easy' ? '简单' : difficulty.value === 'medium' ? '中等' : '困难' }, { label: 'AI', value: aiSide.value === 'red' ? 'AI 先手' : '你先手' }]
+  if (mode.value === 'ai') return [{ label: '难度', value: difficulty.value === 'easy' ? '简单' : difficulty.value === 'medium' ? '中等' : '困难' }, { label: 'AI', value: aiSide.value === 'red' ? 'AI 先手' : '你先手' }, { label: '引擎', value: XQ_BUILD_TAG }]
   return [{ label: '模式', value: '选择中' }]
 })
 const layoutTutorial = computed(() =>
@@ -362,6 +401,17 @@ const notationList = computed(() => {
   }))
 })
 
+// ---- 棋盒：双方已吃棋子（数据源 playedMoves.captured，与悔棋/重开同步） ----
+const RED_GLYPH: Record<PieceType, string> = { king: '帥', advisor: '仕', elephant: '相', horse: '馬', rook: '車', cannon: '炮', pawn: '兵' }
+const BLACK_GLYPH: Record<PieceType, string> = { king: '將', advisor: '士', elephant: '象', horse: '馬', rook: '車', cannon: '砲', pawn: '卒' }
+// 红方吃到的子（黑方棋子）、黑方吃到的子（红方棋子）
+const capturedByRed = computed(() =>
+  playedMoves.value.filter(m => m.captured && m.captured.side === 'black')
+    .map(m => BLACK_GLYPH[m.captured!.type]).join('') || '—')
+const capturedByBlack = computed(() =>
+  playedMoves.value.filter(m => m.captured && m.captured.side === 'red')
+    .map(m => RED_GLYPH[m.captured!.type]).join('') || '—')
+
 const highlightPositions = computed(() => {
   if (reviewMove.value === null) return null
   const move = gameRecord.value.moves[reviewMove.value]
@@ -375,7 +425,7 @@ const turnLabel = computed(() => {
     if (result.value === 'black-win') return '黑方获胜！'
     return '和棋'
   }
-  if (mode.value === 'ai' && aiThinking.value) return 'AI 思考中...'
+  if (mode.value === 'ai' && aiThinking.value) return 'AI 思考中'
   if (mode.value === 'ai') {
     return currentSide.value === aiSide.value ? 'AI 回合' : '你的回合'
   }
@@ -465,21 +515,24 @@ async function showHint() {
     haptics.tap()
     return
   }
-  // 提示与 AI 同强度：简单固定深度 2，中等深度 4，困难迭代加深（限 2s 保证响应，异步不阻塞 UI）
-  // 均传入对局历史 key：提示不走进长将/长捉判负的着法
+  // 提示与 AI 走子完全同参数（深度/时限/下限）：保证「提示 = AI 下一步会走的棋」，
+  // 消除「提示建议的棋 AI 自己不走」的困惑；响应性由引擎提前出手（决定性/稳定局面早退）兜底
   const hint = await requestSearch({
     board: board.value,
     side: humanSide.value,
     depth: difficulty.value === 'easy' ? 2 : difficulty.value === 'medium' ? 4 : 8,
-    timeLimitMs: difficulty.value === 'easy' ? undefined : difficulty.value === 'medium' ? 1200 : 2000,
+    timeLimitMs: difficulty.value === 'easy' ? undefined : difficulty.value === 'medium' ? 1200 : 4000,
+    minDepth: difficulty.value === 'easy' ? undefined : difficulty.value === 'medium' ? 3 : 4,
     historyKeys: recentHistoryKeys(),
-  })
+  }).catch(() => null) // 搜索异常兜底：不悬挂 Promise、不永久锁死「提示中」
   if (seq !== hintSeq) return // 过期（又点/走子/取消），丢弃
   hintThinking.value = false
   if (hint) {
     hintMove.value = hint
     sound.select()
     haptics.tap()
+  } else {
+    toast.show('提示不可用，请稍后重试', '⚠️')
   }
 }
 
@@ -625,6 +678,31 @@ function closeNotation() {
   if (gameOver.value) gameOverDialog.value = true
 }
 
+// 复制棋谱：按回合组包中文记谱（红方中文数字、黑方阿拉伯数字均由 toNotation 保证）
+async function copyNotation() {
+  if (notationList.value.length === 0) return
+  const rounds: string[] = []
+  for (let i = 0; i < notationList.value.length; i += 2) {
+    const round = Math.floor(i / 2) + 1
+    const red = notationList.value[i]?.notation || ''
+    const black = notationList.value[i + 1]?.notation || ''
+    rounds.push(`${round}. ${red}${black ? ' ' + black : ''}`)
+  }
+  const ok = await copyText(rounds.join('\n'))
+  toast.show(ok ? '棋谱已复制到剪贴板' : '复制失败，请手动选择复制', ok ? '📋' : '⚠️')
+  if (ok) haptics.tap()
+}
+
+// AI 着法裁决预演（最后防线）：着法若立即触发重复局面裁决（长将/长捉等）返回裁决，否则 null。
+// applyMove 深拷贝新棋盘、cloneBoard 生成快照，不污染 playedMoves/positions 真实状态。
+function verdictForMove(move: Move) {
+  const after = applyMove(board.value, move)
+  return checkRepetitionViolation(
+    [...playedMoves.value, move],
+    [...positions.value, cloneBoard(after)]
+  )
+}
+
 function scheduleAIMove() {
   if (mode.value !== 'ai') return
   if (gameOver.value) return
@@ -643,22 +721,49 @@ function scheduleAIMove() {
         }
         return
       }
-      // 简单固定深度 2；中等深度 4、限 1.2s；困难迭代加深至多 8 层、限 4s（超时回退已完成深度的最佳着法）
+      // 简单固定深度 2；中等深度 4、限 1.2s、深度下限 3；困难迭代加深至多 8 层、限 4s、
+      // 深度下限 4（慢设备保底强度，超时前必须完成下限层，总时长硬上限 2×时限）
       // 均传入对局历史 key：AI 不走进长将/长捉判负的着法
-      const move = await requestSearch({
+      const searchParams = {
         board: board.value,
         side: aiSide.value,
         depth: difficulty.value === 'easy' ? 2 : difficulty.value === 'medium' ? 4 : 8,
         timeLimitMs: difficulty.value === 'easy' ? undefined : difficulty.value === 'medium' ? 1200 : 4000,
+        minDepth: difficulty.value === 'easy' ? undefined : difficulty.value === 'medium' ? 3 : 4,
         historyKeys: recentHistoryKeys(),
-      })
+      }
+      let move = await requestSearch(searchParams).catch(() => null) // 搜索异常兜底：不悬挂 Promise、不永久锁死「AI 思考中」
       aiThinking.value = false
       // 过期校验：await 期间可能已悔棋/认输/重开/离开（seq 失效）或轮到玩家
       if (seq !== aiSeq) return
-      if (move && !gameOver.value && currentSide.value === aiSide.value && mode.value === 'ai') {
+      if (!move) {
+        // 无结果（Worker 异常/被取消）：复位状态并提示，避免无声锁死
+        toast.show('AI 走子出错，请悔棋或重试', '⚠️')
+        return
+      }
+      if (!gameOver.value && currentSide.value === aiSide.value && mode.value === 'ai') {
+        // 最后防线：着法若会立即触发重复局面裁决，把该局面 key 并入历史重搜一次
+        // （搜索内第 3 次重复分支必然惩罚），杜绝引擎回归时 AI 主动犯规
+        if (verdictForMove(move) !== null) {
+          const after = applyMove(board.value, move)
+          const violationKey = boardKey(after, aiSide.value === 'red' ? 'black' : 'red')
+          move = await requestSearch({
+            ...searchParams,
+            historyKeys: [...searchParams.historyKeys, violationKey],
+          }).catch(() => null)
+          aiThinking.value = false
+          if (seq !== aiSeq) return
+          if (!move) {
+            toast.show('AI 走子出错，请悔棋或重试', '⚠️')
+            return
+          }
+          if (verdictForMove(move) !== null) {
+            toast.show('AI 避让失败，按规则判负', '⚠️')
+          }
+        }
         executeMove(move.from, move.to)
       }
-    }, 400)
+    }, 250)
   }
 }
 
@@ -848,6 +953,7 @@ function undoMove() {
   if (history.value.length === 0 || gameOver.value) return
   // 人机模式：撤销 AI 一步 + 玩家一步，确保回到玩家回合
   const stepsToUndo = mode.value === 'ai' ? 2 : 1
+  let popped = 0
   for (let i = 0; i < stepsToUndo && history.value.length > 0; i++) {
     const prev = history.value.pop()!
     board.value = prev.board
@@ -857,6 +963,13 @@ function undoMove() {
     playedMoves.value.pop()
     positions.value.pop()
     notations.value.pop()
+    popped++
+  }
+  // 棋谱记录同步（修复：悔棋后棋谱保留已撤销着法，点旧条目 board=undefined 渲染崩溃）
+  if (popped > 0) {
+    gameRecord.value.moves.splice(gameRecord.value.moves.length - popped, popped)
+    gameRecord.value.sides.splice(gameRecord.value.sides.length - popped, popped)
+    localStorage.setItem('xiangqi_record', JSON.stringify({ ...gameRecord.value, timestamp: Date.now() }))
   }
   clearSelection()
   reviewMove.value = null
@@ -868,6 +981,10 @@ function undoMove() {
   aiSeq++ // 使进行中的 AI 搜索过期
   cancel()
   if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
+  // 修复：悔棋后若轮到 AI（AI 执红时开局后悔棋即触发），重新调度，避免棋盘冻结在「AI 回合」
+  if (mode.value === 'ai' && !gameOver.value && currentSide.value === aiSide.value) {
+    scheduleAIMove()
+  }
   sound.select()
   haptics.light()
 }
@@ -1045,6 +1162,25 @@ function onRestart() {
   border-radius: 30px;
   transition: all 0.3s ease;
 }
+.turn-label {
+  white-space: nowrap;
+}
+.thinking-dots {
+  display: inline-flex;
+  gap: 3px;
+  align-items: baseline;
+}
+.thinking-dots i {
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
+  animation: thinking-blink 1.2s infinite;
+}
+.thinking-dots i:nth-child(2) { animation-delay: 0.2s }
+.thinking-dots i:nth-child(3) { animation-delay: 0.4s }
 .turn-indicator.black-turn {
   background: rgba(44, 62, 80, 0.15);
   border-color: rgba(44, 62, 80, 0.5);
@@ -1104,6 +1240,32 @@ function onRestart() {
   font-size: 1.2em;
   font-weight: 700;
   color: #fff;
+}
+
+.captured-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  font-size: 0.95em;
+  max-width: 100%;
+  overflow: hidden;
+}
+.captured-pieces {
+  letter-spacing: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 20px;
+}
+.captured-pieces.black-side {
+  color: #9aa0b5;
+}
+.captured-pieces.red-side {
+  color: #FF6B6B;
 }
 
 .dialog-btn {
@@ -1251,6 +1413,11 @@ function onRestart() {
   font-size: 0.95em;
   font-weight: 600;
   color: #fff;
+}
+.notation-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .notation-close {
   background: none;
