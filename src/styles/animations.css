@@ -209,6 +209,12 @@
   100% { transform: translateX(-50%) scale(1); opacity: 1; }
 }
 
+/* ---------- AI 思考省略号（象棋） ---------- */
+@keyframes thinking-blink {
+  0%, 60%, 100% { opacity: 0 }
+  30% { opacity: 1 }
+}
+
 /* ---------- 可访问性：prefers-reduced-motion ---------- */
 @media (prefers-reduced-motion: reduce) {
   *,

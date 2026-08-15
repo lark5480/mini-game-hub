@@ -82,6 +82,13 @@
           <span class="count-label">步数</span>
           <span class="count-value">{{ moveCount }}</span>
         </div>
+
+        <div class="captured-row">
+          <span class="count-label">红吃</span>
+          <span class="captured-pieces black-side">{{ capturedByRed }}</span>
+          <span class="count-label">黑吃</span>
+          <span class="captured-pieces red-side">{{ capturedByBlack }}</span>
+        </div>
       </div>
 
       <div v-if="showNotation" class="notation-panel">
@@ -156,9 +163,10 @@
           <button class="start-ai-btn" @click="startAIGame">开始对局</button>
         </div>
 
-        <div class="turn-indicator" :class="{ 'red-turn': currentSide === 'red', 'black-turn': currentSide === 'black' }">
+        <div class="turn-indicator" :class="{ 'red-turn': currentSide === 'red', 'black-turn': currentSide === 'black', thinking: mode === 'ai' && aiThinking }">
           <span class="turn-dot" :class="{ red: currentSide === 'red', black: currentSide === 'black' }"></span>
-          {{ turnLabel }}
+          <span class="turn-label">{{ turnLabel }}</span>
+          <span v-if="mode === 'ai' && aiThinking" class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span>
         </div>
 
         <XiangqiBoard
@@ -203,6 +211,13 @@
         <div class="move-count">
           <span class="count-label">步数</span>
           <span class="count-value">{{ moveCount }}</span>
+        </div>
+
+        <div class="captured-row">
+          <span class="count-label">红吃</span>
+          <span class="captured-pieces black-side">{{ capturedByRed }}</span>
+          <span class="count-label">黑吃</span>
+          <span class="captured-pieces red-side">{{ capturedByBlack }}</span>
         </div>
       </div>
 
@@ -270,7 +285,7 @@ import PauseOverlay from '@/components/PauseOverlay.vue'
 import ResumePrompt from '@/components/ResumePrompt.vue'
 import XiangqiBoard from '@/components/XiangqiBoard.vue'
 import XiangqiOnlineView from '@/views/XiangqiOnlineView.vue'
-import type { Board, Position, Move, Side } from '@/engine/xiangqi/types'
+import type { Board, Position, Move, Side, PieceType } from '@/engine/xiangqi/types'
 import { cloneBoard } from '@/engine/xiangqi/types'
 import { initialBoard, generateMoves, applyMove, isInCheck, getGameStatus, classifyMove, isPinned, toNotation, checkRepetitionViolation } from '@/engine/xiangqi/rules'
 import { boardKey } from '@/engine/xiangqi/ai'
@@ -331,7 +346,21 @@ const violationReason = ref<'perpetual_check' | 'perpetual_chase' | 'perpetual_m
 const drawByRepetition = ref<'mutual_attack' | 'mutual_idle' | null>(null)
 const staleMated = ref(false) // 困毙（无子可走）判负标志：区别于将死，用于结果文案
 const { paused, resume: resumeGame } = useGamePause({
-  canPause: () => mode.value !== 'online' && mode.value !== 'ai' && !gameOver.value && result.value === null,
+  // AI 模式同样支持暂停（失焦/P/Esc）：手机切后台或来电话时暂停 AI 思考与对局
+  canPause: () => mode.value !== 'online' && !gameOver.value && result.value === null,
+  // 暂停：取消进行中的 AI 搜索/待执行调度（恢复时按需重新调度）
+  onPause: () => {
+    aiSeq++
+    cancel()
+    if (aiTimer) { clearTimeout(aiTimer); aiTimer = null }
+    aiThinking.value = false
+  },
+  // 恢复：轮到 AI 时重新调度（玩家回合无需动作）
+  onResume: () => {
+    if (mode.value === 'ai' && !gameOver.value && currentSide.value === aiSide.value) {
+      scheduleAIMove()
+    }
+  },
 })
 
 // ---- 模式相关 UI ----
@@ -369,6 +398,17 @@ const notationList = computed(() => {
   }))
 })
 
+// ---- 棋盒：双方已吃棋子（数据源 playedMoves.captured，与悔棋/重开同步） ----
+const RED_GLYPH: Record<PieceType, string> = { king: '帥', advisor: '仕', elephant: '相', horse: '馬', rook: '車', cannon: '炮', pawn: '兵' }
+const BLACK_GLYPH: Record<PieceType, string> = { king: '將', advisor: '士', elephant: '象', horse: '馬', rook: '車', cannon: '砲', pawn: '卒' }
+// 红方吃到的子（黑方棋子）、黑方吃到的子（红方棋子）
+const capturedByRed = computed(() =>
+  playedMoves.value.filter(m => m.captured && m.captured.side === 'black')
+    .map(m => BLACK_GLYPH[m.captured!.type]).join('') || '—')
+const capturedByBlack = computed(() =>
+  playedMoves.value.filter(m => m.captured && m.captured.side === 'red')
+    .map(m => RED_GLYPH[m.captured!.type]).join('') || '—')
+
 const highlightPositions = computed(() => {
   if (reviewMove.value === null) return null
   const move = gameRecord.value.moves[reviewMove.value]
@@ -382,7 +422,7 @@ const turnLabel = computed(() => {
     if (result.value === 'black-win') return '黑方获胜！'
     return '和棋'
   }
-  if (mode.value === 'ai' && aiThinking.value) return 'AI 思考中...'
+  if (mode.value === 'ai' && aiThinking.value) return 'AI 思考中'
   if (mode.value === 'ai') {
     return currentSide.value === aiSide.value ? 'AI 回合' : '你的回合'
   }
@@ -472,14 +512,14 @@ async function showHint() {
     haptics.tap()
     return
   }
-  // 提示与 AI 同强度：简单固定深度 2，中等深度 4，困难迭代加深（限 2s 保证响应，异步不阻塞 UI）
-  // 中/困难加深度下限 3（提示与走子强度的慢设备保底）；均传入对局历史 key：提示不走进长将/长捉判负的着法
+  // 提示与 AI 走子完全同参数（深度/时限/下限）：保证「提示 = AI 下一步会走的棋」，
+  // 消除「提示建议的棋 AI 自己不走」的困惑；响应性由引擎提前出手（决定性/稳定局面早退）兜底
   const hint = await requestSearch({
     board: board.value,
     side: humanSide.value,
     depth: difficulty.value === 'easy' ? 2 : difficulty.value === 'medium' ? 4 : 8,
-    timeLimitMs: difficulty.value === 'easy' ? undefined : difficulty.value === 'medium' ? 1200 : 2000,
-    minDepth: difficulty.value === 'easy' ? undefined : 3,
+    timeLimitMs: difficulty.value === 'easy' ? undefined : difficulty.value === 'medium' ? 1200 : 4000,
+    minDepth: difficulty.value === 'easy' ? undefined : difficulty.value === 'medium' ? 3 : 4,
     historyKeys: recentHistoryKeys(),
   }).catch(() => null) // 搜索异常兜底：不悬挂 Promise、不永久锁死「提示中」
   if (seq !== hintSeq) return // 过期（又点/走子/取消），丢弃
@@ -690,7 +730,7 @@ function scheduleAIMove() {
       if (!gameOver.value && currentSide.value === aiSide.value && mode.value === 'ai') {
         executeMove(move.from, move.to)
       }
-    }, 400)
+    }, 250)
   }
 }
 
@@ -1089,6 +1129,25 @@ function onRestart() {
   border-radius: 30px;
   transition: all 0.3s ease;
 }
+.turn-label {
+  white-space: nowrap;
+}
+.thinking-dots {
+  display: inline-flex;
+  gap: 3px;
+  align-items: baseline;
+}
+.thinking-dots i {
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
+  animation: thinking-blink 1.2s infinite;
+}
+.thinking-dots i:nth-child(2) { animation-delay: 0.2s }
+.thinking-dots i:nth-child(3) { animation-delay: 0.4s }
 .turn-indicator.black-turn {
   background: rgba(44, 62, 80, 0.15);
   border-color: rgba(44, 62, 80, 0.5);
@@ -1148,6 +1207,32 @@ function onRestart() {
   font-size: 1.2em;
   font-weight: 700;
   color: #fff;
+}
+
+.captured-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  font-size: 0.95em;
+  max-width: 100%;
+  overflow: hidden;
+}
+.captured-pieces {
+  letter-spacing: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 20px;
+}
+.captured-pieces.black-side {
+  color: #9aa0b5;
+}
+.captured-pieces.red-side {
+  color: #FF6B6B;
 }
 
 .dialog-btn {
