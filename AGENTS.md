@@ -83,7 +83,7 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 - 引擎在 `src/engine/xiangqi/`（纯 TS 零依赖：`types/rules/ai/openings/notation`），**新增引擎能力先改这里 + 在 `tests/test-xiangqi.cjs` 补断言**（`node tests/test-xiangqi.cjs` 直接跑，自动 tsc 编译；测试构造局面必须棋规合法——走子不送将）
 - 搜索必须走 `useXiangqiAI`（Web Worker，主线程不阻塞）；**postMessage 前棋盘必须 `toPlainBoard` 深拷贝**（Vue 响应式 Proxy 无法结构化克隆，历史 P0）；禁止在主线程同步搜索
 - AI 走子/提示统一先查 `lookupOpening`（开局库命中零延迟）→ 未命中才进 Worker 搜索
-- 重复局面裁决 `checkRepetitionViolation`（长将/长捉/长杀/长打，周期 4..32 半步）是胜负判定一环；视图 AI 历史窗口 `recentHistoryKeys` 必须与裁决窗口一致（32 半步），否则 AI 长打规避失效
+- 重复局面裁决 `checkRepetitionViolation`（长将/长捉/长杀/长打）是胜负判定一环；周期扫描范围与视图 AI 历史窗口一致性约束见 `rules.ts` 的 `MAX_PERIOD` 注释与 `XiangqiView.vue` 的 `recentHistoryKeys` 注释（改窗口须两处同步，否则 AI 长打规避失效）
 - 评估热路径纪律：`evaluateBoard` 每叶子调用，禁止走法生成/二次全盘扫描；结构评估项必须在单遍扫描内顺带收集（参考 R2 性能教训）
 - 棋盘渲染用 `XiangqiBoard`（Canvas 2D），联机黑方视角用 `flipped` prop
 - 引擎接口变更（`rules.ts` / `ai.ts` 导出）需同步测试回归；完整架构事实见 [system_design.md](./docs/system_design.md) 的「中国象棋引擎」段
@@ -94,60 +94,13 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 
 > 2048 和连连看支持中途提交分数。
 
-## 多 Agent 协作工作流（Claude + Codex）
+## 变更纪律（工具无关）
 
-角色分工：Claude 负责计划与审查，Codex 负责按计划执行。循环流程：Claude 写计划 → Codex 执行 → Claude review → 出修复方案 → Codex 修复 → Claude 再 review → 通过后提交。
+> 适用于任何 agent 组合——单 agent 从头做到尾、或“规划者↔执行者”跨工具接力（任一方可是 Claude / Qoder / CodeBuddy / 人）均可。不绑定特定工具或角色名。
 
-### 交接机制（硬规则）
-
-- 交接物是 git diff：Codex 执行完**不 commit**，只写文件；Claude review 时通过 `git diff` 查看未提交的改动，不全量重读代码；review 通过后由 Codex 一次性 commit。**P0/P1 未清零前禁止 commit**（commit = 验收合格，不是"我写完了"）
-- 严格串行：同一文件严格串行（Claude 和 Codex 不同时改同一文件），不同文件可并行；Claude review 时必须基于已冻结的文件集合
-- 计划必须"可执行"：写清文件路径、修改点、验收标准、review checklist（模板见 [docs/ai-workflow/TEMPLATE.md](./docs/ai-workflow/TEMPLATE.md)）
-- **任务文件使用方式**：一任务一文件 `docs/ai-workflow/tasks/<date>-<slug>.md`，创建时从模板骨架 [docs/ai-workflow/TEMPLATE.md](./docs/ai-workflow/TEMPLATE.md) 复制初始态；**不清空、不回填**，历史天然归档；当前任务由 `docs/ai-workflow/state.json`（current_task/phase/round）指明，current_task 取值为任务文件名去 `.md`（如 `2026-08-06-example`）；Codex 执行后更新勾选与交接记录，Claude review 结果写入同一文件；任务提交后将 state.json 的 current_task 置 null
-- 每轮交接时，当前 agent 必须更新任务文件的状态勾选，避免基于过时计划判断
-- 审查依据 = 本文件硬规则 + 任务文件验收标准，不凭感觉
-- **分歧兜底**：Claude 对 P0/P1 有最终裁定权；Codex 认为计划有误时，先按原计划执行再在任务文件记录异议，不擅自跳步
-
-### 任务模式（粗细双模式）
-
-Claude 创建计划时根据任务规模选择模式，在任务文件顶部声明：
-
-| 维度 | 细模式（micro） | 粗模式（macro） |
-|------|----------------|-----------------|
-| 适用场景 | ≤ 50 行改动、bug 修复、单文件修改 | 新游戏、多文件重构、架构级变更 |
-| 文件级修改点 | 表格：文件 + 具体改动 + 完成勾选 | 文字描述：改哪些模块、不改哪些 |
-| 实现细节 | 精确到行号 + 改前/改后代码片段 | 只给约束（"必须复用 X"、"禁止新建 Y"） |
-| Review Checklist 重点 | 正确性：逻辑、空安全、build | 架构合规：分层、复用、命名 |
-| Codex 自由度 | 按指令执行，不改逻辑 | 自主决定实现细节，Claude 只验收结果 |
-
-### Review 四级分级标准
-
-Review 结果按严重度分级，Codex 根据级别决定处理方式：
-
-| 级别 | 标识 | 含义 | 处理方式 | 典型示例 |
-|------|------|------|---------|---------|
-| P0 正确性 | 🔴 | 逻辑/渲染/数据错误 | 阻塞，Codex 必须修 | 飘字坐标偏移、得分计算错误、空指针 |
-| P1 规范 | 🟡 | 违反 AGENTS.md 硬规则 | 阻塞，Codex 必须修 | 新建了本应复用的 composable、未用 GameLayout |
-| P2 打磨 | 🔵 | 风格/微优化、零风险 | 不进 backlog，Codex 顺手修，跟主任务同一 commit（message 注明 `+ 顺手修 xxx`）；Claude review 时对 P2 清单逐项核对，每条须为「已修」或「明确跳过 + 理由」，不允许静默遗漏 | 单双引号、冗余媒体查询、未使用变量 |
-| P3 可选 | ⚪ | 后续可做的改进 | 进 backlog（`docs/ai-workflow/BACKLOG.md`，写 review 的一方负责登记） | 动画曲线优化、新增触觉反馈 |
-
-### 当前执行模式
-
-手动传话（codex 插件已卸载，不依赖自动调度）：
-
-1. Claude 创建任务文件并更新 state.json → 运行 `/codex-plan-exec` 生成执行 prompt → 用户复制到桌面端 Codex
-2. Codex 执行（跑 `npm run build` 确认零错误，不 commit）→ 告知"跑完了"
-3. Claude `git diff` 审查 → 有 P0/P1 → 用户传修复指令给 Codex → 清零后 Codex commit
-
-`/codex-plan-exec` 会读 state.json 指明的当前任务文件，按 gpt-5-4-prompting 约定生成结构化 prompt（含 `<task>` / `<prereqs>` / `<verification_loop>` / `<grounding_rules>` / `<delivery_report>`），输出到终端供复制。
-
-### 终止条件
-
-P0 + P1 清零 + P2 已修或明确跳过 + P3 已登记 BACKLOG.md → 可提交。P0/P1 清零即提交，不限制轮数。
-
-### 回滚机制
-
-提交后发现 P0/P1（review 未覆盖的盲区）→ `git revert` 回滚，不走修复循环；revert 后重新走计划。
+- **大改前先写意图**：改哪些文件、验收标准，写在一处即可（PR 描述 / commit message / 一个临时清单），做完对照勾销。不为流程专门建文档。
+- **审查按严重度排序**：🔴 正确性/数据错误 → 🟡 违反本规范 → 🔵 风格打磨 → ⚪ 可选优化。**前两级未清零不提交**（commit = 验收合格，不是“我写完了”）；提交后发现 🔴/🟡 用 `git revert`，不另走修复循环。
+- **产出归位**：⚪ 可选优化落 [docs/ai-workflow/BACKLOG.md](./docs/ai-workflow/BACKLOG.md)；踩过的 🔴/🟡 根因能固化成测试断言 / `npm run lint:conventions` 检查就优先固化，其余记 [docs/ai-workflow/knowledge.md](./docs/ai-workflow/knowledge.md)。
 
 ## 成就系统（新增成就操作）
 
