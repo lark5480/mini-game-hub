@@ -95,87 +95,18 @@ npm run preview
 
 ```
 game-collection/
-├── src/
-│   ├── components/          # 公共组件
-│   │   ├── GameLayout.vue         # 游戏布局组件
-│   │   ├── GameDialog.vue         # 游戏对话框（带过渡动画）
-│   │   ├── DirectionPad.vue       # 方向控制键盘
-│   │   ├── LeaderboardOverlay.vue  # 排行榜提交弹窗（带过渡动画 + 重试按钮）
-│   │   ├── LeaderboardStrip.vue   # 内嵌排行榜条
-│   │   ├── GameToast.vue          # 成就解锁 Toast（带过渡动画 + safe-area）
-│   │   ├── PauseOverlay.vue       # 暂停遮罩（带过渡动画）
-│   │   ├── ResumePrompt.vue       # 继续/重开选择弹窗（带过渡动画）
-│   │   ├── ScoreFloat.vue         # 浮动分数动画（"+10" 等）
-│   │   ├── XiangqiBoard.vue       # 中国象棋棋盘（Canvas 渲染 + 点击交互）
-│   │   └── WhackAMoleBoard.vue    # 打地鼠棋盘
-│   ├── composables/         # 组合式函数
-│   │   ├── useGameKeyboard.ts  # 键盘输入处理（支持 repeat 长按连发 + isDown 查询）
-│   │   ├── useGameLoop.ts      # 游戏循环管理（暂停停 rAF + dt clamp）
-│   │   ├── useSound.ts         # 音效系统（Web Audio API，23+ 预设）
-│   │   ├── useLeaderboard.ts   # 排行榜数据（Supabase，5s 超时 + 错误映射）
-│   │   ├── useToast.ts         # Toast 通知管理
-│   │   ├── useAutoPause.ts     # 失焦自动暂停
-│   │   ├── useHaptics.ts       # 触觉反馈（移动端震动）
-│   │   ├── useScoreFloats.ts   # 浮动分数堆叠管理
-│   │   ├── useGameSave.ts      # 存档/读档/继续游戏
-│   │   ├── useAutoSave.ts      # 自动保存（300ms 节流）
-│   │   ├── useGameOver.ts      # 游戏结束统一处理（新记录 + 成就提示）
-│   │   ├── useGamePause.ts     # 统一的暂停/恢复（P/Esc + 失焦 + ResumePrompt）
-│   │   ├── useSwipe.ts         # 移动端滑动手势
-│   │   ├── useRealtimeRoom.ts  # 联机房间基础（井字棋/象棋双人）
-│   │   ├── useRaceRoom.ts      # 打地鼠竞速房间
-│   │   └── useXiangqiAI.ts     # 象棋 AI 调度器（Web Worker 搜索 + 取消协议）
-│   ├── router/              # 路由配置（从 GAMES 注册表循环生成）
-│   │   └── index.ts
-│   ├── lib/
-│   │   ├── supabase.ts       # Supabase 客户端
-│   │   ├── games.ts          # 🎮 游戏注册表 — 单一数据源（新增游戏第一步）
-│   │   ├── linkGame.ts       # 连连看算法（消除判定/洗牌）
-│   │   ├── rank.ts           # 排行榜排名工具
-│   │   └── clipboard.ts      # 剪贴板复制工具
-│   ├── engine/xiangqi/       # 中国象棋引擎（纯 TS，零依赖）
-│   │   ├── types.ts          # 类型定义（Board / Piece / Move / Side）
-│   │   ├── rules.ts          # 走法生成/合法性/将死困毙/重复局面裁决
-│   │   ├── ai.ts             # 搜索（negamax + alpha-beta + TT）+ 评估
-│   │   ├── openings.ts       # 开局库（UCCI 主变查表 + 构建期自检）
-│   │   └── notation.ts       # 中国象棋记谱（车五进三 等）
-│   ├── workers/xiangqi-ai.worker.ts  # 象棋 AI 搜索 Worker（保留 TT 跨调用）
-│   ├── stores/               # 状态管理
-│   │   ├── game.ts            # 游戏本地分数管理（分数自动引用 defaultScoreKeys）
-│   │   └── achievements.ts    # 成就系统管理（解锁时自动触发音效+震动）
-│   ├── styles/              # 全局样式
-│   │   ├── game-theme.css    # 主题变量 + 间距 token
-│   │   └── animations.css    # 共享动画 keyframes（弹窗/路由/Toast）+ focus-visible + reduced-motion
-│   ├── views/               # 游戏页面
-│   │   ├── HomeView.vue      # 首页 - 游戏选择（从 GAMES 派生卡片列表）
-│   │   ├── AchievementsView.vue # 成就展示页
-│   │   ├── SokobanView.vue   # 推箱子
-│   │   ├── LinkGameView.vue  # 连连看
-│   │   ├── CatchFruitView.vue # 接水果
-│   │   ├── SnakeView.vue     # 贪吃蛇
-│   │   ├── TetrisView.vue    # 俄罗斯方块
-│   │   ├── BreakoutView.vue  # 弹球打砖块（支持触摸拖拽挡板）
-│   │   ├── Game2048View.vue  # 2048
-│   │   ├── WhackAMoleView.vue # 打地鼠（已补震动反馈）
-│   │   ├── WhackAMoleRaceView.vue # 打地鼠·竞速（在线对战）
-│   │   ├── SimonView.vue    # 西蒙记忆灯
-│   │   ├── TicTacToeView.vue # 井字棋（单人 AI）
-│   │   ├── TicTacToeOnlineView.vue # 井字棋·双人（联机）
-│   │   ├── XiangqiView.vue   # 中国象棋（人机/本地双人）
-│   │   └── XiangqiOnlineView.vue # 中国象棋·联机
-│   ├── App.vue              # 根组件（页面路由过渡 + 全局动画样式引入）
-│   └── main.ts              # 入口文件
-├── public/                  # 静态资源
-├── tests/                   # 测试文件（node test-xxx.cjs 直接跑）
-├── docs/                    # 文档
-│   ├── system_design.md     # 系统设计文档
-│   ├── class-diagram.mermaid # 类图
-│   └── sequence-diagram.mermaid # 时序图
-├── package.json
-├── tsconfig.json
-├── vite.config.ts
-└── README.md
+├── src/components/     # 公共组件（GameLayout / GameDialog / DirectionPad 等）
+├── src/composables/    # 组合式函数（useGameLoop / useSound / useXiangqiAI 等）
+├── src/engine/xiangqi/ # 中国象棋引擎（纯 TS 零依赖）
+├── src/workers/        # 象棋 AI 搜索 Worker
+├── src/lib/            # 游戏注册表 games.ts、Supabase、工具函数
+├── src/{router,stores,views,styles}/  # 路由 / Pinia / 游戏页面 / 主题与动画
+├── tests/              # node test-xxx.cjs 直接跑（无测试框架依赖）
+├── docs/               # 设计与流程文档
+└── public/             # 静态资源（PWA 图标、字体）
 ```
+
+> 各文件的职责与约定见 [AGENTS.md](./AGENTS.md)；完整架构事实见 [docs/system_design.md](./docs/system_design.md)。
 
 ---
 
@@ -215,7 +146,7 @@ game-collection/
 
 ## 📝 添加新游戏
 
-新增游戏步骤（模板 + 流程 + 参考 SnakeView.vue）详见 [AGENTS.md](./AGENTS.md) 的「新增游戏 checklist」。
+开发约定与统一模板（GameLayout/composable/参考 SnakeView.vue）见 [AGENTS.md](./AGENTS.md)；新增游戏完整步骤清单（games.ts / router / HomeView / 成就）见 [docs/system_design.md](./docs/system_design.md) 的「新增游戏 checklist」。
 
 ---
 

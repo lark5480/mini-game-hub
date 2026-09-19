@@ -536,15 +536,6 @@ defineExpose({ resetBoard })
 }
 .dialog-btn:hover { transform: scale(1.05); }
 
-@keyframes winPulse {
-  0%, 100% { box-shadow: 0 0 12px rgba(255, 215, 0, 0.4); }
-  50% { box-shadow: 0 0 26px rgba(255, 215, 0, 0.8); }
-}
-@keyframes appear {
-  from { opacity: 0; transform: scale(0.6); }
-  to { opacity: 1; transform: scale(1); }
-}
-
 @media (max-width: 640px) {
   .board { width: min(300px, 85vw); }
   .score-box { padding: 8px 14px; min-width: 65px; }
