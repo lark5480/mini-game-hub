@@ -146,7 +146,7 @@ game-collection/
 
 ## 📝 添加新游戏
 
-新增游戏步骤（模板 + 流程 + 参考 SnakeView.vue）详见 [AGENTS.md](./AGENTS.md) 的「新增游戏 checklist」。
+开发约定与统一模板（GameLayout/composable/参考 SnakeView.vue）见 [AGENTS.md](./AGENTS.md)；新增游戏完整步骤清单（games.ts / router / HomeView / 成就）见 [docs/system_design.md](./docs/system_design.md) 的「新增游戏 checklist」。
 
 ---
 
