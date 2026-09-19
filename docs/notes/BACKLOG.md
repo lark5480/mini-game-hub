@@ -1,12 +1,12 @@
-# BACKLOG.md — P3 可选事项积压
+# BACKLOG.md — ⚪ 可选事项积压
 
 > 本表登记开发 / review 中冒出来但**不阻塞**的可选优化（⚪ 级）。分级与登记规则见 [AGENTS.md](../../AGENTS.md) 的「变更纪律」。
 
 ## 维护规则
 
-- review 写出 P3 项的一方（通常是 Claude）负责同步登记到本表，不登记视为流程未完成
-- 条目被顺手消化或正式立项时**直接删除该行**（追溯靠 git：`git log -p docs/ai-workflow/BACKLOG.md`），本表只保留 `待处理` 项，避免膨胀成第二份 changelog
-- 🔵 P2（打磨）不进本表，由 Codex 顺手修
+- review / 开发中写出 ⚪ 项的一方负责同步登记到本表，不登记视为流程未完成
+- 条目被顺手消化或正式立项时**直接删除该行**（追溯靠 git：`git log -p docs/notes/BACKLOG.md`），本表只保留 `待处理` 项，避免膨胀成第二份 changelog
+- 🔵 打磨级不进本表，由执行者顺手修
 
 ## 积压清单
 

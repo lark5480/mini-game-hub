@@ -13,4 +13,4 @@
 ## 变更纪律
 
 - 大改前先写意图、审查按严重度（🔴/🟡/🔵/⚪）、🔴/🟡 未清零不提交——见 [AGENTS.md](./AGENTS.md)「变更纪律」（工具无关，单/多 agent 均适用，不再绑定 Claude+Codex 接力流程）
-- 可选积压见 `docs/ai-workflow/BACKLOG.md`，踩坑根因见 `docs/ai-workflow/knowledge.md`（历史过程不单独留档，靠 git + tests + system_design 追溯）
+- 可选积压见 `docs/notes/BACKLOG.md`，踩坑根因见 `docs/notes/knowledge.md`（历史过程不单独留档，靠 git + tests + system_design 追溯）

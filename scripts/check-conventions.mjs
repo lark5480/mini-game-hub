@@ -3,7 +3,7 @@
  * check-conventions.mjs — 项目约定静态检查（PITFALLS 根因固化）
  *
  * 把历史上靠记忆文档约束、易被 Agent 反复违反的 P0/P1 根因，固化为可执行检查。
- * 由原 docs/ai-workflow/PITFALLS.md 的可机械化条目迁移而来：
+ * 由原踩坑记忆库（PITFALLS）的可机械化条目迁移而来：
  *   - P-002 局部 @keyframes 未进共享 animations.css
  *   - P-007 tsc 编译产物（.js）混入 src 目录被 Vite 优先解析
  *

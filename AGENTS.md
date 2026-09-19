@@ -100,7 +100,7 @@ import LeaderboardStrip from '@/components/LeaderboardStrip.vue'
 
 - **大改前先写意图**：改哪些文件、验收标准，写在一处即可（PR 描述 / commit message / 一个临时清单），做完对照勾销。不为流程专门建文档。
 - **审查按严重度排序**：🔴 正确性/数据错误 → 🟡 违反本规范 → 🔵 风格打磨 → ⚪ 可选优化。**前两级未清零不提交**（commit = 验收合格，不是“我写完了”）；提交后发现 🔴/🟡 用 `git revert`，不另走修复循环。
-- **产出归位**：⚪ 可选优化落 [docs/ai-workflow/BACKLOG.md](./docs/ai-workflow/BACKLOG.md)；踩过的 🔴/🟡 根因能固化成测试断言 / `npm run lint:conventions` 检查就优先固化，其余记 [docs/ai-workflow/knowledge.md](./docs/ai-workflow/knowledge.md)。
+- **产出归位**：⚪ 可选优化落 [docs/notes/BACKLOG.md](./docs/notes/BACKLOG.md)；踩过的 🔴/🟡 根因能固化成测试断言 / `npm run lint:conventions` 检查就优先固化，其余记 [docs/notes/knowledge.md](./docs/notes/knowledge.md)。
 
 ## 成就系统（新增成就操作）
 
