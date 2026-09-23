@@ -102,7 +102,7 @@ App.vue（全局样式 + scanlines 特效）
 
 `useGameStore`（Pinia）：`scores[gameName]` → `GameScore[]`，`addScore()` 自动排序 + 截断 top 10，`watch(deep)` 自动写入 `localStorage`。分数注册表通过 `defaultScoreKeys()` 引用 `GAMES`。
 
-`useAchievements`（Pinia）：元数据 `ACHIEVEMENTS` 数组（13 个）+ `Set<string>` 已解锁 + localStorage 持久化（key: `game-achievements`）；**`unlock()` 内部自动调用 `sound.unlock()` + `haptics.success()`**；其余成就全解锁时自动解锁 `perfectionist` 元成就。
+`useAchievements`（Pinia）：元数据 `ACHIEVEMENTS` 数组（14 条 = 13 个普通成就 + `perfectionist` 元成就）+ `Set<string>` 已解锁 + localStorage 持久化（key: `game-achievements`）；**`unlock()` 内部自动调用 `sound.unlock()` + `haptics.success()`**；其余成就全解锁时自动解锁 `perfectionist` 元成就。
 
 ## 数据流
 
@@ -184,7 +184,7 @@ create policy "anon update" on leaderboard for update to anon using (true) with 
 | 游戏开发约定（模板 + 约束）| [AGENTS.md](../AGENTS.md)（CLAUDE.md 保留硬规则副本）|
 | Supabase SQL / 环境变量 / 核心文件 / 部署 | **本文档**（本节）|
 | 成就系统架构事实 | **本文档**（Store 段）|
-| 成就系统新增操作流程 | [CLAUDE.md](../CLAUDE.md)（仅该 8 行）|
+| 成就系统新增操作流程 | [AGENTS.md](../AGENTS.md)（「成就系统」段）|
 | 项目门面（游戏列表 / 快速开始 / 目录树）| [README.md](../README.md) |
 
 如 schema 或部署流程变更，请**只更新本节**，其他文档通过指针引用——勿在其他文档里独立维护副本。
