@@ -23,7 +23,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'xiangqi_first_win', name: '象棋胜利', icon: '🏆', desc: '首次赢得象棋对局' },
   { id: 'xiangqi_online_win', name: '联机先锋', icon: '🌐', desc: '首次赢得联机对局' },
   { id: 'first_submit', name: '排行榜新人', icon: '🏆', desc: '首次提交分数到排行榜' },
-  { id: 'all_games', name: '全能玩家', icon: '🎮', desc: '所有 8 款游戏都提交过分数' },
+  { id: 'all_games', name: '全能玩家', icon: '🎮', desc: '所有游戏都提交过分数' },
   { id: 'perfectionist', name: '完美主义者', icon: '⭐', desc: '解锁以上所有成就' },
 ]
 

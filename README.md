@@ -72,7 +72,7 @@ npm run preview
 
 ## ✨ 体验特性
 
-弹窗动画 / 触屏拖拽 / 键盘连发 / 音效反馈（23+ 预设）/ 震动反馈 / 失焦暂停 / 可访问性（focus-visible + reduced-motion）/ PWA（可安装 + 离线缓存）/ 新记录徽章 / 成就接近提示 / 邻位排名 / 排行榜容错（5s 超时 + 重试）
+弹窗动画 / 触屏拖拽 / 键盘连发 / 音效反馈 / 震动反馈 / 失焦暂停 / 可访问性（focus-visible + reduced-motion）/ PWA（可安装 + 离线缓存）/ 新记录徽章 / 成就接近提示 / 邻位排名 / 排行榜容错（5s 超时 + 重试）
 
 详细机制见 [docs/system_design.md](./docs/system_design.md)。
 
@@ -132,13 +132,13 @@ game-collection/
 - 流畅的键盘响应
 
 ### 🔊 音效系统
-- 基于 Web Audio API 的合成音效，23+ 预设，零加载
+- 基于 Web Audio API 的合成音效，零加载
 - 全局静音切换按钮（GameLayout 顶部栏），状态持久化到 localStorage
 - 静音→开启时自动给一声短 click 确认
 - 完整音效列表见 [docs/class-diagram.mermaid](./docs/class-diagram.mermaid) 的 `useSound` 类
 
 ### 🏅 成就系统
-- 13 个可解锁成就 + 自动 `perfectionist` 元成就
+- 多款可解锁成就 + 自动 `perfectionist` 元成就
 - 解锁时顶部弹入 Toast 通知 + 音效 + 震动，进度保存到 localStorage
 - 成就页面（`/achievements`）网格展示所有成就的解锁状态
 
