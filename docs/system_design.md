@@ -9,7 +9,7 @@ Vue 3 + TypeScript + Vite + Pinia + Vue Router，原生 CSS（CSS 变量驱动�
 ```
 App.vue（全局样式 + scanlines 特效）
 └── <router-view>
-    ├── HomeView          — 首页游戏选择（11 张卡片）
+    ├── HomeView          — 首页游戏选择
     ├── AchievementsView  — 成就展示
     ├── SokobanView       — 推箱子（v-for 网格）
     ├── LinkGameView      — 连连看（v-for 网格 + 键盘光标）
@@ -51,7 +51,7 @@ App.vue（全局样式 + scanlines 特效）
 | `useGameKeyboard` | 键盘绑定，`repeat` 支持长按连发，`isDown()` 查询当前按键状态，blur 时自动清"粘键" |
 | `useAutoPause` | 监听 `visibilitychange`，页面切到后台自动触发暂停回调 |
 | `useGamePause` | 统一暂停/恢复骨架：封装 P/Esc + 失焦 + PauseOverlay/ResumePrompt 联动 |
-| `useSound` | Web Audio API 合成音效（tone/sweep），23+ 预设，全局 `muted` ref + localStorage 持久化，mute 切换给确认 click |
+| `useSound` | Web Audio API 合成音效（tone/sweep），全局 `muted` ref + localStorage 持久化，mute 切换给确认 click |
 | `useHaptics` | 移动端震动反馈（`light / tap / select / pulse / success / error / win`），无振动环境静默 |
 | `useScoreFloats` | 浮动分数堆叠管理，`pop(text, x, y)` 触发新浮动 */
 | `useGameSave` | 存档/读档/继续游戏（localStorage），每 300ms 节流自动保存 |
@@ -102,7 +102,7 @@ App.vue（全局样式 + scanlines 特效）
 
 `useGameStore`（Pinia）：`scores[gameName]` → `GameScore[]`，`addScore()` 自动排序 + 截断 top 10，`watch(deep)` 自动写入 `localStorage`。分数注册表通过 `defaultScoreKeys()` 引用 `GAMES`。
 
-`useAchievements`（Pinia）：元数据 `ACHIEVEMENTS` 数组（13 个）+ `Set<string>` 已解锁 + localStorage 持久化（key: `game-achievements`）；**`unlock()` 内部自动调用 `sound.unlock()` + `haptics.success()`**；其余成就全解锁时自动解锁 `perfectionist` 元成就。
+`useAchievements`（Pinia）：元数据 `ACHIEVEMENTS` 数组（普通成就 + `perfectionist` 元成就）+ `Set<string>` 已解锁 + localStorage 持久化（key: `game-achievements`）；**`unlock()` 内部自动调用 `sound.unlock()` + `haptics.success()`**；其余成就全解锁时自动解锁 `perfectionist` 元成就。
 
 ## 数据流
 
@@ -184,7 +184,7 @@ create policy "anon update" on leaderboard for update to anon using (true) with 
 | 游戏开发约定（模板 + 约束）| [AGENTS.md](../AGENTS.md)（CLAUDE.md 保留硬规则副本）|
 | Supabase SQL / 环境变量 / 核心文件 / 部署 | **本文档**（本节）|
 | 成就系统架构事实 | **本文档**（Store 段）|
-| 成就系统新增操作流程 | [CLAUDE.md](../CLAUDE.md)（仅该 8 行）|
+| 成就系统新增操作流程 | [AGENTS.md](../AGENTS.md)（「成就系统」段）|
 | 项目门面（游戏列表 / 快速开始 / 目录树）| [README.md](../README.md) |
 
 如 schema 或部署流程变更，请**只更新本节**，其他文档通过指针引用——勿在其他文档里独立维护副本。

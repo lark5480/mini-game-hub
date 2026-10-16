@@ -72,7 +72,6 @@ import { useRouter } from 'vue-router'
 import { useGameKeyboard } from '@/composables/useGameKeyboard'
 import { useGameLoop } from '@/composables/useGameLoop'
 import { useSound } from '@/composables/useSound'
-import { useAchievements } from '@/stores/achievements'
 import { useGameSave } from '@/composables/useGameSave'
 import { useAutoSave } from '@/composables/useAutoSave'
 import { useSwipe } from '@/composables/useSwipe'
@@ -91,7 +90,6 @@ import ScoreFloat from '@/components/ScoreFloat.vue'
 
 const router = useRouter()
 const sound = useSound()
-const achievements = useAchievements()
 const haptics = useHaptics()
 const { popups, pop } = useScoreFloats()
 const { checkGameOver } = useGameOver()
@@ -320,9 +318,6 @@ function endGame() {
   newRecord.value = isNewRecordResult
   achievementHint.value = hint
   gameStats.value = stats
-  if (achievements.isUnlocked('snake_king')) {
-    // 已解锁则无需提示
-  }
 }
 
 function openLeaderboard() {
