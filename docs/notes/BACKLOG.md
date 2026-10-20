@@ -20,3 +20,5 @@
 | 6 | 2026-08-14 | 象棋 AI 细节优化 review（2026-08-14-xiangqi-ai-ux-polish） | 对 AI 战绩统计（localStorage 胜/负/和 + 难度面板展示），激励重复游玩 |
 | 7 | 2026-08-14 | 象棋 AI 细节优化 review（2026-08-14-xiangqi-ai-ux-polish） | 续局功能：xiangqi_record 目前只写不读（死数据）；读取并恢复 AI 模式对局需扩展存档字段（mode/difficulty/aiSide/gameStarted）并回放 moves 重建局面 |
 | 8 | 2026-08-14 | 象棋 AI 细节优化 review（2026-08-14-xiangqi-ai-ux-polish） | 开局库扩充 3-5 条主流变化谱（当前 7 条主线多局雷同）；与 #4（简单模式库命中弱化）联动 |
+| 9 | 2026-10-20 | 文档-代码校对 | `useGameStore` 的 `currentGame` / `setCurrentGame` 全项目零调用（死代码）；删除或找到真实用途 |
+| 10 | 2026-10-20 | 文档-代码校对 | `tests/e2e-smoke.mjs` 的 GAMES 只覆盖 9 款（缺 simon / xiangqi），且要手工先起 dev server；可补两款 + 自起服务或明确标注前置 |

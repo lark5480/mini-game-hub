@@ -22,7 +22,7 @@
 | 5 | 🎯 俄罗斯方块 | 经典益智游戏 | ⭐⭐⭐ |
 | 6 | 🎱 弹球打砖块 | 经典街机游戏 | ⭐⭐ |
 | 7 | 🔢 2048 | 数字合成挑战 | ⭐⭐ |
-| 8 | 🔨 打地鼠 | 反应力大考验 | ⭐ |
+| 8 | 🔨 打地鼠 | 反应力大考验 · 在线竞速 | ⭐ |
 | 9 | ⭕ 井字棋 | 单人 AI · 在线双人 | ⭐ |
 | 10 | 💡 西蒙记忆灯 | 看灯序挑战记忆 | ⭐ |
 | 11 | ♟️ 中国象棋 | 人机对弈（三档难度）· 本地双人 · 联机 | ⭐⭐ |
@@ -68,11 +68,20 @@ npm run build
 npm run preview
 ```
 
+### 测试与检查
+
+```bash
+npm test                    # 全部单元测试（tests/test-xxx.cjs，零测试框架依赖）
+node tests/test-xiangqi.cjs # 单独跑象棋引擎回归（自动 tsc 编译）
+npm run lint:conventions    # 静态约定检查（@keyframes 集中、src 下无编译产物）
+npm run test:e2e            # E2E 冒烟（Playwright + headless Chromium，需先 npm run dev）
+```
+
 ---
 
 ## ✨ 体验特性
 
-弹窗动画 / 触屏拖拽 / 键盘连发 / 音效反馈 / 震动反馈 / 失焦暂停 / 可访问性（focus-visible + reduced-motion）/ PWA（可安装 + 离线缓存）/ 新记录徽章 / 成就接近提示 / 邻位排名 / 排行榜容错（5s 超时 + 重试）
+弹窗动画 / 触屏拖拽 / 键盘连发 / 音效反馈 / 震动反馈 / 失焦暂停 / 3-2-1 恢复倒计时 / 新手引导气泡 / 重启二次确认 / 可访问性（focus-visible + reduced-motion）/ PWA（可安装 + 离线缓存）/ 新记录徽章 / 成就接近提示 / 邻位排名 / 排行榜容错（5s 超时 + 重试）
 
 详细机制见 [docs/system_design.md](./docs/system_design.md)。
 
@@ -87,7 +96,7 @@ npm run preview
 - **状态管理**: [Pinia](https://pinia.vuejs.org/) - Vue 的现代状态管理库
 - **样式**: 原生 CSS + CSS 变量
 - **PWA**: [vite-plugin-pwa](https://vite-pwa-org.netlify.app/) - 离线缓存 + 自动更新
-- **实时通信**: Supabase Realtime - 井字棋在线对战
+- **实时通信**: Supabase Realtime（broadcast + presence，无需数据库表）— 井字棋联机 / 象棋联机 / 打地鼠竞速
 
 ---
 
@@ -101,8 +110,9 @@ game-collection/
 ├── src/workers/        # 象棋 AI 搜索 Worker
 ├── src/lib/            # 游戏注册表 games.ts、Supabase、工具函数
 ├── src/{router,stores,views,styles}/  # 路由 / Pinia / 游戏页面 / 主题与动画
-├── tests/              # node test-xxx.cjs 直接跑（无测试框架依赖）
-├── docs/               # 设计与流程文档
+├── tests/              # 单测 node test-xxx.cjs 直接跑（零框架依赖）；e2e-smoke.mjs 用 Playwright
+├── scripts/            # check-conventions.mjs（npm run lint:conventions 静态约定检查）
+├── docs/               # 设计与架构文档 + docs/notes（积压、踩坑根因）
 └── public/             # 静态资源（PWA 图标、字体）
 ```
 
@@ -119,8 +129,13 @@ game-collection/
 
 ### 🏆 全局排行榜（Supabase）
 - 跨玩家积分排行榜，匿名昵称制，同昵称保留最高分
-- 每款游戏内嵌实时排行榜条（Top 5），支持中途提交分数
+- 各计分游戏页面底部内嵌排行榜条（Top 5），支持中途提交分数；首页每张卡片可点开只读排行榜
 - 架构（SQL / 核心文件 / 环境变量 / 昵称去重逻辑）见 [docs/system_design.md](./docs/system_design.md) 的「部署与基础设施」
+
+### 🌐 联机对战
+- 井字棋双人、中国象棋双人、打地鼠竞速三种联机形态
+- 传房间号即可开局（链接走 `?room=` 自动进对局），角色按在线成员确定性分配，象棋支持第三人观战
+- 纯 Supabase Realtime broadcast + presence，不需要额外数据库表；未配 Supabase 时视图给出提示而非崩溃
 
 ### 🎨 统一的游戏布局
 - 所有游戏共享统一的布局组件（GameLayout）

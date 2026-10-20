@@ -5,9 +5,15 @@ classDiagram
         +String gradientEnd
         +String[] hints
         +InfoItem[] infoItems
+        +Boolean confirmRestart
+        +String tutorial
+        +String entrance
+        +String mood
         +Slot default
         +Slot controls
+        +Slot header-extra
         +Event back
+        +Event restart
     }
 
     class InfoItem {
@@ -22,6 +28,9 @@ classDiagram
         +String title
         +String message
         +String actionText
+        +Boolean newRecord
+        +String achievementHint
+        +StatItem[] stats
         +Slot icon
         +Slot default
         +Slot action
@@ -29,15 +38,21 @@ classDiagram
         +Event action
     }
 
+    class StatItem {
+        +String label
+        +String value
+    }
+
     class DirectionPad {
         +String layout
         +Boolean showUp
         +Boolean showDown
+        +Boolean repeat
         +Slot extra
-        +Event up
-        +Event down
-        +Event left
-        +Event right
+        +Event up(isRepeat)
+        +Event down(isRepeat)
+        +Event left(isRepeat)
+        +Event right(isRepeat)
     }
 
     class KeyBinding {
@@ -45,6 +60,12 @@ classDiagram
         +Function handler
         +Boolean preventDefault
         +Boolean onKeyUp
+        +RepeatOption repeat
+    }
+
+    class RepeatOption {
+        +Number initialDelay
+        +Number intervalMs
     }
 
     class UseGameKeyboardOptions {
@@ -84,6 +105,9 @@ classDiagram
         +collect() void
         +win() void
         +gameOver() void
+        +pause() void
+        +resume() void
+        +unlock() void
     }
 
     class GameScore {
@@ -99,6 +123,11 @@ classDiagram
     }
 
     GameLayout --> InfoItem : infoItems
+    GameDialog --> StatItem : stats
     UseGameKeyboardOptions --> KeyBinding : bindings
+    KeyBinding --> RepeatOption : repeat
     useGameStore --> GameScore : scores
     useGameStore --> localStorage : watch + sync
+
+    note for GameLayout "restart 未声明在 emits 里，由 useAttrs 探测 $attrs.onRestart：\n绑定才渲染重启按钮，confirmRestart=true 时先弹二次确认"
+    note for useSound "对外返回 muted(readonly)/toggleMute/tone + 全部音效预设；\nsweep 与 getCtx/createVoice 是模块内部实现，未随 return 导出"
